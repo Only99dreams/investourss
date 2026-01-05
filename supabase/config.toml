@@ -1,0 +1,7 @@
+project_id = "xpghrhuxmfaljtptvriy"
+
+[functions.scam-detection]
+verify_jwt = false
+
+[functions.financial-tutor]
+verify_jwt = false

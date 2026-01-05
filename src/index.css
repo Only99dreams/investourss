@@ -1,0 +1,228 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Investours Purple Brand */
+    --primary: 270 60% 35%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Background & Surface */
+    --background: 270 20% 99%;
+    --foreground: 270 40% 10%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 270 40% 10%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 270 40% 10%;
+    
+    /* Secondary - Light purple tint */
+    --secondary: 270 30% 95%;
+    --secondary-foreground: 270 40% 20%;
+    
+    /* Muted */
+    --muted: 270 15% 94%;
+    --muted-foreground: 270 10% 45%;
+    
+    /* Accent - Emerald for growth/money */
+    --accent: 160 60% 45%;
+    --accent-foreground: 0 0% 100%;
+    
+    /* Destructive */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Border & Input */
+    --border: 270 20% 90%;
+    --input: 270 20% 90%;
+    --ring: 270 60% 35%;
+    
+    --radius: 0.75rem;
+    
+    /* Sidebar */
+    --sidebar-background: 270 30% 98%;
+    --sidebar-foreground: 270 20% 25%;
+    --sidebar-primary: 270 60% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 270 25% 94%;
+    --sidebar-accent-foreground: 270 40% 20%;
+    --sidebar-border: 270 20% 90%;
+    --sidebar-ring: 270 60% 50%;
+    
+    /* Custom Investours tokens */
+    --investours-purple: 270 60% 35%;
+    --investours-purple-light: 270 50% 55%;
+    --investours-purple-dark: 270 65% 25%;
+    --investours-emerald: 160 60% 45%;
+    --investours-emerald-light: 160 50% 60%;
+    --investours-gold: 45 90% 55%;
+    --investours-coral: 15 80% 60%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(270 60% 35%) 0%, hsl(270 50% 55%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(270 30% 98%) 0%, hsl(270 25% 95%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(270 20% 98%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(160 60% 45%) 0%, hsl(160 50% 55%) 100%);
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(270 20% 10% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(270 20% 10% / 0.08), 0 2px 4px -2px hsl(270 20% 10% / 0.06);
+    --shadow-lg: 0 10px 15px -3px hsl(270 20% 10% / 0.1), 0 4px 6px -4px hsl(270 20% 10% / 0.08);
+    --shadow-xl: 0 20px 25px -5px hsl(270 20% 10% / 0.12), 0 8px 10px -6px hsl(270 20% 10% / 0.08);
+    --shadow-glow: 0 0 30px hsl(270 60% 35% / 0.2);
+    --shadow-glow-accent: 0 0 30px hsl(160 60% 45% / 0.25);
+  }
+
+  .dark {
+    --primary: 270 50% 60%;
+    --primary-foreground: 270 40% 10%;
+    
+    --background: 270 30% 8%;
+    --foreground: 270 10% 95%;
+    
+    --card: 270 25% 12%;
+    --card-foreground: 270 10% 95%;
+    
+    --popover: 270 25% 12%;
+    --popover-foreground: 270 10% 95%;
+    
+    --secondary: 270 25% 18%;
+    --secondary-foreground: 270 10% 90%;
+    
+    --muted: 270 20% 18%;
+    --muted-foreground: 270 10% 60%;
+    
+    --accent: 160 55% 50%;
+    --accent-foreground: 160 80% 10%;
+    
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 270 20% 20%;
+    --input: 270 20% 20%;
+    --ring: 270 50% 60%;
+    
+    --sidebar-background: 270 30% 10%;
+    --sidebar-foreground: 270 10% 90%;
+    --sidebar-primary: 270 50% 60%;
+    --sidebar-primary-foreground: 270 40% 10%;
+    --sidebar-accent: 270 25% 18%;
+    --sidebar-accent-foreground: 270 10% 90%;
+    --sidebar-border: 270 20% 20%;
+    --sidebar-ring: 270 50% 60%;
+    
+    --gradient-primary: linear-gradient(135deg, hsl(270 50% 45%) 0%, hsl(270 45% 60%) 100%);
+    --gradient-hero: linear-gradient(180deg, hsl(270 30% 8%) 0%, hsl(270 25% 12%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(270 25% 14%) 0%, hsl(270 20% 10%) 100%);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .shadow-glow-accent {
+    box-shadow: var(--shadow-glow-accent);
+  }
+
+  .glass {
+    @apply bg-card/80 backdrop-blur-md;
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.6s ease-out forwards;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.4s ease-out forwards;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s ease-in-out infinite;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
