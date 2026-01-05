@@ -66,11 +66,11 @@ const Home = () => {
             className="text-center max-w-3xl mx-auto"
           >
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-6">
-              Grow Safer, Invest Smarter{" "}
-              <span className="text-primary">Confidence</span>
+              A Daily Financial, {" "}
+              <span className="text-primary">Safety Companion</span>
             </h1>
             <p className="text-lg text-muted-foreground mb-8">
-            AI-powered financial education, scam detection, and access to licensed firms.
+            AI Tutor and Scam Detector, Community and Safe Offers.
             </p>
             
             {/* AI Financial Tutor Search Bar */}
@@ -100,18 +100,18 @@ const Home = () => {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Try: "What is compound interest?" or "How do I start investing?"
+                Try: "What is budgeting?"
               </p>
             </motion.form>
 
             <div className="flex flex-wrap justify-center gap-4">
-              <Link to="/signup">
+              <Link to="/dashboard">
                 <Button variant="hero" size="lg">
                   Start Learning Free
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
-              <Link to="/auth?mode=login">
+              <Link to="/vetting">
                 <Button variant="outline" size="lg">
                 Use Scam Detector
                 </Button>

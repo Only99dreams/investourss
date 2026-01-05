@@ -424,20 +424,20 @@ const Vetting = () => {
                             </Card>
 
                             {/* Recommendations */}
-                            {deepResult.recommendations?.length > 0 && (
+                          {/*  {deepResult.recommendations?.length > 0 && (
                               <Card className="border-primary/30">
                                 <CardHeader className="pb-2">
                                   <CardTitle className="text-base text-primary">Recommendations</CardTitle>
                                 </CardHeader>
-                                <CardContent>
+                               <CardContent>
                                   <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
                                     {deepResult.recommendations.map((rec, i) => (
                                       <li key={i}>{rec}</li>
                                     ))}
                                   </ul>
-                                </CardContent>
+                                </CardContent> 
                               </Card>
-                            )}
+                            )}   */}
                           </motion.div>
                         )}
                       </form>

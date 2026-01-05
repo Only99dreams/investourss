@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Welcome from "./pages/Welcome";
 import Home from "./pages/Home";
 import Auth from "./pages/Auth";
@@ -36,11 +35,7 @@ const App = () => (
             <Route path="/complete-profile" element={<CompleteProfile />} />
             <Route path="/dashboard/*" element={<Dashboard />} />
             <Route path="/admin/*" element={<AdminDashboard />} />
-            <Route path="/vetting" element={
-              <ProtectedRoute>
-                <Vetting />
-              </ProtectedRoute>
-            } />
+            <Route path="/vetting" element={<Vetting />} />
             <Route path="/community" element={<Community />} />
             <Route path="/tutor" element={<FinancialTutor />} />
             <Route path="/pricing" element={<Pricing />} />

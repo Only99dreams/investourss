@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Routes, Route, useNavigate, useSearchParams } from "react-router-dom";
+import { Routes, Route, useNavigate, useSearchParams, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
@@ -58,7 +58,8 @@ const Dashboard = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         <Routes>
-          <Route path="/" element={
+          <Route index element={<Navigate to="/dashboard/education" replace />} />
+          <Route path="/profile" element={
             <>
               <DashboardHeader title="Profile" onMenuClick={() => setSidebarOpen(true)} />
               <ProfileSection />

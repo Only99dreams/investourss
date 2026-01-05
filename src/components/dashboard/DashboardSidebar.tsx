@@ -10,7 +10,7 @@ import investoursLogo from "@/assets/investours-logo.png";
 
 const sidebarItems = [
   { icon: GraduationCap, label: "Education", path: "/dashboard/education" },
-  { icon: User, label: "Profile", path: "/dashboard" },
+  { icon: User, label: "Profile", path: "/dashboard/profile" },
   { icon: Bell, label: "Notifications", path: "/dashboard/notifications" },
   { icon: FileText, label: "AI Reports", path: "/dashboard/ai-reports", subtitle: "Searches & Scam Checks" },
   { icon: TrendingUp, label: "Investments", path: "/dashboard/investments" },

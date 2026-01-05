@@ -564,7 +564,7 @@ const Community = () => {
                   Community
                 </h1>
                 <p className="text-muted-foreground">
-                  Connect, learn, and build financial confidence together.
+                  Connect, share insight, and learn from other members.
                 </p>
               </div>
               <div className="flex items-center gap-6">
