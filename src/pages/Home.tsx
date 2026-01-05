@@ -124,7 +124,7 @@ const Home = () => {
       {/* Community Section - After Hero */}
       <CommunitySection />
 
-      {/* Feature Sections */}
+      {/* Feature Sections 
       <section className="py-16 md:py-24">
         <div className="container mx-auto px-4">
           <motion.div
@@ -134,7 +134,7 @@ const Home = () => {
             viewport={{ once: true }}
             className="grid md:grid-cols-2 lg:grid-cols-4 gap-6"
           >
-            {/* Learning */}
+             Learning 
             <motion.div variants={fadeInUp}>
               <Card variant="feature" className="h-full group">
                 <CardHeader>
@@ -162,7 +162,7 @@ const Home = () => {
               </Card>
             </motion.div>
 
-            {/* Vetting */}
+             Vetting 
             <motion.div variants={fadeInUp}>
               <Card variant="feature" className="h-full group border-accent/30">
                 <CardHeader>
@@ -197,7 +197,7 @@ const Home = () => {
               </Card>
             </motion.div>
 
-            {/* Safe Investing */}
+             Safe Investing 
             <motion.div variants={fadeInUp}>
               <Card variant="feature" className="h-full group">
                 <CardHeader>
@@ -225,7 +225,7 @@ const Home = () => {
               </Card>
             </motion.div>
 
-            {/* Community */}
+             Community 
             <motion.div variants={fadeInUp}>
               <Card variant="feature" className="h-full group">
                 <CardHeader>
@@ -261,7 +261,7 @@ const Home = () => {
             </motion.div>
           </motion.div>
         </div>
-      </section>
+      </section>   */}
 
       {/* Trust Section */}
       <section className="py-16 bg-secondary/50">

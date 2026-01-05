@@ -344,7 +344,7 @@ const CommunitySection = () => {
             Community Feed
           </h2>
           <p className="text-muted-foreground">
-            Connect, share insights, and learn from fellow investors
+            Connect, share insights, and learn from other members
           </p>
         </motion.div>
 

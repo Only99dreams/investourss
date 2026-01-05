@@ -272,12 +272,9 @@ const Vetting = () => {
                     </form>
 
                     <div className="mt-6 pt-6 border-t border-border">
-                      <p className="text-sm text-muted-foreground text-center">
-                        Want deeper analysis?{" "}
-                        <a href="/auth?mode=login" className="text-primary hover:underline">
-                          Login to use Analyze
-                        </a>
-                      </p>
+                   <p className="text-sm text-muted-foreground text-center">
+                       ⚠️ Warning: A low-risk result does not guarantee safety. Always verify official sources and regulatory status.
+                      </p> 
                     </div>
                   </CardContent>
                 </Card>
@@ -441,7 +438,13 @@ const Vetting = () => {
                           </motion.div>
                         )}
                       </form>
+                      
                     )}
+                     <div className="mt-6 pt-6 border-t border-border">
+                   <p className="text-sm text-muted-foreground text-center">
+                       ⚠️ Warning: A low-risk result does not guarantee safety. Always verify official sources and regulatory status.
+                      </p> 
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>

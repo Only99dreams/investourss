@@ -245,14 +245,14 @@ const Header = () => {
               className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
-              Vetting
+              Scam Detector
             </Link>
             <Link 
               to="/investing" 
               className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
-              Safe Investing
+              Safe Offers
             </Link>
             <Link 
               to="/community" 

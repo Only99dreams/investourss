@@ -92,7 +92,7 @@ export function Footer() {
           
           
           
-          Investours provides financial education and AI-powered scam detection. All AI insights are for educational and risk-awareness purposes only.
+         Disclaimer: Investours does not provide financial or investment advice. AI insights are for education and risk awareness only.
           
           
           
