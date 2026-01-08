@@ -155,14 +155,21 @@ const FinancialTutor = () => {
               </div>
             </div>
           </div>
-          {!user && (
-            <Link to="/auth?mode=login">
+          <div className="flex items-center gap-2">
+            <Link to="/vetting">
               <Button variant="outline" size="sm">
-                <LogIn className="w-4 h-4 mr-2" />
-                Login
+                AI Vetting
               </Button>
             </Link>
-          )}
+            {!user && (
+              <Link to="/auth?mode=login">
+                <Button variant="outline" size="sm">
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Login
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
