@@ -22,7 +22,7 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4" />
-                <span>Abuja, Nigeria</span>
+                <span>Nigeria</span>
               </div>
             </div>
           </div>
