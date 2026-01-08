@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { GraduationCap, Play, CheckCircle, Lock, Clock, Trophy, Share2, Copy, Twitter, Facebook, Linkedin, Link as LinkIcon, Shield } from "lucide-react";
+import { GraduationCap, Play, CheckCircle, Lock, Clock, Trophy, Share2, Copy, Twitter, Facebook, Linkedin, Link as LinkIcon, Shield, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useSearchParams, Link } from "react-router-dom";
@@ -328,12 +328,20 @@ export function EducationSection() {
                   <span>{completedCount}/{totalModules}</span>
                 </div>
                 <Progress value={progressPercent} className="h-3" />
-                <Link to="/vetting">
-                  <Button className="w-full" size="sm">
-                    <Shield className="w-4 h-4 mr-2" />
-                    Go to AI Tutor & Scam Detector
-                  </Button>
-                </Link>
+                <div className="flex gap-2">
+                  <Link to="/tutor" className="flex-1">
+                    <Button className="w-full" size="sm">
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Use AI Tutor
+                    </Button>
+                  </Link>
+                  <Link to="/vetting" className="flex-1">
+                    <Button className="w-full" size="sm">
+                      <Shield className="w-4 h-4 mr-2" />
+                      Use Scam Detector
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
           </CardContent>
