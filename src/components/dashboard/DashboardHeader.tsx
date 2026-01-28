@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Menu, Search } from "lucide-react";
+import { Bell, Menu, Search, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -96,13 +96,33 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
             )}
           </Button>
 
+          {profile?.user_tier === "free" && (
+            <Button 
+              variant="default" 
+              size="sm"
+              onClick={() => navigate('/subscribe')}
+              className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+            >
+              <Crown className="w-4 h-4 mr-2" />
+              Upgrade
+            </Button>
+          )}
+
           <div className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium",
-            profile?.user_tier === "premium" ? "bg-gold/20 text-gold" :
+            "px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1",
+            profile?.user_tier === "premium" ? 
+              profile?.subscription_type === "annual" ? "bg-investours-gold/20 text-investours-gold" :
+              profile?.subscription_type === "quarterly" ? "bg-accent/20 text-accent" :
+              "bg-primary/20 text-primary" :
             profile?.user_tier === "exclusive" ? "bg-primary/20 text-primary" :
             "bg-muted text-muted-foreground"
           )}>
             {profile?.user_tier?.toUpperCase() || "FREE"}
+            {profile?.user_tier === "premium" && profile?.subscription_type && (
+              <span className="text-xs opacity-75">
+                ({profile.subscription_type})
+              </span>
+            )}
           </div>
         </div>
       </div>

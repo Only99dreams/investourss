@@ -15,7 +15,7 @@ const sidebarItems = [
   { icon: FileText, label: "AI Reports", path: "/dashboard/ai-reports", subtitle: "Searches & Scam Checks" },
   { icon: TrendingUp, label: "Investments", path: "/dashboard/investments" },
   { icon: Umbrella, label: "Microinsurance", path: "/dashboard/microinsurance" },
-  { icon: Share2, label: "Referrals", path: "/dashboard/referrals" },
+  { icon: Share2, label: "Followers", path: "/dashboard/followers" },
   { icon: Trophy, label: "Leaderboard", path: "/dashboard/leaderboard" },
   { icon: Wallet, label: "Wallets", path: "/dashboard/wallets" },
   { icon: Target, label: "SDG Impact", path: "/dashboard/sdg" },

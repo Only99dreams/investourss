@@ -15,6 +15,7 @@ import Vetting from "./pages/Vetting";
 import Community from "./pages/Community";
 import FinancialTutor from "./pages/FinancialTutor";
 import Pricing from "./pages/Pricing";
+import SubscriptionPage from "./pages/SubscriptionPage";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/community" element={<Community />} />
             <Route path="/tutor" element={<FinancialTutor />} />
             <Route path="/pricing" element={<Pricing />} />
+            <Route path="/subscribe" element={<SubscriptionPage />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

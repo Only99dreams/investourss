@@ -178,7 +178,7 @@ const Pricing = () => {
                           <span className="text-sm text-muted-foreground"> / month</span>
                         </div>
                       </div>
-                      <Link to="/signup?plan=premium-monthly">
+                      <Link to="/subscribe?plan=premium-monthly">
                         <Button variant="default" className="w-full" size="sm">
                           Upgrade Now
                         </Button>
@@ -196,7 +196,7 @@ const Pricing = () => {
                           <span className="text-sm text-muted-foreground"> / 3 months</span>
                         </div>
                       </div>
-                      <Link to="/signup?plan=premium-quarterly">
+                      <Link to="/subscribe?plan=premium-quarterly">
                         <Button variant="accent" className="w-full" size="sm">
                           Upgrade Now
                         </Button>
@@ -214,7 +214,7 @@ const Pricing = () => {
                           <span className="text-sm text-muted-foreground"> / year</span>
                         </div>
                       </div>
-                      <Link to="/signup?plan=premium-annual">
+                      <Link to="/subscribe?plan=premium-annual">
                         <Button variant="default" className="w-full bg-investours-gold hover:bg-investours-gold/90 text-foreground" size="sm">
                           Upgrade Now
                         </Button>

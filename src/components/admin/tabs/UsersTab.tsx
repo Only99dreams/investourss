@@ -54,6 +54,7 @@ const UsersTab = () => {
     assigned_role: "",
     user_tier: "",
     user_type: "",
+    access: "",
   });
 
   useEffect(() => {
@@ -64,7 +65,7 @@ const UsersTab = () => {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("*")
+        .select("*, subscription_type")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -84,6 +85,7 @@ const UsersTab = () => {
       assigned_role: user.assigned_role || "user",
       user_tier: user.user_tier || "free",
       user_type: user.user_type || "individual",
+      access: user.user_tier === "free" ? "Free" : (user.subscription_type || "monthly"),
     });
     setIsEditDialogOpen(true);
   };
@@ -92,12 +94,18 @@ const UsersTab = () => {
     try {
       if (!selectedUser) return;
 
+      // Determine user_tier and subscription_type based on access
+      const isFree = editForm.access === "Free";
+      const userTier = isFree ? "free" : "premium";
+      const subscriptionType = isFree ? null : editForm.access.toLowerCase();
+
       const { error } = await supabase
         .from("profiles")
         .update({
           assigned_role: editForm.assigned_role,
-          user_tier: editForm.user_tier,
+          user_tier: userTier,
           user_type: editForm.user_type,
+          subscription_type: subscriptionType,
         })
         .eq("id", selectedUser.id);
 
@@ -157,6 +165,7 @@ const UsersTab = () => {
                   <TableHead>Role</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Tier</TableHead>
+                  <TableHead>Access</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -165,7 +174,7 @@ const UsersTab = () => {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center h-24">
+                    <TableCell colSpan={9} className="text-center h-24">
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -186,6 +195,11 @@ const UsersTab = () => {
                       </TableCell>
                       <TableCell className="capitalize">
                         {user.user_tier || "free"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {user.user_tier === "free" ? "Free" : (user.subscription_type || "monthly")}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -309,6 +323,27 @@ const UsersTab = () => {
                     <SelectItem value="individual">Individual</SelectItem>
                     <SelectItem value="group">Group</SelectItem>
                     <SelectItem value="firm">Firm</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="access" className="text-right">
+                  Access
+                </Label>
+                <Select
+                  value={editForm.access}
+                  onValueChange={(val) =>
+                    setEditForm({ ...editForm, access: val })
+                  }
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select access level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Free">Free</SelectItem>
+                    <SelectItem value="Monthly">Monthly</SelectItem>
+                    <SelectItem value="Quarterly">Quarterly</SelectItem>
+                    <SelectItem value="Annual">Annual</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -19,8 +19,10 @@ import ResourcesTab from "@/components/admin/tabs/ResourcesTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
 import SupportTab from "@/components/admin/tabs/SupportTab";
 import AdvertisingTab from "@/components/admin/tabs/AdvertisingTab";
+import SettingsTab from "@/components/admin/tabs/SettingsTab";
 import AdminOverview from "@/components/admin/AdminOverview";
 import { Loader2 } from "lucide-react";
+import { DepositRequestsManager } from "@/components/admin/DepositRequestsManager";
 
 
 const AdminDashboard = () => {
@@ -58,6 +60,7 @@ const AdminDashboard = () => {
             <Route path="education" element={<EducationTab />} />
             <Route path="community" element={<CommunityTab />} />
             <Route path="wallets" element={<WalletsTab />} />
+            <Route path="deposit-requests" element={<DepositRequestsManager />} />
             <Route path="payouts" element={<PayoutsTab />} />
             <Route path="referrals" element={<ReferralsTab />} />
             <Route path="campaigns" element={<CampaignsTab />} />
@@ -65,6 +68,7 @@ const AdminDashboard = () => {
             <Route path="messages" element={<MessagesTab />} />
             <Route path="support" element={<SupportTab />} />
             <Route path="advertising" element={<AdvertisingTab />} />
+            <Route path="settings" element={<SettingsTab />} />
           </Routes>
         </main>
       </div>

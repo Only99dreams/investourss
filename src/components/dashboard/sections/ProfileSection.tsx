@@ -197,6 +197,34 @@ export function ProfileSection() {
         </Card>
       </motion.div>
 
+      {/* GFE Section - Moved to top */}
+      {!profile?.is_gfe && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold mb-1">Become a Grassroots Financial Educator (GFE)</h3>
+                  <p className="text-muted-foreground mb-2">
+                    Earn commissions by educating your community about financial literacy and investments.
+                  </p>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• Share education videos and earn from referrals</li>
+                    <li>• Access exclusive BDE content (Annual Premium required)</li>
+                    <li>• Lower withdrawal fees on earnings</li>
+                  </ul>
+                </div>
+                <Button variant="hero" size="lg">Become a GFE</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       <div className="grid md:grid-cols-2 gap-6">
         {/* Contact Info */}
         <motion.div
@@ -421,29 +449,6 @@ export function ProfileSection() {
           </Card>
         </motion.div>
       </div>
-
-      {/* GFE Section */}
-      {!profile?.is_gfe && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold mb-1">Become a Grassroots Financial Educator (GFE)</h3>
-                  <p className="text-muted-foreground">
-                    Earn commissions by educating your community about financial literacy and investments.
-                  </p>
-                </div>
-                <Button variant="hero">Become a GFE</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
     </div>
   );
 }

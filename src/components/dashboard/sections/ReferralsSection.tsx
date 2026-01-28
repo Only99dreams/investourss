@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Check, Users, MousePointer, UserCheck, Crown, TrendingUp, QrCode } from "lucide-react";
+import { Copy, Check, Users, MousePointer, UserCheck, Crown, TrendingUp, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ReferralsSection() {
@@ -15,8 +15,9 @@ export function ReferralsSection() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [stats, setStats] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [referrals, setReferrals] = useState<any[]>([]);
+  const [followers, setFollowers] = useState<any[]>([]);
   const [copied, setCopied] = useState(false);
+  const [showReferralCode, setShowReferralCode] = useState(false);
 
   const referralLink = `${window.location.origin}/signup/individual?ref=${profile?.referral_code}`;
 
@@ -33,15 +34,15 @@ export function ReferralsSection() {
 
       setStats(statsData);
 
-      // Fetch referred users
-      const { data: referralsData } = await supabase
+      // Fetch referred users (now called followers)
+      const { data: followersData } = await supabase
         .from("profiles")
         .select("id, full_name, user_tier, created_at")
         .eq("referred_by", user.id)
         .order("created_at", { ascending: false })
         .limit(10);
 
-      setReferrals(referralsData || []);
+      setFollowers(followersData || []);
     };
 
     fetchData();
@@ -64,7 +65,7 @@ export function ReferralsSection() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Referral Link */}
+      {/* Referral Link - Hidden by default */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -73,25 +74,22 @@ export function ReferralsSection() {
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row md:items-center gap-4">
               <div className="flex-1">
-                <h3 className="text-lg font-semibold mb-1">Your Referral Link</h3>
+                <h3 className="text-lg font-semibold mb-1">Share Education Videos</h3>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Share this link to earn commissions when your referrals subscribe or invest.
+                  Share free education videos to earn followers and commissions automatically.
                 </p>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 bg-background/80 rounded-lg px-4 py-2 text-sm font-mono truncate">
-                    {referralLink}
+                    {showReferralCode ? profile?.referral_code : "••••••••"}
                   </div>
-                  <Button onClick={copyLink} variant="outline">
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </Button>
-                  <Button variant="outline">
-                    <QrCode className="w-4 h-4" />
+                  <Button 
+                    onClick={() => setShowReferralCode(!showReferralCode)} 
+                    variant="outline"
+                    size="icon"
+                  >
+                    {showReferralCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </Button>
                 </div>
-              </div>
-              <div className="text-center p-4 bg-primary/10 rounded-lg">
-                <p className="text-2xl font-bold">{profile?.referral_code}</p>
-                <p className="text-xs text-muted-foreground">Your Code</p>
               </div>
             </div>
           </CardContent>
@@ -168,31 +166,31 @@ export function ReferralsSection() {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Recent Referrals</CardTitle>
-              <CardDescription>Users who signed up with your link</CardDescription>
+              <CardTitle>Recent Followers</CardTitle>
+              <CardDescription>Users who signed up through your shared content</CardDescription>
             </CardHeader>
             <CardContent>
-              {referrals.length > 0 ? (
+              {followers.length > 0 ? (
                 <div className="space-y-3">
-                  {referrals.map((ref) => (
-                    <div key={ref.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  {followers.map((follower) => (
+                    <div key={follower.id} className="flex items-center justify-between py-2 border-b last:border-0">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          {ref.full_name?.charAt(0) || "U"}
+                          {follower.full_name?.charAt(0) || "U"}
                         </div>
                         <div>
-                          <p className="font-medium">{ref.full_name || "User"}</p>
+                          <p className="font-medium">{follower.full_name || "User"}</p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(ref.created_at).toLocaleDateString()}
+                            {new Date(follower.created_at).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
                       <Badge variant={
-                        ref.user_tier === "exclusive" ? "default" :
-                        ref.user_tier === "premium" ? "secondary" :
+                        follower.user_tier === "exclusive" ? "default" :
+                        follower.user_tier === "premium" ? "secondary" :
                         "outline"
                       }>
-                        {ref.user_tier}
+                        {follower.user_tier}
                       </Badge>
                     </div>
                   ))}
@@ -200,8 +198,8 @@ export function ReferralsSection() {
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>No referrals yet</p>
-                  <p className="text-sm">Share your link to get started!</p>
+                  <p>No followers yet</p>
+                  <p className="text-sm">Share education videos to grow your network!</p>
                 </div>
               )}
             </CardContent>

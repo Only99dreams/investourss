@@ -9,6 +9,7 @@ import { EducationSection } from "@/components/dashboard/sections/EducationSecti
 import { InvestmentsSection } from "@/components/dashboard/sections/InvestmentsSection";
 import { ReferralsSection } from "@/components/dashboard/sections/ReferralsSection";
 import { MessagesSection } from "@/components/dashboard/sections/MessagesSection";
+import { AIReportsSection } from "@/components/dashboard/sections/AIReportsSection";
 import { SettingsSection } from "@/components/dashboard/sections/SettingsSection";
 import { NotificationsSection } from "@/components/dashboard/sections/NotificationsSection";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -83,9 +84,9 @@ const Dashboard = () => {
               <InvestmentsSection />
             </>
           } />
-          <Route path="/referrals" element={
+          <Route path="/followers" element={
             <>
-              <DashboardHeader title="Referrals & Performance" onMenuClick={() => setSidebarOpen(true)} />
+              <DashboardHeader title="Followers & Performance" onMenuClick={() => setSidebarOpen(true)} />
               <ReferralsSection />
             </>
           } />
@@ -110,9 +111,7 @@ const Dashboard = () => {
           <Route path="/ai-reports" element={
             <>
               <DashboardHeader title="AI Reports" onMenuClick={() => setSidebarOpen(true)} />
-              <div className="p-6">
-                <p className="text-muted-foreground">AI Reports - Searches & Scam Checks. Coming soon...</p>
-              </div>
+              <AIReportsSection />
             </>
           } />
           <Route path="/microinsurance" element={

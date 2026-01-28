@@ -18,7 +18,9 @@ import {
   HeadphonesIcon,
   LayoutDashboard,
   ChevronLeft,
-  Radio
+  Radio,
+  Settings,
+  Banknote
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,7 @@ const menuItems = [
   { icon: GraduationCap, label: "Education", path: "/admin/education" },
   { icon: MessageSquare, label: "Community", path: "/admin/community" },
   { icon: Wallet, label: "Wallets", path: "/admin/wallets" },
+  { icon: Banknote, label: "Deposit Requests", path: "/admin/deposit-requests" },
   { icon: CreditCard, label: "Payouts", path: "/admin/payouts" },
   { icon: Share2, label: "Referrals", path: "/admin/referrals" },
   { icon: Megaphone, label: "Campaigns", path: "/admin/campaigns" },
@@ -46,6 +49,7 @@ const menuItems = [
   { icon: Mail, label: "Messages", path: "/admin/messages" },
   { icon: HeadphonesIcon, label: "Support", path: "/admin/support" },
   { icon: Radio, label: "Advertising", path: "/admin/advertising" },
+  { icon: Settings, label: "Settings", path: "/admin/settings" },
 ];
 
 const AdminSidebar = ({ isOpen, onToggle }: AdminSidebarProps) => {
