@@ -139,20 +139,12 @@ export function ReferralsSection() {
               </div>
               <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
                 <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="font-semibold">30%</p>
-                  <p className="text-muted-foreground">Direct Subscribers</p>
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
                   <p className="font-semibold">40%</p>
-                  <p className="text-muted-foreground">Direct Investors</p>
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="font-semibold">10%</p>
-                  <p className="text-muted-foreground">Indirect Subscribers</p>
+                  <p className="text-muted-foreground">Direct Earnings</p>
                 </div>
                 <div className="text-center p-3 bg-muted/50 rounded-lg">
                   <p className="font-semibold">5%</p>
-                  <p className="text-muted-foreground">Indirect Investors</p>
+                  <p className="text-muted-foreground">Indirect Earnings</p>
                 </div>
               </div>
             </CardContent>

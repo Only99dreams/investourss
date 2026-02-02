@@ -51,11 +51,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed"
           >
-            Your trusted AI-powered platform tackling low financial literacy and {" "}
-            <br className="hidden sm:block" />
-            investment scams, with access to investment and microinsurance {" "}
-            <br className="hidden sm:block" />
-            options via licensed partners.
+            Your trusted AI-powered platform tackling low financial literacy and investment scams — building pathways to investment and microinsurance through licensed partners.
           </motion.p>
 
           {/* CTA Button */}

@@ -103,6 +103,36 @@ export function ProfileSection() {
     }
   };
 
+  const handleBecomeGFE = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_gfe: true,
+          gfe_terms_agreed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      await refreshProfile();
+      toast({
+        title: "Welcome to GFE Program!",
+        description: "You are now a Grassroots Financial Educator. Start earning commissions by sharing education content!",
+      });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to become a GFE",
+        variant: "destructive"
+      });
+    }
+  };
+
   const tierColors = {
     free: "bg-muted text-muted-foreground",
     premium: "bg-gold/20 text-gold border-gold/30",
@@ -218,7 +248,7 @@ export function ProfileSection() {
                     <li>• Lower withdrawal fees on earnings</li>
                   </ul>
                 </div>
-                <Button variant="hero" size="lg">Become a GFE</Button>
+                <Button variant="hero" size="lg" onClick={handleBecomeGFE}>Become a GFE</Button>
               </div>
             </CardContent>
           </Card>

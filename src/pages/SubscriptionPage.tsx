@@ -115,7 +115,7 @@ const SubscriptionPage = () => {
                 </CardTitle>
                 <CardDescription>Perfect for getting started</CardDescription>
                 <div className="mt-4">
-                  <span className="text-3xl font-bold">₦1,500</span>
+                  <span className="text-3xl font-bold">₦1,613</span>
                   <span className="text-muted-foreground"> / month</span>
                 </div>
               </CardHeader>
@@ -155,9 +155,9 @@ const SubscriptionPage = () => {
                 </CardTitle>
                 <CardDescription>Best value for committed learners</CardDescription>
                 <div className="mt-4">
-                  <span className="text-3xl font-bold">₦4,000</span>
+                  <span className="text-3xl font-bold">₦4,300</span>
                   <span className="text-muted-foreground"> / 3 months</span>
-                  <div className="text-sm text-green-600 font-medium">Save ₦500</div>
+                  <div className="text-sm text-green-600 font-medium">Save ₦539</div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -191,9 +191,9 @@ const SubscriptionPage = () => {
                 </CardTitle>
                 <CardDescription>Maximum savings for power users</CardDescription>
                 <div className="mt-4">
-                  <span className="text-3xl font-bold">₦15,000</span>
+                  <span className="text-3xl font-bold">₦16,125</span>
                   <span className="text-muted-foreground"> / year</span>
-                  <div className="text-sm text-green-600 font-medium">Save ₦3,000</div>
+                  <div className="text-sm text-green-600 font-medium">Save ₦3,231</div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">

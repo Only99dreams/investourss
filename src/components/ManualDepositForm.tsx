@@ -15,9 +15,10 @@ interface ManualDepositFormProps {
   onSuccess?: () => void;
   narration?: string;
   prefillAmount?: number;
+  promoCode?: any;
 }
 
-export const ManualDepositForm: React.FC<ManualDepositFormProps> = ({ onSuccess, narration, prefillAmount }) => {
+export const ManualDepositForm: React.FC<ManualDepositFormProps> = ({ onSuccess, narration, prefillAmount, promoCode }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -140,6 +141,31 @@ export const ManualDepositForm: React.FC<ManualDepositFormProps> = ({ onSuccess,
         });
 
       if (error) throw error;
+
+      // Record promo code usage if applicable
+      if (promoCode) {
+        const { error: promoError } = await supabase
+          .from('promo_code_uses')
+          .insert({
+            promo_code_id: promoCode.promo_code_id,
+            user_id: user.id,
+            discount_applied: (prefillAmount || amount) - amount // The discount amount
+          });
+
+        if (promoError) {
+          console.error('Error recording promo code usage:', promoError);
+          // Don't fail the whole transaction for promo code recording error
+        }
+
+        // Update promo code usage count
+        const { error: updateError } = await supabase.rpc('increment_promo_usage', {
+          promo_id: promoCode.promo_code_id
+        });
+
+        if (updateError) {
+          console.error('Error updating promo code usage count:', updateError);
+        }
+      }
 
       toast({
         title: "Deposit Request Submitted",

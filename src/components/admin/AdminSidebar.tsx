@@ -20,7 +20,8 @@ import {
   ChevronLeft,
   Radio,
   Settings,
-  Banknote
+  Banknote,
+  Tag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ const menuItems = [
   { icon: CreditCard, label: "Payouts", path: "/admin/payouts" },
   { icon: Share2, label: "Referrals", path: "/admin/referrals" },
   { icon: Megaphone, label: "Campaigns", path: "/admin/campaigns" },
+  { icon: Tag, label: "Promo Codes", path: "/admin/promo-codes" },
   { icon: FileText, label: "Resources", path: "/admin/resources" },
   { icon: Mail, label: "Messages", path: "/admin/messages" },
   { icon: HeadphonesIcon, label: "Support", path: "/admin/support" },
