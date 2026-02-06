@@ -34,19 +34,19 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
   const planDetails = {
     monthly: {
       name: 'Premium Monthly',
-      price: 1613,
+      price: 1500, // Base price excluding VAT
       period: 'month',
       savings: null
     },
     quarterly: {
       name: 'Premium Quarterly',
-      price: 4300,
+      price: 4000, // Base price excluding VAT
       period: '3 months',
       savings: 'Save ₦539'
     },
     annual: {
       name: 'Premium Annual',
-      price: 16125,
+      price: 15000, // Base price excluding VAT
       period: 'year',
       savings: 'Save ₦3,231'
     }
@@ -114,16 +114,39 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
     setPromoCode('');
   };
 
-  // Calculate discounted price
-  const getDiscountedPrice = () => {
-    if (appliedPromo && planType === 'annual') {
-      const discount = (currentPlan.price * appliedPromo.discount_percentage) / 100;
-      return Math.max(0, currentPlan.price - discount);
+  // Calculate pricing with VAT and promo codes
+  const calculatePricing = () => {
+    const basePrice = currentPlan.price;
+    const vatRate = 0.075; // 7.5% VAT
+    const vatAmount = basePrice * vatRate;
+    const subtotal = basePrice + vatAmount;
+
+    let discountAmount = 0;
+    let finalTotal = subtotal;
+
+    if (appliedPromo) {
+      if (appliedPromo.discount_percentage === 100) {
+        // 100% discount: Free subscription
+        discountAmount = subtotal;
+        finalTotal = 0;
+      } else if (appliedPromo.discount_percentage > 0) {
+        // Regular discount applied to subtotal (price + VAT)
+        discountAmount = (subtotal * appliedPromo.discount_percentage) / 100;
+        finalTotal = Math.max(0, subtotal - discountAmount);
+      }
     }
-    return currentPlan.price;
+
+    return {
+      basePrice,
+      vatAmount,
+      subtotal,
+      discountAmount,
+      finalTotal,
+      isFree: appliedPromo?.discount_percentage === 100
+    };
   };
 
-  const discountedPrice = getDiscountedPrice();
+  const pricing = calculatePricing();
 
   if (showBankTransferForm) {
     return (
@@ -153,10 +176,15 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
                 <div>
                   <h3 className="font-semibold">{currentPlan.name}</h3>
                   <p className="text-sm text-muted-foreground">
-                    ₦{discountedPrice.toLocaleString()} / {currentPlan.period}
-                    {appliedPromo && (
+                    ₦{pricing.finalTotal.toLocaleString()} / {currentPlan.period}
+                    {appliedPromo && pricing.discountAmount > 0 && (
                       <span className="block text-green-600 font-medium">
-                        (₦{currentPlan.price.toLocaleString()} - {appliedPromo.discount_percentage}% discount)
+                        ({appliedPromo.discount_percentage}% discount applied)
+                      </span>
+                    )}
+                    {pricing.isFree && (
+                      <span className="block text-green-600 font-medium">
+                        (100% discount - Free subscription!)
                       </span>
                     )}
                   </p>
@@ -166,9 +194,14 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
                     {currentPlan.savings}
                   </Badge>
                 )}
-                {appliedPromo && (
+                {appliedPromo && !pricing.isFree && (
                   <Badge variant="secondary" className="bg-green-100 text-green-800">
                     {appliedPromo.discount_percentage}% OFF
+                  </Badge>
+                )}
+                {pricing.isFree && (
+                  <Badge variant="secondary" className="bg-green-100 text-green-800">
+                    FREE
                   </Badge>
                 )}
               </div>
@@ -176,11 +209,13 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
 
             <ManualDepositForm
               narration={`Premium subscription - ${planType}${appliedPromo ? ` (${appliedPromo.code})` : ''}`}
-              prefillAmount={discountedPrice}
+              prefillAmount={pricing.finalTotal}
               onSuccess={() => {
                 toast({
-                  title: "Payment Submitted",
-                  description: "Your payment proof has been uploaded. We'll review it and activate your subscription within 24 hours.",
+                  title: pricing.isFree ? "Subscription Activated!" : "Payment Submitted",
+                  description: pricing.isFree 
+                    ? "Your premium subscription has been activated for free!"
+                    : "Your payment proof has been uploaded. We'll review it and activate your subscription within 24 hours.",
                 });
                 onSuccess?.();
               }}
@@ -205,33 +240,54 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Plan Summary */}
-          <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg p-6 border border-primary/20">
-            <div className="flex items-center justify-between">
+          <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg p-4 sm:p-6 border border-primary/20">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h3 className="text-xl font-bold text-primary">{currentPlan.name}</h3>
-                <p className="text-muted-foreground">
-                  ₦{currentPlan.price.toLocaleString()} / {currentPlan.period}
-                </p>
+                <h3 className="text-lg sm:text-xl font-bold text-primary">{currentPlan.name}</h3>
                 <ul className="mt-3 space-y-1 text-sm">
                   <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                     Unlimited AI Tutor access
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                     Premium educational content
                   </li>
                   <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                     Priority support
                   </li>
                 </ul>
               </div>
-              {currentPlan.savings && (
-                <Badge className="bg-accent text-accent-foreground">
-                  {currentPlan.savings}
-                </Badge>
+              <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2">
+                {currentPlan.savings && (
+                  <Badge className="bg-accent text-accent-foreground">
+                    {currentPlan.savings}
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Pricing Breakdown */}
+            <div className="mt-4 pt-4 border-t border-primary/10 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Base Price:</span>
+                <span>₦{pricing.basePrice.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">VAT (7.5%):</span>
+                <span>₦{Math.round(pricing.vatAmount).toLocaleString()}</span>
+              </div>
+              {appliedPromo && pricing.discountAmount > 0 && (
+                <div className="flex justify-between text-green-600 font-medium">
+                  <span>Discount ({appliedPromo.discount_percentage}%):</span>
+                  <span>-₦{Math.round(pricing.discountAmount).toLocaleString()}</span>
+                </div>
               )}
+              <div className="flex justify-between font-bold text-base sm:text-lg border-t border-primary/10 pt-2 mt-2">
+                <span>Total:</span>
+                <span className="text-primary">₦{Math.round(pricing.finalTotal).toLocaleString()} / {currentPlan.period}</span>
+              </div>
             </div>
           </div>
 
@@ -283,77 +339,114 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
                 </div>
               )}
 
-              {appliedPromo && (
-                <div className="mt-3 text-sm text-muted-foreground">
-                  <div className="flex justify-between">
-                    <span>Original Price:</span>
-                    <span>₦{currentPlan.price.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between font-medium text-green-600">
-                    <span>Discount ({appliedPromo.discount_percentage}%):</span>
-                    <span>-₦{((currentPlan.price * appliedPromo.discount_percentage) / 100).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-lg border-t pt-1 mt-1">
-                    <span>Total:</span>
-                    <span>₦{discountedPrice.toLocaleString()}</span>
-                  </div>
-                </div>
-              )}
+
             </div>
 
             {/* Payment Method Selection */}
-          <div className="space-y-4">
-            <h4 className="font-semibold">Choose Payment Method</h4>
+            {!pricing.isFree && (
+              <div className="space-y-4">
+                <h4 className="font-semibold">Choose Payment Method</h4>
 
-            <div className="grid gap-3">
-              {/* Bank Transfer Option */}
-              <div
-                className={cn(
-                  "border rounded-lg p-4 cursor-pointer transition-all",
-                  selectedPaymentMethod === 'bank_transfer'
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
-                )}
-                onClick={() => handlePaymentMethodSelect('bank_transfer')}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-4 h-4 rounded-full border-2 flex items-center justify-center",
-                    selectedPaymentMethod === 'bank_transfer'
-                      ? "border-primary"
-                      : "border-muted-foreground"
-                  )}>
-                    {selectedPaymentMethod === 'bank_transfer' && (
-                      <div className="w-2 h-2 bg-primary rounded-full" />
+                <div className="grid gap-3">
+                  {/* Bank Transfer Option */}
+                  <div
+                    className={cn(
+                      "border rounded-lg p-4 cursor-pointer transition-all",
+                      selectedPaymentMethod === 'bank_transfer'
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50"
                     )}
+                    onClick={() => handlePaymentMethodSelect('bank_transfer')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-4 h-4 rounded-full border-2 flex items-center justify-center",
+                        selectedPaymentMethod === 'bank_transfer'
+                          ? "border-primary"
+                          : "border-muted-foreground"
+                      )}>
+                        {selectedPaymentMethod === 'bank_transfer' && (
+                          <div className="w-2 h-2 bg-primary rounded-full" />
+                        )}
+                      </div>
+                      <Banknote className="h-5 w-5 text-primary" />
+                      <div className="flex-1">
+                        <h5 className="font-medium">Bank Transfer</h5>
+                        <p className="text-sm text-muted-foreground">
+                          Transfer directly to our account and upload proof of payment
+                        </p>
+                      </div>
+                      <Badge variant="secondary">Recommended</Badge>
+                    </div>
                   </div>
-                  <Banknote className="h-5 w-5 text-primary" />
-                  <div className="flex-1">
-                    <h5 className="font-medium">Bank Transfer</h5>
-                    <p className="text-sm text-muted-foreground">
-                      Transfer directly to our account and upload proof of payment
-                    </p>
-                  </div>
-                  <Badge variant="secondary">Recommended</Badge>
-                </div>
-              </div>
 
-              {/* Card Payment Option (Coming Soon) */}
-              <div className="border rounded-lg p-4 opacity-50 cursor-not-allowed">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full border-2 border-muted-foreground" />
-                  <CreditCard className="h-5 w-5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <h5 className="font-medium">Card Payment</h5>
-                    <p className="text-sm text-muted-foreground">
-                      Pay with debit/credit card (Coming Soon)
-                    </p>
+                  {/* Card Payment Option (Coming Soon) */}
+                  <div className="border rounded-lg p-4 opacity-50 cursor-not-allowed">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full border-2 border-muted-foreground" />
+                      <CreditCard className="h-5 w-5 text-muted-foreground" />
+                      <div className="flex-1">
+                        <h5 className="font-medium">Card Payment</h5>
+                        <p className="text-sm text-muted-foreground">
+                          Pay with debit/credit card (Coming Soon)
+                        </p>
+                      </div>
+                      <Badge variant="outline">Coming Soon</Badge>
+                    </div>
                   </div>
-                  <Badge variant="outline">Coming Soon</Badge>
                 </div>
               </div>
-            </div>
-          </div>
+            )}
+
+            {/* Free Subscription Activation */}
+            {pricing.isFree && (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <div>
+                      <h4 className="font-semibold text-green-800">Free Subscription Available!</h4>
+                      <p className="text-sm text-green-700">
+                        Your 100% discount promo code makes this subscription completely free.
+                        Click below to activate your premium subscription immediately.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Directly activate subscription for free
+                      const { error } = await supabase.rpc('activate_free_subscription', {
+                        p_user_id: user?.id,
+                        p_plan_type: planType,
+                        p_promo_code_id: appliedPromo.promo_code_id
+                      });
+
+                      if (error) throw error;
+
+                      toast({
+                        title: "Subscription Activated!",
+                        description: "Your premium subscription has been activated for free!",
+                      });
+                      onSuccess?.();
+                    } catch (error: any) {
+                      toast({
+                        title: "Error",
+                        description: error.message || "Failed to activate subscription",
+                        variant: "destructive"
+                      });
+                    }
+                  }}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                  size="lg"
+                >
+                  Activate Free Subscription
+                  <CheckCircle className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
+            )}
         </CardContent>
       </Card>
 

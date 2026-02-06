@@ -108,6 +108,18 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
             </Button>
           )}
 
+          {profile?.user_tier === "premium" && profile?.subscription_type !== "annual" && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate('/subscribe')}
+              className="border-primary/50 text-primary hover:bg-primary/10"
+            >
+              <Crown className="w-4 h-4 mr-2" />
+              Upgrade Plan
+            </Button>
+          )}
+
           <div className={cn(
             "px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1",
             profile?.user_tier === "premium" ? 
