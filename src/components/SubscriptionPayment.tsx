@@ -115,32 +115,36 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
   };
 
   // Calculate pricing with VAT and promo codes
+  // VAT is calculated AFTER promo discount is applied
   const calculatePricing = () => {
     const basePrice = currentPlan.price;
     const vatRate = 0.075; // 7.5% VAT
-    const vatAmount = basePrice * vatRate;
-    const subtotal = basePrice + vatAmount;
 
     let discountAmount = 0;
-    let finalTotal = subtotal;
+    let subtotalAfterDiscount = basePrice;
 
+    // First apply promo discount to base price
     if (appliedPromo) {
       if (appliedPromo.discount_percentage === 100) {
         // 100% discount: Free subscription
-        discountAmount = subtotal;
-        finalTotal = 0;
+        discountAmount = basePrice;
+        subtotalAfterDiscount = 0;
       } else if (appliedPromo.discount_percentage > 0) {
-        // Regular discount applied to subtotal (price + VAT)
-        discountAmount = (subtotal * appliedPromo.discount_percentage) / 100;
-        finalTotal = Math.max(0, subtotal - discountAmount);
+        // Regular discount applied to base price
+        discountAmount = (basePrice * appliedPromo.discount_percentage) / 100;
+        subtotalAfterDiscount = Math.max(0, basePrice - discountAmount);
       }
     }
 
+    // Calculate VAT on the discounted subtotal
+    const vatAmount = subtotalAfterDiscount * vatRate;
+    const finalTotal = subtotalAfterDiscount + vatAmount;
+
     return {
       basePrice,
-      vatAmount,
-      subtotal,
       discountAmount,
+      subtotalAfterDiscount,
+      vatAmount,
       finalTotal,
       isFree: appliedPromo?.discount_percentage === 100
     };
@@ -271,21 +275,27 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
             {/* Pricing Breakdown */}
             <div className="mt-4 pt-4 border-t border-primary/10 space-y-1.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Base Price:</span>
+                <span className="text-muted-foreground">{currentPlan.name}:</span>
                 <span>₦{pricing.basePrice.toLocaleString()}</span>
               </div>
+              {appliedPromo && pricing.discountAmount > 0 && (
+                <div className="flex justify-between text-green-600 font-medium">
+                  <span>Promo Discount ({appliedPromo.discount_percentage}%):</span>
+                  <span>-₦{Math.round(pricing.discountAmount).toLocaleString()}</span>
+                </div>
+              )}
+              {appliedPromo && pricing.discountAmount > 0 && (
+                <div className="flex justify-between border-t border-primary/10 pt-1.5 mt-1.5">
+                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span>₦{Math.round(pricing.subtotalAfterDiscount).toLocaleString()}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">VAT (7.5%):</span>
                 <span>₦{Math.round(pricing.vatAmount).toLocaleString()}</span>
               </div>
-              {appliedPromo && pricing.discountAmount > 0 && (
-                <div className="flex justify-between text-green-600 font-medium">
-                  <span>Discount ({appliedPromo.discount_percentage}%):</span>
-                  <span>-₦{Math.round(pricing.discountAmount).toLocaleString()}</span>
-                </div>
-              )}
               <div className="flex justify-between font-bold text-base sm:text-lg border-t border-primary/10 pt-2 mt-2">
-                <span>Total:</span>
+                <span>Total Payable:</span>
                 <span className="text-primary">₦{Math.round(pricing.finalTotal).toLocaleString()} / {currentPlan.period}</span>
               </div>
             </div>
