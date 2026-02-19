@@ -64,20 +64,36 @@ export const ManualDepositForm: React.FC<ManualDepositFormProps> = ({ onSuccess,
 
   const uploadProofOfPayment = async (file: File): Promise<string | null> => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${user?.id}_${Date.now()}.${fileExt}`;
-    const filePath = `proof-of-payment/${fileName}`;
+    const fileName = `proof-of-payment_${Date.now()}.${fileExt}`;
+    const filePath = `${user?.id}/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
+    // Try to upload to 'attachments' bucket first, fall back to 'deposit-proofs'
+    let uploadError: any = null;
+    let usedBucket = 'attachments';
+
+    const result = await supabase.storage
       .from('attachments')
       .upload(filePath, file);
 
+    uploadError = result.error;
+
+    // If the bucket doesn't exist, try 'deposit-proofs' bucket
+    if (uploadError && (uploadError.message?.includes('not found') || uploadError.message?.includes('Bucket') || uploadError.statusCode === '404')) {
+      console.warn('Attachments bucket not found, trying deposit-proofs bucket...');
+      usedBucket = 'deposit-proofs';
+      const fallbackResult = await supabase.storage
+        .from('deposit-proofs')
+        .upload(filePath, file);
+      uploadError = fallbackResult.error;
+    }
+
     if (uploadError) {
       console.error('Error uploading file:', uploadError);
-      return null;
+      throw new Error(`File upload failed: ${uploadError.message || 'Storage bucket may not exist. Please contact support.'}`);
     }
 
     const { data } = supabase.storage
-      .from('attachments')
+      .from(usedBucket)
       .getPublicUrl(filePath);
 
     return data.publicUrl;
@@ -121,7 +137,7 @@ export const ManualDepositForm: React.FC<ManualDepositFormProps> = ({ onSuccess,
       if (formData.proofOfPayment) {
         proofUrl = await uploadProofOfPayment(formData.proofOfPayment);
         if (!proofUrl) {
-          throw new Error('Failed to upload proof of payment');
+          throw new Error('Failed to upload proof of payment. Please try a different file.');
         }
       }
 
@@ -140,7 +156,10 @@ export const ManualDepositForm: React.FC<ManualDepositFormProps> = ({ onSuccess,
           status: 'pending'
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw new Error(error.message || 'Database error');
+      }
 
       // Record promo code usage if applicable
       if (promoCode) {
@@ -187,9 +206,10 @@ export const ManualDepositForm: React.FC<ManualDepositFormProps> = ({ onSuccess,
 
     } catch (error) {
       console.error('Error submitting deposit request:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
       toast({
         title: "Submission Failed",
-        description: "Failed to submit your deposit request. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
