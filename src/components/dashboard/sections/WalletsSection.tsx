@@ -208,7 +208,7 @@ export function WalletsSection() {
       balance: wallet?.gfe_wallet_balance || 0,
       icon: Users,
       color: "from-primary to-primary/70",
-      description: "Educator earnings",
+      description: "Referral commissions & educator earnings",
       locked: !profile?.is_gfe || !profile?.gfe_terms_agreed_at,
       gfeOnly: true
     }

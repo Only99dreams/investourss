@@ -210,6 +210,34 @@ export function EducationSection() {
     return url;
   };
 
+  const getVideoThumbnail = (module: Module): string | null => {
+    if (module.thumbnail_url) return module.thumbnail_url;
+    if (module.video_url) {
+      // Extract YouTube thumbnail
+      if (module.video_url.includes("youtube.com/watch")) {
+        const videoId = module.video_url.split("v=")[1]?.split("&")[0];
+        if (videoId) return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      }
+      if (module.video_url.includes("youtu.be/")) {
+        const videoId = module.video_url.split("youtu.be/")[1]?.split("?")[0];
+        if (videoId) return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      }
+    }
+    return null;
+  };
+
+  const generateShareUrl = (moduleId: string): string => {
+    const baseUrl = window.location.origin;
+    const referralCode = profile?.referral_code || "";
+    const url = new URL(`${baseUrl}/dashboard`);
+    url.searchParams.set("tab", "education");
+    url.searchParams.set("module", moduleId);
+    if (referralCode) {
+      url.searchParams.set("ref", referralCode);
+    }
+    return url.toString();
+  };
+
   const addSampleData = async () => {
     try {
       // Sample modules data
@@ -309,7 +337,11 @@ export function EducationSection() {
 
   const handleShare = async (module: Module, platform: "copy" | "twitter" | "facebook" | "linkedin" | "instagram" | "whatsapp") => {
     const shareUrl = generateShareUrl(module.id);
+    const thumbnail = getVideoThumbnail(module);
     const shareText = `Check out this learning module: "${module.title}" on Investours!`;
+    const shareTextWithLink = thumbnail
+      ? `${shareText}\n\n🎥 ${module.title}\n${shareUrl}`
+      : `${shareText}\n${shareUrl}`;
 
     switch (platform) {
       case "copy":
@@ -326,12 +358,11 @@ export function EducationSection() {
         window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, "_blank");
         break;
       case "instagram":
-        // Instagram doesn't support direct URL sharing, so copy to clipboard
-        await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
+        await navigator.clipboard.writeText(shareTextWithLink);
         toast.success("Content copied! Paste into Instagram.");
         break;
       case "whatsapp":
-        window.open(`https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`, "_blank");
+        window.open(`https://wa.me/?text=${encodeURIComponent(shareTextWithLink)}`, "_blank");
         break;
     }
   };

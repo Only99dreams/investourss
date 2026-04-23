@@ -23,6 +23,25 @@ const signupReasons = [
   { id: "gfe", label: "To learn and make money as a Grassroots Financial Educator - GFE" }
 ];
 
+const months = [
+  { value: "01", label: "January" },
+  { value: "02", label: "February" },
+  { value: "03", label: "March" },
+  { value: "04", label: "April" },
+  { value: "05", label: "May" },
+  { value: "06", label: "June" },
+  { value: "07", label: "July" },
+  { value: "08", label: "August" },
+  { value: "09", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
+
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
+const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
+
 const CompleteProfile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -31,7 +50,9 @@ const CompleteProfile = () => {
   const [showGFETerms, setShowGFETerms] = useState(false);
 
   const [formData, setFormData] = useState({
-    dateOfBirth: "",
+    dobDay: "",
+    dobMonth: "",
+    dobYear: "",
     residentialAddress: "",
     occupation: "",
     sector: "",
@@ -75,8 +96,12 @@ const CompleteProfile = () => {
     setIsLoading(true);
 
     try {
+      const dateOfBirth = formData.dobYear && formData.dobMonth && formData.dobDay
+        ? `${formData.dobYear}-${formData.dobMonth}-${formData.dobDay}`
+        : null;
+
       const updateData: Record<string, unknown> = {
-        date_of_birth: formData.dateOfBirth || null,
+        date_of_birth: dateOfBirth,
         residential_address: formData.residentialAddress,
         occupation: formData.occupation,
         sector: formData.sector,
@@ -140,15 +165,41 @@ const CompleteProfile = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="dob" className="flex items-center gap-2">
+                    <Label className="flex items-center gap-2">
                       <Calendar className="w-4 h-4" /> Date of Birth
                     </Label>
-                    <Input 
-                      id="dob" 
-                      type="date"
-                      value={formData.dateOfBirth}
-                      onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <Select value={formData.dobDay} onValueChange={(v) => setFormData({ ...formData, dobDay: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Day" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {days.map((day) => (
+                            <SelectItem key={day} value={day}>{day}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select value={formData.dobMonth} onValueChange={(v) => setFormData({ ...formData, dobMonth: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Month" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {months.map((m) => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select value={formData.dobYear} onValueChange={(v) => setFormData({ ...formData, dobYear: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {years.map((y) => (
+                            <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
                   <div className="space-y-2">

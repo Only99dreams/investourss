@@ -34,21 +34,21 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
   const planDetails = {
     monthly: {
       name: 'Premium Monthly',
-      price: 1500, // Base price excluding VAT
+      price: 3000, // Base price excluding VAT
       period: 'month',
       savings: null
     },
     quarterly: {
       name: 'Premium Quarterly',
-      price: 4000, // Base price excluding VAT
+      price: 8000, // Base price excluding VAT
       period: '3 months',
-      savings: 'Save ₦539'
+      savings: 'Save ₦1,075'
     },
     annual: {
       name: 'Premium Annual',
-      price: 15000, // Base price excluding VAT
+      price: 30000, // Base price excluding VAT
       period: 'year',
-      savings: 'Save ₦3,231'
+      savings: 'Save ₦6,450'
     }
   };
 
