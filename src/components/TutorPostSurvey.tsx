@@ -16,6 +16,7 @@ type Understanding = "well" | "slightly" | "not_at_all";
 type WantsAdvanced = "yes" | "maybe" | "no";
 
 interface SurveyAnswers {
+  pre_understanding: Understanding | null;
   completed: Completed | null;
   helpfulness: Helpfulness | null;
   post_understanding: Understanding | null;
@@ -30,6 +31,7 @@ const TutorPostSurvey = ({
   onDismiss,
 }: TutorPostSurveyProps) => {
   const [answers, setAnswers] = useState<SurveyAnswers>({
+    pre_understanding: null,
     completed: null,
     helpfulness: null,
     post_understanding: null,
@@ -44,7 +46,7 @@ const TutorPostSurvey = ({
   };
 
   const isReady =
-    answers.completed && answers.helpfulness && answers.post_understanding && answers.wants_advanced;
+    answers.pre_understanding && answers.completed && answers.helpfulness && answers.post_understanding && answers.wants_advanced;
 
   const handleSubmit = async () => {
     if (!isReady || submitting) return;
@@ -54,6 +56,7 @@ const TutorPostSurvey = ({
         session_id: sessionId,
         user_id: userId ?? null,
         topic: topic ?? null,
+        pre_understanding: answers.pre_understanding,
         completed: answers.completed,
         helpfulness: answers.helpfulness,
         post_understanding: answers.post_understanding,
@@ -110,7 +113,21 @@ const TutorPostSurvey = ({
             </div>
 
             <div className="space-y-3">
-              {/* Q1: Completion */}
+              {/* Q1: Pre-understanding */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">Before this lesson, how well did you understand this topic?</p>
+                <div className="flex gap-2 flex-wrap">
+                  {([
+                    { v: "well" as Understanding, l: "Well" },
+                    { v: "slightly" as Understanding, l: "Slightly" },
+                    { v: "not_at_all" as Understanding, l: "Not at all" },
+                  ]).map(({ v, l }) => (
+                    <Chip key={v} active={answers.pre_understanding === v} onClick={() => set("pre_understanding", v)} label={l} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Q2: Completion */}
               <div>
                 <p className="text-xs text-muted-foreground mb-1.5">Did you complete this lesson?</p>
                 <div className="flex gap-2 flex-wrap">
@@ -125,7 +142,7 @@ const TutorPostSurvey = ({
                 </div>
               </div>
 
-              {/* Q2: Helpfulness */}
+              {/* Q3: Helpfulness */}
               <div>
                 <p className="text-xs text-muted-foreground mb-1.5">How helpful was this lesson?</p>
                 <div className="flex gap-2 flex-wrap">
@@ -139,7 +156,7 @@ const TutorPostSurvey = ({
                 </div>
               </div>
 
-              {/* Q3: Post-understanding */}
+              {/* Q4: Post-understanding */}
               <div>
                 <p className="text-xs text-muted-foreground mb-1.5">How well do you understand the topic now?</p>
                 <div className="flex gap-2 flex-wrap">
@@ -153,7 +170,7 @@ const TutorPostSurvey = ({
                 </div>
               </div>
 
-              {/* Q4: What gained (optional) */}
+              {/* Q5: What gained (optional) */}
               <div>
                 <p className="text-xs text-muted-foreground mb-1.5">What did you gain? <span className="opacity-60">(optional)</span></p>
                 <input
@@ -166,7 +183,7 @@ const TutorPostSurvey = ({
                 />
               </div>
 
-              {/* Q5: Wants advanced */}
+              {/* Q6: Wants advanced */}
               <div>
                 <p className="text-xs text-muted-foreground mb-1.5">Would you like more advanced tools, mentorship & earning guidance?</p>
                 <div className="flex gap-2 flex-wrap">

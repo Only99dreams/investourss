@@ -11,7 +11,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/ui/Footer";
 import investoursLogo from "@/assets/investours-logo.png";
-import TutorPreSurvey from "@/components/TutorPreSurvey";
 import TutorPostSurvey from "@/components/TutorPostSurvey";
 
 interface Message {
@@ -57,7 +56,6 @@ const FinancialTutor = () => {
 
   // Survey state
   const sessionId = useMemo(() => crypto.randomUUID(), []);
-  const [showPreSurvey, setShowPreSurvey] = useState(true);
   const [showPostSurvey, setShowPostSurvey] = useState(false);
   const [postSurveyDismissed, setPostSurveyDismissed] = useState(false);
 
@@ -201,17 +199,6 @@ const FinancialTutor = () => {
               <p className="text-muted-foreground mb-8 max-w-md mx-auto">
                 Ask me anything about personal finance, investing basics, budgeting, and more!
               </p>
-              
-              {showPreSurvey && (
-                <div className="max-w-lg mx-auto mb-4 text-left">
-                  <TutorPreSurvey
-                    sessionId={sessionId}
-                    userId={user?.id}
-                    onComplete={() => setShowPreSurvey(false)}
-                    onDismiss={() => setShowPreSurvey(false)}
-                  />
-                </div>
-              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
                 {suggestedQuestions.map((question, i) => (
