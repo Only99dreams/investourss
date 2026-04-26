@@ -51,7 +51,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed"
           >
-            Your trusted AI-powered platform tackling low financial literacy and investment scams — building pathways to investment and microinsurance through licensed partners.
+            An AI-powered platform advancing financial intelligence and income mobility for underserved communities. Improve your income and build valuable skills in 6 months with AI.
           </motion.p>
 
           {/* CTA Button */}
@@ -85,19 +85,19 @@ const Welcome = () => {
               <svg className="w-5 h-5 text-accent" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
-              <span>AI Tutor & Scam Detector</span>
+              <span>AI Tutor & Scam Detection</span>
             </div>
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-accent" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
-              <span>Vetted Investments</span>
+              <span>Income Skills & Mentorship</span>
             </div>
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-accent" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
-              <span>Microinsurance</span>
+              <span>Investment & Microinsurance Marketplace</span>
             </div>
           </motion.div>
         </motion.div>
