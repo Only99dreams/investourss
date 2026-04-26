@@ -45,8 +45,8 @@ const ScamDetectorSurvey = ({ sessionId, userId, onDismiss }: ScamDetectorSurvey
         action_taken: answers.action_taken,
         confidence_after: answers.confidence_after,
       });
-    } catch {
-      // Non-blocking
+    } catch (err) {
+      console.error('[ScamDetectorSurvey] Failed to save survey:', err);
     } finally {
       setSubmitting(false);
       setSubmitted(true);

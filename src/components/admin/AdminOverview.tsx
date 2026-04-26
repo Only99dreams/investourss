@@ -25,20 +25,36 @@ interface Stats {
 }
 
 interface AIImpact {
-  // Financial Tutor
+  // Financial Tutor — usage
   tutorTotal: number;
-  tutorCompletionRate: number;       // % completed = 'yes'
-  tutorPartialRate: number;          // % completed = 'partially'
-  tutorLearningImprovedPct: number;  // % who went not_at_all/slightly → well
-  tutorHelpfulPct: number;           // % very_helpful
-  tutorWantsAdvancedPct: number;     // % yes for wants_advanced
-  // Scam Detector
+  tutorCompletionRate: number;
+  tutorPartialRate: number;
+  tutorNotCompletedRate: number;
+  tutorLearningImprovedPct: number;
+  tutorPreWellPct: number;
+  tutorPreSlightlyPct: number;
+  tutorPreNotAtAllPct: number;
+  tutorPostWellPct: number;
+  tutorHelpfulPct: number;
+  tutorSomewhatHelpfulPct: number;
+  tutorNotHelpfulPct: number;
+  tutorWantsAdvancedPct: number;
+  tutorMaybeAdvancedPct: number;
+  // Scam Detector — usage from ai_search_logs
+  scamQuickTotal: number;
+  scamDeepTotal: number;
+  // Scam Detector — survey
   scamTotal: number;
-  scamIdentifiedRiskPct: number;     // % identified_risk = 'yes'
-  scamAvoidedPct: number;            // % action_taken = 'avoided'
-  scamCautiousPct: number;           // % action_taken = 'cautious'
-  scamMoreConfidentPct: number;      // % confidence_after = 'more_confident'
-  scamSlightlyConfidentPct: number;  // % confidence_after = 'slightly_confident'
+  scamIdentifiedRiskPct: number;
+  scamNotSurePct: number;
+  scamAvoidedPct: number;
+  scamCautiousPct: number;
+  scamContinuedPct: number;
+  scamMoreConfidentPct: number;
+  scamSlightlyConfidentPct: number;
+  scamNoDifferencePct: number;
+  // Survey response rate (surveys / ai_search_logs)
+  surveyResponseRatePct: number;
 }
 
 const AdminOverview = () => {
@@ -65,20 +81,36 @@ const AdminOverview = () => {
     tutorTotal: 0,
     tutorCompletionRate: 0,
     tutorPartialRate: 0,
+    tutorNotCompletedRate: 0,
     tutorLearningImprovedPct: 0,
+    tutorPreWellPct: 0,
+    tutorPreSlightlyPct: 0,
+    tutorPreNotAtAllPct: 0,
+    tutorPostWellPct: 0,
     tutorHelpfulPct: 0,
+    tutorSomewhatHelpfulPct: 0,
+    tutorNotHelpfulPct: 0,
     tutorWantsAdvancedPct: 0,
+    tutorMaybeAdvancedPct: 0,
+    scamQuickTotal: 0,
+    scamDeepTotal: 0,
     scamTotal: 0,
     scamIdentifiedRiskPct: 0,
+    scamNotSurePct: 0,
     scamAvoidedPct: 0,
     scamCautiousPct: 0,
+    scamContinuedPct: 0,
     scamMoreConfidentPct: 0,
     scamSlightlyConfidentPct: 0,
+    scamNoDifferencePct: 0,
+    surveyResponseRatePct: 0,
   });
+  const [aiImpactLoading, setAIImpactLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchStats();
+    fetchAIImpact();
   }, []);
 
   const fetchStats = async () => {
@@ -99,8 +131,6 @@ const AdminOverview = () => {
         activeUsersResult,
         aiQueriesResult,
         referralsResult,
-        tutorSurveysResult,
-        scamSurveysResult
       ] = await Promise.all([
         // Total users
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
@@ -122,10 +152,6 @@ const AdminOverview = () => {
         supabase.from('ai_search_logs').select('*', { count: 'exact', head: true }).gte('created_at', startOfToday.toISOString()),
         // Total referrals
         supabase.from('referral_commissions').select('*', { count: 'exact', head: true }),
-        // Tutor surveys
-        supabase.from('tutor_survey_responses').select('pre_understanding, post_understanding, helpfulness, completed, wants_advanced'),
-        // Scam detector surveys
-        supabase.from('scam_detector_survey_responses').select('identified_risk, action_taken, confidence_after')
       ]);
 
       const totalInvestments = investmentsResult.data?.reduce((sum, inv) => sum + (inv.amount || 0), 0) || 0;
@@ -160,41 +186,86 @@ const AdminOverview = () => {
         aiQueriesToday: aiQueriesResult.count || 0,
         totalReferrals: referralsResult.count || 0
       });
-
-      // ── AI Impact Analytics ──────────────────────────────
-      const tutorRows = tutorSurveysResult.data || [];
-      const scamRows = scamSurveysResult.data || [];
-      const tt = tutorRows.length;
-      const st = scamRows.length;
-
-      const pct = (count: number, total: number) =>
-        total > 0 ? Math.round((count / total) * 100) : 0;
-
-      // Tutor: "improved" = had pre_understanding not_at_all/slightly AND post_understanding = well
-      const improved = tutorRows.filter(
-        (r) => (r.pre_understanding === 'not_at_all' || r.pre_understanding === 'slightly') &&
-               r.post_understanding === 'well'
-      ).length;
-
-      setAIImpact({
-        tutorTotal: tt,
-        tutorCompletionRate: pct(tutorRows.filter(r => r.completed === 'yes').length, tt),
-        tutorPartialRate: pct(tutorRows.filter(r => r.completed === 'partially').length, tt),
-        tutorLearningImprovedPct: pct(improved, tutorRows.filter(r => r.pre_understanding === 'not_at_all' || r.pre_understanding === 'slightly').length),
-        tutorHelpfulPct: pct(tutorRows.filter(r => r.helpfulness === 'very_helpful').length, tt),
-        tutorWantsAdvancedPct: pct(tutorRows.filter(r => r.wants_advanced === 'yes').length, tt),
-        scamTotal: st,
-        scamIdentifiedRiskPct: pct(scamRows.filter(r => r.identified_risk === 'yes').length, st),
-        scamAvoidedPct: pct(scamRows.filter(r => r.action_taken === 'avoided').length, st),
-        scamCautiousPct: pct(scamRows.filter(r => r.action_taken === 'cautious').length, st),
-        scamMoreConfidentPct: pct(scamRows.filter(r => r.confidence_after === 'more_confident').length, st),
-        scamSlightlyConfidentPct: pct(scamRows.filter(r => r.confidence_after === 'slightly_confident').length, st),
-      });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Error fetching stats:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Separate fetch for AI impact — isolated so survey table absence never breaks main stats
+  const fetchAIImpact = async () => {
+    setAIImpactLoading(true);
+    try {
+      const [tutorSurveysResult, scamSurveysResult, aiLogsResult] = await Promise.all([
+        supabase.from('tutor_survey_responses').select(
+          'pre_understanding, post_understanding, helpfulness, completed, wants_advanced'
+        ),
+        supabase.from('scam_detector_survey_responses').select(
+          'identified_risk, action_taken, confidence_after'
+        ),
+        supabase.from('ai_search_logs').select('search_type'),
+      ]);
+
+      const tutorRows = tutorSurveysResult.data || [];
+      const scamRows = scamSurveysResult.data || [];
+      const logRows = aiLogsResult.data || [];
+
+      const tt = tutorRows.length;
+      const st = scamRows.length;
+      const totalSearches = logRows.length;
+
+      const pct = (count: number, total: number) =>
+        total > 0 ? Math.round((count / total) * 100) : 0;
+
+      // Tutor: "improved" = pre was not_at_all or slightly AND post is well
+      const startedLow = tutorRows.filter(
+        r => r.pre_understanding === 'not_at_all' || r.pre_understanding === 'slightly'
+      );
+      const improved = startedLow.filter(r => r.post_understanding === 'well').length;
+
+      // Scam detector search types (logged via ai_search_logs)
+      const scamQuickTotal = logRows.filter(r => r.search_type === 'quick').length;
+      const scamDeepTotal = logRows.filter(r => r.search_type === 'deep').length;
+
+      // Survey response rate: survey responses vs total scam searches
+      const totalSurveys = tt + st;
+      const surveyResponseRatePct = pct(totalSurveys, totalSearches || 1);
+
+      setAIImpact({
+        tutorTotal: tt,
+        tutorCompletionRate: pct(tutorRows.filter(r => r.completed === 'yes').length, tt),
+        tutorPartialRate: pct(tutorRows.filter(r => r.completed === 'partially').length, tt),
+        tutorNotCompletedRate: pct(tutorRows.filter(r => r.completed === 'no').length, tt),
+        tutorLearningImprovedPct: pct(improved, startedLow.length),
+        tutorPreWellPct: pct(tutorRows.filter(r => r.pre_understanding === 'well').length, tt),
+        tutorPreSlightlyPct: pct(tutorRows.filter(r => r.pre_understanding === 'slightly').length, tt),
+        tutorPreNotAtAllPct: pct(tutorRows.filter(r => r.pre_understanding === 'not_at_all').length, tt),
+        tutorPostWellPct: pct(tutorRows.filter(r => r.post_understanding === 'well').length, tt),
+        tutorHelpfulPct: pct(tutorRows.filter(r => r.helpfulness === 'very_helpful').length, tt),
+        tutorSomewhatHelpfulPct: pct(tutorRows.filter(r => r.helpfulness === 'somewhat_helpful').length, tt),
+        tutorNotHelpfulPct: pct(tutorRows.filter(r => r.helpfulness === 'not_helpful').length, tt),
+        tutorWantsAdvancedPct: pct(tutorRows.filter(r => r.wants_advanced === 'yes').length, tt),
+        tutorMaybeAdvancedPct: pct(tutorRows.filter(r => r.wants_advanced === 'maybe').length, tt),
+        scamQuickTotal,
+        scamDeepTotal,
+        scamTotal: st,
+        scamIdentifiedRiskPct: pct(scamRows.filter(r => r.identified_risk === 'yes').length, st),
+        scamNotSurePct: pct(scamRows.filter(r => r.identified_risk === 'not_sure').length, st),
+        scamAvoidedPct: pct(scamRows.filter(r => r.action_taken === 'avoided').length, st),
+        scamCautiousPct: pct(scamRows.filter(r => r.action_taken === 'cautious').length, st),
+        scamContinuedPct: pct(scamRows.filter(r => r.action_taken === 'continued').length, st),
+        scamMoreConfidentPct: pct(scamRows.filter(r => r.confidence_after === 'more_confident').length, st),
+        scamSlightlyConfidentPct: pct(scamRows.filter(r => r.confidence_after === 'slightly_confident').length, st),
+        scamNoDifferencePct: pct(scamRows.filter(r => r.confidence_after === 'no_difference').length, st),
+        surveyResponseRatePct,
+      });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      console.error('Error fetching AI impact:', error);
+    } finally {
+      setAIImpactLoading(false);
     }
   };
 
@@ -422,169 +493,259 @@ const AdminOverview = () => {
 
       {/* ── AI Learning Impact Section ── */}
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">AI Tool Impact</h2>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-semibold text-foreground">AI Tool Impact</h2>
+          {aiImpactLoading && <span className="text-xs text-muted-foreground animate-pulse">Loading survey data...</span>}
+        </div>
         <p className="text-sm text-muted-foreground mb-4">Insights from user feedback surveys on the Financial Tutor &amp; Scam Detector.</p>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-4">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Tutor Responses</CardTitle>
-                <BookOpen className="w-4 h-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{aiImpact.tutorTotal}</div>
-                <p className="text-xs text-muted-foreground">Total lesson feedback entries</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Scam Detector Responses</CardTitle>
-                <Shield className="w-4 h-4 text-accent" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{aiImpact.scamTotal}</div>
-                <p className="text-xs text-muted-foreground">Total detector feedback entries</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Learning Improvement</CardTitle>
-                <Brain className="w-4 h-4 text-indigo-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-indigo-600">{aiImpact.tutorLearningImprovedPct}%</div>
-                <p className="text-xs text-muted-foreground">Went from low → well understanding</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Risk Identified</CardTitle>
-                <Zap className="w-4 h-4 text-destructive" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-destructive">{aiImpact.scamIdentifiedRiskPct}%</div>
-                <p className="text-xs text-muted-foreground">Users who spotted a scam/risk</p>
-              </CardContent>
-            </Card>
-          </motion.div>
+        {/* Top KPI cards */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-4">
+          {[
+            { label: "Tutor Feedback", value: aiImpact.tutorTotal, sub: "survey responses", icon: BookOpen, color: "text-primary" },
+            { label: "Scam Survey Feedback", value: aiImpact.scamTotal, sub: "survey responses", icon: Shield, color: "text-accent" },
+            { label: "Quick Searches", value: aiImpact.scamQuickTotal, sub: "scam detector uses", icon: Zap, color: "text-amber-500" },
+            { label: "Deep Analyses", value: aiImpact.scamDeepTotal, sub: "scam detector uses", icon: BarChart3, color: "text-indigo-600" },
+            { label: "Learning Improved", value: `${aiImpact.tutorLearningImprovedPct}%`, sub: "low → well understanding", icon: Brain, color: "text-indigo-600" },
+            { label: "Risk Identified", value: `${aiImpact.scamIdentifiedRiskPct}%`, sub: "users spotted a risk", icon: AlertTriangle, color: "text-destructive" },
+          ].map((card, i) => (
+            <motion.div key={card.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground leading-tight">{card.label}</CardTitle>
+                  <card.icon className={`w-4 h-4 flex-shrink-0 ${card.color}`} />
+                </CardHeader>
+                <CardContent>
+                  <div className={`text-2xl font-bold ${card.color}`}>{card.value}</div>
+                  <p className="text-xs text-muted-foreground">{card.sub}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
+          {/* Financial Tutor — full breakdown */}
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <BookOpen className="w-4 h-4 text-primary" /> Financial Tutor
               </CardTitle>
-              <CardDescription>Lesson feedback breakdown</CardDescription>
+              <CardDescription>Lesson feedback &amp; learning outcomes</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Lesson completion</span>
-                  <span className="text-sm font-semibold text-green-600">{aiImpact.tutorCompletionRate}%</span>
+            <CardContent className="space-y-4">
+              {/* Completion */}
+              <div>
+                <p className="text-xs font-semibold text-foreground mb-2">Lesson Completion</p>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "Completed", value: aiImpact.tutorCompletionRate, color: "bg-green-500", text: "text-green-600" },
+                    { label: "Partial", value: aiImpact.tutorPartialRate, color: "bg-amber-400", text: "text-amber-500" },
+                    { label: "Did not finish", value: aiImpact.tutorNotCompletedRate, color: "bg-red-400", text: "text-red-500" },
+                  ].map(r => (
+                    <div key={r.label}>
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span className="text-muted-foreground">{r.label}</span>
+                        <span className={`font-semibold ${r.text}`}>{r.value}%</span>
+                      </div>
+                      <div className="w-full bg-secondary rounded-full h-1.5">
+                        <div className={`${r.color} h-1.5 rounded-full transition-all`} style={{ width: `${r.value}%` }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="w-full bg-secondary rounded-full h-1.5">
-                  <div className="bg-green-500 h-1.5 rounded-full transition-all" style={{ width: `${aiImpact.tutorCompletionRate}%` }} />
+              </div>
+
+              {/* Pre vs Post understanding */}
+              <div className="pt-2 border-t">
+                <p className="text-xs font-semibold text-foreground mb-2">Understanding: Before → After</p>
+                <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                  <div className="rounded-lg bg-secondary p-2">
+                    <p className="text-muted-foreground mb-1">Pre: "Not at all"</p>
+                    <p className="text-lg font-bold text-red-500">{aiImpact.tutorPreNotAtAllPct}%</p>
+                  </div>
+                  <div className="rounded-lg bg-secondary p-2">
+                    <p className="text-muted-foreground mb-1">Post: "Well"</p>
+                    <p className="text-lg font-bold text-green-600">{aiImpact.tutorPostWellPct}%</p>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Partial completion</span>
-                  <span className="text-sm font-semibold text-amber-500">{aiImpact.tutorPartialRate}%</span>
+                <p className="text-xs text-center text-muted-foreground mt-2 font-medium">
+                  Improved: <span className="text-indigo-600 font-bold">{aiImpact.tutorLearningImprovedPct}%</span> of low-knowledge users
+                </p>
+              </div>
+
+              {/* Helpfulness */}
+              <div className="pt-2 border-t">
+                <p className="text-xs font-semibold text-foreground mb-2">Lesson Helpfulness</p>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "Very helpful", value: aiImpact.tutorHelpfulPct, color: "bg-primary", text: "text-primary" },
+                    { label: "Somewhat helpful", value: aiImpact.tutorSomewhatHelpfulPct, color: "bg-blue-400", text: "text-blue-500" },
+                    { label: "Not helpful", value: aiImpact.tutorNotHelpfulPct, color: "bg-red-400", text: "text-red-500" },
+                  ].map(r => (
+                    <div key={r.label}>
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span className="text-muted-foreground">{r.label}</span>
+                        <span className={`font-semibold ${r.text}`}>{r.value}%</span>
+                      </div>
+                      <div className="w-full bg-secondary rounded-full h-1.5">
+                        <div className={`${r.color} h-1.5 rounded-full transition-all`} style={{ width: `${r.value}%` }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="w-full bg-secondary rounded-full h-1.5">
-                  <div className="bg-amber-400 h-1.5 rounded-full transition-all" style={{ width: `${aiImpact.tutorPartialRate}%` }} />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Found very helpful</span>
-                  <span className="text-sm font-semibold text-primary">{aiImpact.tutorHelpfulPct}%</span>
-                </div>
-                <div className="w-full bg-secondary rounded-full h-1.5">
-                  <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${aiImpact.tutorHelpfulPct}%` }} />
-                </div>
-                <div className="pt-2 border-t">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Wants advanced tools</span>
-                    <span className="text-sm font-bold text-indigo-600">{aiImpact.tutorWantsAdvancedPct}%</span>
+              </div>
+
+              {/* Wants advanced */}
+              <div className="pt-2 border-t">
+                <p className="text-xs font-semibold text-foreground mb-2">Interest in Advanced Tools</p>
+                <div className="flex gap-2">
+                  <div className="flex-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 p-2 text-center text-xs">
+                    <p className="text-muted-foreground">Yes</p>
+                    <p className="text-lg font-bold text-indigo-600">{aiImpact.tutorWantsAdvancedPct}%</p>
+                  </div>
+                  <div className="flex-1 rounded-lg bg-secondary p-2 text-center text-xs">
+                    <p className="text-muted-foreground">Maybe</p>
+                    <p className="text-lg font-bold text-muted-foreground">{aiImpact.tutorMaybeAdvancedPct}%</p>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Scam Detector — full breakdown */}
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Shield className="w-4 h-4 text-accent" /> Scam Detector
               </CardTitle>
-              <CardDescription>Behavioral impact after detection</CardDescription>
+              <CardDescription>Usage &amp; behavioral outcomes</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Avoided opportunity</span>
-                  <span className="text-sm font-semibold text-destructive">{aiImpact.scamAvoidedPct}%</span>
-                </div>
-                <div className="w-full bg-secondary rounded-full h-1.5">
-                  <div className="bg-destructive h-1.5 rounded-full transition-all" style={{ width: `${aiImpact.scamAvoidedPct}%` }} />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Proceeded with caution</span>
-                  <span className="text-sm font-semibold text-amber-500">{aiImpact.scamCautiousPct}%</span>
-                </div>
-                <div className="w-full bg-secondary rounded-full h-1.5">
-                  <div className="bg-amber-400 h-1.5 rounded-full transition-all" style={{ width: `${aiImpact.scamCautiousPct}%` }} />
-                </div>
-                <div className="pt-2 border-t">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Protected users</span>
-                    <span className="text-sm font-bold text-accent">
-                      {aiImpact.scamAvoidedPct + aiImpact.scamCautiousPct}%
-                    </span>
+            <CardContent className="space-y-4">
+              {/* Search type split */}
+              <div>
+                <p className="text-xs font-semibold text-foreground mb-2">Search Type Breakdown</p>
+                <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-2">
+                    <p className="text-muted-foreground">Quick searches</p>
+                    <p className="text-lg font-bold text-amber-500">{aiImpact.scamQuickTotal}</p>
+                  </div>
+                  <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/30 p-2">
+                    <p className="text-muted-foreground">Deep analyses</p>
+                    <p className="text-lg font-bold text-indigo-600">{aiImpact.scamDeepTotal}</p>
                   </div>
                 </div>
+              </div>
+
+              {/* Risk identification */}
+              <div className="pt-2 border-t">
+                <p className="text-xs font-semibold text-foreground mb-2">Did Tool Identify Risk?</p>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "Yes, identified risk", value: aiImpact.scamIdentifiedRiskPct, color: "bg-destructive", text: "text-destructive" },
+                    { label: "Not sure", value: aiImpact.scamNotSurePct, color: "bg-amber-400", text: "text-amber-500" },
+                  ].map(r => (
+                    <div key={r.label}>
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span className="text-muted-foreground">{r.label}</span>
+                        <span className={`font-semibold ${r.text}`}>{r.value}%</span>
+                      </div>
+                      <div className="w-full bg-secondary rounded-full h-1.5">
+                        <div className={`${r.color} h-1.5 rounded-full transition-all`} style={{ width: `${r.value}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action taken */}
+              <div className="pt-2 border-t">
+                <p className="text-xs font-semibold text-foreground mb-2">Action Taken After Detection</p>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "Avoided opportunity", value: aiImpact.scamAvoidedPct, color: "bg-destructive", text: "text-destructive" },
+                    { label: "Proceeded with caution", value: aiImpact.scamCautiousPct, color: "bg-amber-400", text: "text-amber-500" },
+                    { label: "Continued as planned", value: aiImpact.scamContinuedPct, color: "bg-blue-400", text: "text-blue-500" },
+                  ].map(r => (
+                    <div key={r.label}>
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span className="text-muted-foreground">{r.label}</span>
+                        <span className={`font-semibold ${r.text}`}>{r.value}%</span>
+                      </div>
+                      <div className="w-full bg-secondary rounded-full h-1.5">
+                        <div className={`${r.color} h-1.5 rounded-full transition-all`} style={{ width: `${r.value}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-center text-muted-foreground mt-2">
+                  Protected (avoided + cautious): <span className="text-accent font-bold">{aiImpact.scamAvoidedPct + aiImpact.scamCautiousPct}%</span>
+                </p>
               </div>
             </CardContent>
           </Card>
 
+          {/* Confidence Change */}
           <Card className="lg:col-span-1">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <TrendingUp className="w-4 h-4 text-green-600" /> Confidence Change
+                <TrendingUp className="w-4 h-4 text-green-600" /> Confidence &amp; Engagement
               </CardTitle>
-              <CardDescription>After using the Scam Detector</CardDescription>
+              <CardDescription>User confidence after Scam Detector</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">More confident</span>
-                  <span className="text-sm font-semibold text-green-600">{aiImpact.scamMoreConfidentPct}%</span>
+            <CardContent className="space-y-4">
+              {/* Confidence */}
+              <div>
+                <p className="text-xs font-semibold text-foreground mb-2">Confidence Change</p>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "More confident", value: aiImpact.scamMoreConfidentPct, color: "bg-green-500", text: "text-green-600" },
+                    { label: "Slightly confident", value: aiImpact.scamSlightlyConfidentPct, color: "bg-blue-400", text: "text-blue-500" },
+                    { label: "No difference", value: aiImpact.scamNoDifferencePct, color: "bg-secondary", text: "text-muted-foreground" },
+                  ].map(r => (
+                    <div key={r.label}>
+                      <div className="flex justify-between text-xs mb-0.5">
+                        <span className="text-muted-foreground">{r.label}</span>
+                        <span className={`font-semibold ${r.text}`}>{r.value}%</span>
+                      </div>
+                      <div className="w-full bg-secondary rounded-full h-1.5">
+                        <div className={`${r.color} h-1.5 rounded-full transition-all`} style={{ width: `${r.value}%` }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="w-full bg-secondary rounded-full h-1.5">
-                  <div className="bg-green-500 h-1.5 rounded-full transition-all" style={{ width: `${aiImpact.scamMoreConfidentPct}%` }} />
+                <div className="mt-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/30 text-center">
+                  <p className="text-xs text-muted-foreground">Overall confidence boost</p>
+                  <p className="text-xl font-bold text-green-600">
+                    {aiImpact.scamMoreConfidentPct + aiImpact.scamSlightlyConfidentPct}%
+                  </p>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Slightly confident</span>
-                  <span className="text-sm font-semibold text-blue-500">{aiImpact.scamSlightlyConfidentPct}%</span>
+              </div>
+
+              {/* Survey response rate */}
+              <div className="pt-2 border-t">
+                <p className="text-xs font-semibold text-foreground mb-2">Survey Engagement Rate</p>
+                <div className="w-full bg-secondary rounded-full h-2">
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all"
+                    style={{ width: `${Math.min(aiImpact.surveyResponseRatePct, 100)}%` }}
+                  />
                 </div>
-                <div className="w-full bg-secondary rounded-full h-1.5">
-                  <div className="bg-blue-400 h-1.5 rounded-full transition-all" style={{ width: `${aiImpact.scamSlightlyConfidentPct}%` }} />
+                <p className="text-xs text-muted-foreground mt-1 text-center">
+                  <span className="font-semibold text-primary">{aiImpact.surveyResponseRatePct}%</span> of sessions left feedback
+                </p>
+              </div>
+
+              {/* Headline summary */}
+              <div className="pt-2 border-t space-y-2">
+                <p className="text-xs font-semibold text-foreground">Impact Summary</p>
+                <div className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 p-3 text-xs text-indigo-700 dark:text-indigo-300">
+                  Understanding improved from{" "}
+                  <span className="font-bold">{aiImpact.tutorPreNotAtAllPct}%</span> "not at all" →{" "}
+                  <span className="font-bold">{aiImpact.tutorPostWellPct}%</span> "well"
                 </div>
-                <div className="pt-2 border-t">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Overall confidence boost</span>
-                    <span className="text-sm font-bold text-green-600">
-                      {aiImpact.scamMoreConfidentPct + aiImpact.scamSlightlyConfidentPct}%
-                    </span>
-                  </div>
+                <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 p-3 text-xs text-green-700 dark:text-green-300">
+                  <span className="font-bold">{aiImpact.scamAvoidedPct + aiImpact.scamCautiousPct}%</span> of users protected from potential scams
                 </div>
               </div>
             </CardContent>

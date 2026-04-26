@@ -60,8 +60,8 @@ const TutorPostSurvey = ({
         what_gained: answers.what_gained || null,
         wants_advanced: answers.wants_advanced,
       }, { onConflict: "session_id" });
-    } catch {
-      // Non-blocking
+    } catch (err) {
+      console.error('[TutorPostSurvey] Failed to save survey:', err);
     } finally {
       setSubmitting(false);
       setSubmitted(true);

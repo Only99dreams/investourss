@@ -31,14 +31,15 @@ const TutorPreSurvey = ({
   const handleSelect = async (value: Understanding) => {
     setSelected(value);
     try {
-      await supabase.from("tutor_survey_responses").insert({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from("tutor_survey_responses").insert({
         session_id: sessionId,
         user_id: userId ?? null,
         topic: topic ?? null,
         pre_understanding: value,
       });
-    } catch {
-      // Non-blocking: survey failure should not affect UX
+    } catch (err) {
+      console.error('[TutorPreSurvey] Failed to save survey:', err);
     }
     onComplete(value);
   };
