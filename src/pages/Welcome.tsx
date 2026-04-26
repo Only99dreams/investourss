@@ -51,7 +51,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed"
           >
-            An AI-powered platform advancing financial intelligence and income mobility for underserved communities. <br/> <b>Improve your income and build valuable skills in 6 months with AI.</b>
+            An AI-powered platform advancing financial intelligence and income mobility for underserved communities. <br/><br/> <b>Improve your income and build valuable skills in 6 months with AI.</b>
           </motion.p>
 
           {/* CTA Button */}
