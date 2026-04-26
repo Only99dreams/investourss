@@ -66,8 +66,8 @@ const Home = () => {
             className="text-center max-w-3xl mx-auto"
           >
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-6">
-              A Daily Financial {" "}
-              <span className="text-primary">Safety Companion</span>
+              Learn Smart. Earn Better.{" "}
+              <span className="text-primary">Stay Safe with AI.</span>
             </h1>
             <p className="text-lg text-muted-foreground mb-8">
             AI Tutor and Scam Detector, Community and Safe Offers.

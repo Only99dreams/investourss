@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Search, Shield, HelpCircle, ArrowRight, AlertTriangle, CheckCircle, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Footer } from "@/components/ui/Footer";
+import ScamDetectorSurvey from "@/components/ScamDetectorSurvey";
 
 interface QuickSearchResult {
   riskLevel: "safe" | "warning" | "danger";
@@ -40,9 +41,12 @@ const Vetting = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [quickResult, setQuickResult] = useState<QuickSearchResult | null>(null);
   const [deepResult, setDeepResult] = useState<DeepAnalysisResult | null>(null);
+  const [showQuickSurvey, setShowQuickSurvey] = useState(false);
+  const [showDeepSurvey, setShowDeepSurvey] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const sessionId = useMemo(() => crypto.randomUUID(), []);
 
   const handleQuickSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +68,7 @@ const Vetting = () => {
 
       if (data.success && data.analysis) {
         setQuickResult(data.analysis);
+        setShowQuickSurvey(true);
       } else {
         throw new Error(data.error || 'Analysis failed');
       }
@@ -109,6 +114,7 @@ const Vetting = () => {
 
       if (data.success && data.analysis) {
         setDeepResult(data.analysis);
+        setShowDeepSurvey(true);
       } else {
         throw new Error(data.error || 'Analysis failed');
       }
@@ -268,6 +274,14 @@ const Vetting = () => {
                             💡 {quickResult.recommendation}
                           </p>
                         </motion.div>
+                      )}
+
+                      {quickResult && showQuickSurvey && (
+                        <ScamDetectorSurvey
+                          sessionId={sessionId}
+                          userId={user?.id}
+                          onDismiss={() => setShowQuickSurvey(false)}
+                        />
                       )}
                     </form>
 
@@ -436,6 +450,14 @@ const Vetting = () => {
                               </Card>
                             )}   */}
                           </motion.div>
+                        )}
+
+                        {deepResult && showDeepSurvey && (
+                          <ScamDetectorSurvey
+                            sessionId={sessionId}
+                            userId={user?.id}
+                            onDismiss={() => setShowDeepSurvey(false)}
+                          />
                         )}
                       </form>
                       

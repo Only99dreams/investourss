@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, User, ArrowLeft, Loader2, LogIn, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/ui/Footer";
 import investoursLogo from "@/assets/investours-logo.png";
+import TutorPreSurvey from "@/components/TutorPreSurvey";
+import TutorPostSurvey from "@/components/TutorPostSurvey";
 
 interface Message {
   id: string;
@@ -52,6 +54,12 @@ const FinancialTutor = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Survey state
+  const sessionId = useMemo(() => crypto.randomUUID(), []);
+  const [showPreSurvey, setShowPreSurvey] = useState(true);
+  const [showPostSurvey, setShowPostSurvey] = useState(false);
+  const [postSurveyDismissed, setPostSurveyDismissed] = useState(false);
 
   // Handle initial query from URL
   useEffect(() => {
@@ -115,6 +123,10 @@ const FinancialTutor = () => {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      // Show post-survey after first AI response
+      if (!postSurveyDismissed) {
+        setShowPostSurvey(true);
+      }
     } catch (error) {
       console.error('Tutor error:', error);
       toast({
@@ -190,6 +202,17 @@ const FinancialTutor = () => {
                 Ask me anything about personal finance, investing basics, budgeting, and more!
               </p>
               
+              {showPreSurvey && (
+                <div className="max-w-lg mx-auto mb-4 text-left">
+                  <TutorPreSurvey
+                    sessionId={sessionId}
+                    userId={user?.id}
+                    onComplete={() => setShowPreSurvey(false)}
+                    onDismiss={() => setShowPreSurvey(false)}
+                  />
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
                 {suggestedQuestions.map((question, i) => (
                   <Button
@@ -251,6 +274,17 @@ const FinancialTutor = () => {
                     </div>
                   </Card>
                 </motion.div>
+              )}
+
+              {showPostSurvey && !isLoading && (
+                <TutorPostSurvey
+                  sessionId={sessionId}
+                  userId={user?.id}
+                  onDismiss={() => {
+                    setShowPostSurvey(false);
+                    setPostSurveyDismissed(true);
+                  }}
+                />
               )}
             </div>
           )}
