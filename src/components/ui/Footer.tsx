@@ -13,12 +13,12 @@ export function Footer() {
           <div>
             <h3 className="font-semibold text-foreground mb-4">Investours</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Building financial futures with confidence through education, community, and verified investment opportunities.
+             Building financial futures with confidence through AI tools, education, community, and mentorship.
             </p>
             <div className="flex flex-col gap-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4" />
-                <span>support@investours.com</span>
+                <span>admin@investours.app</span>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4" />

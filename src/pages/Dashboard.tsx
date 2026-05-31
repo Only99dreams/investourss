@@ -12,6 +12,7 @@ import { MessagesSection } from "@/components/dashboard/sections/MessagesSection
 import { AIReportsSection } from "@/components/dashboard/sections/AIReportsSection";
 import { SettingsSection } from "@/components/dashboard/sections/SettingsSection";
 import { NotificationsSection } from "@/components/dashboard/sections/NotificationsSection";
+import { LeaderboardSection } from "@/components/dashboard/sections/LeaderboardSection";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Loader2 } from "lucide-react";
 
@@ -125,9 +126,7 @@ const Dashboard = () => {
           <Route path="/leaderboard" element={
             <>
               <DashboardHeader title="Leaderboard" onMenuClick={() => setSidebarOpen(true)} />
-              <div className="p-6">
-                <p className="text-muted-foreground">Leaderboard. Coming soon...</p>
-              </div>
+              <LeaderboardSection />
             </>
           } />
           <Route path="/sdg" element={

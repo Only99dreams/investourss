@@ -6,19 +6,25 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { messages, userId } = await req.json();
+    const { messages, userId, userLevel } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    const levelPrompts = {
+      beginner: `Explain financial concepts simply with relatable examples. Use analogies and everyday language. Keep explanations short and accessible. For example: "Think of budgeting like planning a road trip - you need to know how much gas money you have before deciding where to go."`,
+      intermediate: `Teach with practical investment examples. Use real-world scenarios and actionable advice. Include numbers and percentages. For example: "An ETF like VOO tracks the S&P 500, giving you instant diversification across 500 companies with just $1."`,
+      advanced: `Provide strategic and analytical explanations. Use professional terminology and advanced concepts. Include portfolio theory and market analysis. For example: "Diversification reduces unsystematic risk through correlation analysis. A balanced portfolio typically targets 0.6-0.8 correlation coefficients."`
+    };
+
+    const level = userLevel || "beginner";
     const systemPrompt = `You are a friendly and knowledgeable AI Financial Tutor for Investours, an educational platform focused on financial literacy and smart investing.
 
 Your role is to:
@@ -36,6 +42,10 @@ Important guidelines:
 - Use examples when helpful
 - Be friendly and approachable
 - If you don't know something, be honest about it
+- Include a short quiz question at the end to reinforce learning
+- Suggest the next best lesson based on their progress
+
+Personalization for ${level} level: ${levelPrompts[level as keyof typeof levelPrompts]}
 
 Remember: You're an educator, not a financial advisor. Always recommend users consult with licensed professionals for personalized financial advice.`;
 

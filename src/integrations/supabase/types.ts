@@ -47,6 +47,9 @@ export type Database = {
           ai_tutor_used: number | null
           videos_watched: number | null
           posts_created: number | null
+          tutor_interest: string | null
+          tutor_level: string | null
+          tutor_goal: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -730,6 +733,155 @@ export type Database = {
           completed?: boolean | null
           quiz_score?: number | null
           completed_at?: string | null
+          created_at?: string | null
+        }
+      }
+      lessons: {
+        Row: {
+          id: string
+          title: string
+          category: string
+          difficulty: string
+          description: string | null
+          content: string | null
+          quiz: Json | null
+          next_lesson_suggestion: string | null
+          order_index: number | null
+          xp_reward: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          category: string
+          difficulty: string
+          description?: string | null
+          content?: string | null
+          quiz?: Json | null
+          next_lesson_suggestion?: string | null
+          order_index?: number | null
+          xp_reward?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          category?: string
+          difficulty?: string
+          description?: string | null
+          content?: string | null
+          quiz?: Json | null
+          next_lesson_suggestion?: string | null
+          order_index?: number | null
+          xp_reward?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      user_lessons: {
+        Row: {
+          id: string
+          user_id: string
+          lesson_id: string
+          completed: boolean | null
+          xp_earned: number | null
+          quiz_score: number | null
+          completed_at: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          lesson_id: string
+          completed?: boolean | null
+          xp_earned?: number | null
+          quiz_score?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          lesson_id?: string
+          completed?: boolean | null
+          xp_earned?: number | null
+          quiz_score?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+        }
+      }
+      user_tutor_levels: {
+        Row: {
+          id: string
+          user_id: string
+          level: string
+          xp_total: number | null
+          next_level_xp: number | null
+          badges: Json | null
+          last_active_date: string | null
+          streak_days: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          level: string
+          xp_total?: number | null
+          next_level_xp?: number | null
+          badges?: Json | null
+          last_active_date?: string | null
+          streak_days?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          level?: string
+          xp_total?: number | null
+          next_level_xp?: number | null
+          badges?: Json | null
+          last_active_date?: string | null
+          streak_days?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      user_learning_paths: {
+        Row: {
+          id: string
+          user_id: string
+          path_name: string
+          category: string
+          level: string
+          is_active: boolean | null
+          completed_lessons: number | null
+          total_lessons: number | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          path_name: string
+          category: string
+          level: string
+          is_active?: boolean | null
+          completed_lessons?: number | null
+          total_lessons?: number | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          path_name?: string
+          category?: string
+          level?: string
+          is_active?: boolean | null
+          completed_lessons?: number | null
+          total_lessons?: number | null
           created_at?: string | null
         }
       }

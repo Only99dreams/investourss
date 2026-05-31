@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/ui/Footer";
 import investoursLogo from "@/assets/investours-logo.png";
 import TutorPostSurvey from "@/components/TutorPostSurvey";
+import FinancialTutorOnboarding from "@/components/onboarding/FinancialTutorOnboarding";
 
 interface Message {
   id: string;
@@ -19,7 +20,6 @@ interface Message {
   content: string;
 }
 
-// Keywords that indicate vetting/scam detection intent
 const vettingKeywords = [
   "scam", "fraud", "legitimate", "legit", "real", "fake", "trust", "safe to invest",
   "is this company", "should i invest", "check this", "verify", "analyze investment",
@@ -32,60 +32,192 @@ const isVettingQuery = (query: string): boolean => {
   return vettingKeywords.some(keyword => lowerQuery.includes(keyword));
 };
 
-const suggestedQuestions = [
+const beginnerLabels = [
+  "What is budgeting?",
+  "How do I save money?",
+  "Emergency funds explained",
+  "Needs vs wants",
+  "How do banks work?",
   "What is compound interest?",
-  "How do I start investing with little money?",
-  "What's the difference between stocks and bonds?",
-  "How do I create a budget?",
-  "What is diversification?",
-  "How do emergency funds work?"
 ];
+
+const intermediateLabels = [
+  "What are stocks?",
+  "How do ETFs work?",
+  "How do credit scores work?",
+  "Inflation explained",
+  "Side hustles",
+  "Investment risk",
+];
+
+const advancedLabels = [
+  "Portfolio diversification",
+  "Dividend investing",
+  "Retirement planning",
+  "Tax strategies",
+  "Real estate investing",
+  "Market cycles",
+];
+
+type UserLevel = "beginner" | "intermediate" | "advanced" | null;
 
 const FinancialTutor = () => {
   const [searchParams] = useSearchParams();
   const initialQuery = searchParams.get("q") || "";
-  
+  const initialPath = searchParams.get("path") || "";
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showVettingPrompt, setShowVettingPrompt] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Survey state
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth?mode=login", { replace: true });
+    }
+  }, [user, authLoading, navigate]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
   const sessionId = useMemo(() => crypto.randomUUID(), []);
   const [showPostSurvey, setShowPostSurvey] = useState(false);
   const [postSurveyDismissed, setPostSurveyDismissed] = useState(false);
 
-  // Handle initial query from URL
+  const [userLevel, setUserLevel] = useState<UserLevel>(null);
+  const [userXp, setUserXp] = useState(0);
+  const [showOnboarding, setShowOnboarding] = useState(!initialQuery && !initialPath && !localStorage.getItem("tutor_onboarding"));
+
+  useEffect(() => {
+    const savedOnboarding = localStorage.getItem("tutor_onboarding");
+    if (savedOnboarding) {
+      const data = JSON.parse(savedOnboarding);
+      setUserLevel(data.level);
+    }
+  }, []);
+
   useEffect(() => {
     if (initialQuery && messages.length === 0) {
       handleSend(initialQuery);
+      setShowOnboarding(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
 
-  // Auto-scroll to bottom
+  useEffect(() => {
+    if (initialPath) {
+      setShowOnboarding(false);
+    }
+  }, [initialPath]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
+  const loadUserProgress = async () => {
+    if (!user) return;
+    try {
+      const { data } = await supabase
+        .from("tutor_user_levels")
+        .select("xp_total, level")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (data) {
+        setUserXp(data.xp_total || 0);
+        if (data.level) setUserLevel(data.level as UserLevel);
+      }
+    } catch (err) {
+      console.error("Failed to load user progress:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadUserProgress();
+  }, [user?.id]);
+
+  const findLessonByTitle = async (query: string): Promise<string | null> => {
+    try {
+      const { data } = await supabase
+        .from("tutor_lessons")
+        .select("id, title")
+        .ilike("title", `%${query.split(" ").slice(0, 3).join(" ")}%`)
+        .limit(1)
+        .maybeSingle();
+
+      return data?.id || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const awardXP = async (lessonTitle: string) => {
+    if (!user) return;
+
+    try {
+      const lessonId = await findLessonByTitle(lessonTitle) || crypto.randomUUID();
+
+      const { error: progressError } = await supabase
+        .from("tutor_user_progress")
+        .upsert(
+          {
+            user_id: user.id,
+            lesson_id: lessonId,
+            completed: true,
+            xp_earned: 10,
+            completed_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,lesson_id" }
+        );
+
+      if (progressError) console.error("tutor_user_progress upsert error:", progressError);
+
+      const xpDelta = 10;
+      setUserXp((prev) => {
+        const newXp = prev + xpDelta;
+        supabase
+          .from("tutor_user_levels")
+          .upsert(
+            {
+              user_id: user.id,
+              xp_total: newXp,
+              level: userLevel || "beginner",
+              last_active_date: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          )
+          .then(({ error }) => {
+            if (error) console.error("tutor_user_levels upsert error:", error);
+          });
+        return newXp;
+      });
+    } catch (err) {
+      console.error("Failed to award XP:", err);
+    }
+  };
+
   const handleSend = async (text?: string) => {
     const messageText = text || input.trim();
     if (!messageText) return;
 
-    // Check for vetting intent
     if (isVettingQuery(messageText)) {
       if (!user) {
         setShowVettingPrompt(true);
         setInput("");
         return;
       } else {
-        // Redirect to vetting page with query
         navigate(`/vetting?q=${encodeURIComponent(messageText)}`);
         return;
       }
@@ -103,25 +235,36 @@ const FinancialTutor = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke('financial-tutor', {
-        body: { 
+        body: {
           messages: [...messages, userMessage].map(m => ({
             role: m.role,
             content: m.content
           })),
-          userId: user?.id || null
+          userId: user?.id || null,
+          userLevel: userLevel
         }
       });
 
       if (error) throw error;
 
+      const assistantResponse = data.response || "I apologize, but I couldn't generate a response. Please try again.";
+
+      const nextLessonPrompt = userLevel
+        ? "\n\n---\n**Ready for a quick quiz?** Test your knowledge, then I'll suggest your next lesson!"
+        : "";
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.response || "I apologize, but I couldn't generate a response. Please try again."
+        content: assistantResponse + nextLessonPrompt
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      // Show post-survey after first AI response
+
+      if (user && !text?.includes("quiz")) {
+        await awardXP(messageText);
+      }
+
       if (!postSurveyDismissed) {
         setShowPostSurvey(true);
       }
@@ -144,14 +287,36 @@ const FinancialTutor = () => {
     }
   };
 
+  const handleOnboardingComplete = (level: UserLevel) => {
+    setUserLevel(level);
+    setShowOnboarding(false);
+  };
+
+  const getSuggestedQuestions = () => {
+    if (!userLevel) return beginnerLabels;
+    if (userLevel === "beginner") return beginnerLabels;
+    if (userLevel === "intermediate") return intermediateLabels;
+    return advancedLabels;
+  };
+
+  const levelLabels: Record<string, string> = {
+    beginner: "Financial Foundations",
+    intermediate: "Wealth Builder",
+    advanced: "Portfolio Mastery",
+  };
+
+  if (showOnboarding) {
+    return <FinancialTutorOnboarding onComplete={handleOnboardingComplete} />;
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link 
-              to="/home" 
+            <Link
+              to="/home"
               className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -161,7 +326,9 @@ const FinancialTutor = () => {
               <img src={investoursLogo} alt="Investours" className="w-8 h-8" />
               <div>
                 <h1 className="font-semibold text-foreground text-sm sm:text-base">AI Financial Tutor</h1>
-                <p className="text-xs text-muted-foreground hidden sm:block">Your personal finance educator</p>
+                <p className="text-xs text-muted-foreground hidden sm:block">
+                  {userLevel ? levelLabels[userLevel] : "Your personal finance educator"}
+                </p>
               </div>
             </div>
           </div>
@@ -190,18 +357,41 @@ const FinancialTutor = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center py-12"
+              className="py-4"
             >
+              {/* Progress Section */}
+              {userLevel && (
+                <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-2xl p-4 mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h3 className="font-semibold text-foreground">Your Learning Path</h3>
+                      <p className="text-xs text-muted-foreground">{levelLabels[userLevel]}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-primary font-bold text-sm">{userXp} XP</div>
+                    </div>
+                  </div>
+                  <div className="w-full bg-border rounded-full h-2">
+                    <div
+                      className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all"
+                      style={{ width: `${Math.min((userXp / 100) * 100, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
                 <Sparkles className="w-10 h-10 text-primary" />
               </div>
-              <h2 className="text-2xl font-bold text-foreground mb-2">Welcome to AI Financial Tutor</h2>
-              <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+              <h2 className="text-2xl font-bold text-foreground mb-2 text-center">
+                Welcome to AI Financial Tutor
+              </h2>
+              <p className="text-muted-foreground mb-8 max-w-md mx-auto text-center">
                 Ask me anything about personal finance, investing basics, budgeting, and more!
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
-                {suggestedQuestions.map((question, i) => (
+                {getSuggestedQuestions().map((question, i) => (
                   <Button
                     key={i}
                     variant="outline"
@@ -229,11 +419,7 @@ const FinancialTutor = () => {
                         <Bot className="w-4 h-4 text-primary" />
                       </div>
                     )}
-                    <Card className={`max-w-[80%] p-4 ${
-                      message.role === "user" 
-                        ? "bg-primary text-primary-foreground" 
-                        : "bg-card"
-                    }`}>
+                    <Card className={`max-w-[80%] p-4 ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-card"}`}>
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     </Card>
                     {message.role === "user" && (
@@ -244,7 +430,7 @@ const FinancialTutor = () => {
                   </motion.div>
                 ))}
               </AnimatePresence>
-              
+
               {isLoading && (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -330,8 +516,8 @@ const FinancialTutor = () => {
               disabled={isLoading}
               className="flex-1"
             />
-            <Button 
-              onClick={() => handleSend()} 
+            <Button
+              onClick={() => handleSend()}
               disabled={!input.trim() || isLoading}
               size="icon"
             >

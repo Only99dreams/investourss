@@ -60,18 +60,18 @@ const Welcome = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.8 }}
           >
-            <Link to="/home">
-              <Button variant="hero" size="xl" className="group">
-                Get Started
-                <motion.span
-                  className="ml-2 inline-block"
-                  animate={{ x: [0, 4, 0] }}
-                  transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                >
-                  →
-                </motion.span>
-              </Button>
-            </Link>
+<Link to="/home">
+               <Button variant="hero" size="xl" className="group">
+                 Start Learning Journey
+                 <motion.span
+                   className="ml-2 inline-block"
+                   animate={{ x: [0, 4, 0] }}
+                   transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                 >
+                   →
+                 </motion.span>
+               </Button>
+             </Link>
           </motion.div>
 
           {/* Trust badges */}

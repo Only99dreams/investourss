@@ -10,7 +10,8 @@ import {
   Search,
   Lock,
   Globe,
-  Sparkles
+  Sparkles,
+  Trophy
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -117,6 +118,28 @@ const Home = () => {
                 </Button>
               </Link>
             </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+              className="mt-8"
+            >
+              <Link to="/dashboard/leaderboard">
+                <Card className="max-w-md mx-auto hover:border-primary/50 transition-colors cursor-pointer group">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                      <Trophy className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium text-sm group-hover:text-primary transition-colors">Leaderboard</p>
+                      <p className="text-xs text-muted-foreground">See top learners</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground ml-auto group-hover:text-primary transition-colors" />
+                  </CardContent>
+                </Card>
+              </Link>
+            </motion.div>
           </motion.div>
         </div>
       </section>
@@ -276,7 +299,7 @@ const Home = () => {
               Why Choose Investours?
             </h2>
             <p className="text-muted-foreground">
-            AI-powered financial learning, scam protection, and safe access to licensed investments and microinsurance — all in one platform.
+            AI-powered financial learning, scam protection, grassroot educators, and mentorship - all in one platform
             </p>
           </motion.div>
           
@@ -291,7 +314,7 @@ const Home = () => {
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <Shield className="w-8 h-8 text-primary" />
               </div>
-              <h3 className="font-semibold text-foreground mb-2">AI-Powered Protection</h3>
+              <h3 className="font-semibold text-foreground mb-2">AI-Powered Intelligence</h3>
               <p className="text-sm text-muted-foreground">
               Our AI tutor and scam detector help you identify potential scams and make safer financial decisions.
               </p>
@@ -307,9 +330,9 @@ const Home = () => {
               <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
                 <Globe className="w-8 h-8 text-accent" />
               </div>
-              <h3 className="font-semibold text-foreground mb-2">Direct Access</h3>
+              <h3 className="font-semibold text-foreground mb-2">Income Mobility</h3>
               <p className="text-sm text-muted-foreground">
-              Connect directly with vetted investment and microinsurance opportunities from licensed partners.
+              Improve your imcome anywhere in the world through learning, execution and mentorship leveraging AI
               </p>
             </motion.div>
             
@@ -323,9 +346,9 @@ const Home = () => {
               <div className="w-16 h-16 rounded-full bg-investours-gold/10 flex items-center justify-center mx-auto mb-4">
                 <Leaf className="w-8 h-8 text-investours-gold" />
               </div>
-              <h3 className="font-semibold text-foreground mb-2">Community & Learning</h3>
+              <h3 className="font-semibold text-foreground mb-2">Community Impact</h3>
               <p className="text-sm text-muted-foreground">
-              Join a growing network of users and Grassroots Financial Educators to learn, share, and build lasting financial resilience.
+              Join a growing network of users and Grassroots Financial Educators learning, sharing, and building lasting financial resilience in our society.
               </p>
             </motion.div>
           </div>
@@ -345,7 +368,7 @@ const Home = () => {
               Ready to Start Your Journey?
             </h2>
             <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-             Join thousands of youth, women, and microenterprises learning, protecting their money, and accessing trusted investment and microinsurance opportunities.
+             Join thousands of youth, women, and microenterprises learning, protecting their money, and accessing trusted opportunities with AI.
             </p>
             <Link to="/signup">
               <Button variant="glass" size="lg">
