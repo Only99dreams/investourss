@@ -124,7 +124,7 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
             "px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1",
             profile?.user_tier === "premium" ? 
               profile?.subscription_type === "annual" ? "bg-investours-gold/20 text-investours-gold" :
-              profile?.subscription_type === "quarterly" ? "bg-accent/20 text-accent" :
+              profile?.subscription_type === "biennial" ? "bg-accent/20 text-accent" :
               "bg-primary/20 text-primary" :
             profile?.user_tier === "exclusive" ? "bg-primary/20 text-primary" :
             "bg-muted text-muted-foreground"

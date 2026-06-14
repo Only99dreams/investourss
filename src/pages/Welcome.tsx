@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Twitter, Instagram, Youtube, MessageCircle } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
 const Welcome = () => {
@@ -51,7 +52,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed"
           >
-            An AI-powered platform advancing financial intelligence and income mobility for underserved communities. <br/><br/> <b>Improve your income and build valuable skills in 6 months with AI.</b>
+            An AI-powered platform advancing financial intelligence and income mobility for underserved communities. <br/><br/> <b>Improve your income and build valuable skills from anywhere in 6 months with AI.</b>
           </motion.p>
 
           {/* CTA Button */}
@@ -98,6 +99,30 @@ const Welcome = () => {
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
               <span>Investment & Microinsurance Marketplace</span>
+            </div>
+          </motion.div>
+
+          {/* Social Media Links */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 1.4 }}
+            className="mt-12"
+          >
+            <p className="text-sm text-muted-foreground mb-4">Follow us on social media</p>
+            <div className="flex items-center justify-center gap-3">
+              <a href="https://x.com/Investoursworld" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-secondary/80 hover:bg-primary/20 flex items-center justify-center text-muted-foreground hover:text-primary transition-all">
+                <Twitter className="w-5 h-5" />
+              </a>
+              <a href="https://www.instagram.com/investoursworld/" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-secondary/80 hover:bg-primary/20 flex items-center justify-center text-muted-foreground hover:text-primary transition-all">
+                <Instagram className="w-5 h-5" />
+              </a>
+              <a href="https://chat.whatsapp.com/Go5HpKeLiqz5NpPWLcVy1Q" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-secondary/80 hover:bg-primary/20 flex items-center justify-center text-muted-foreground hover:text-primary transition-all">
+                <MessageCircle className="w-5 h-5" />
+              </a>
+              <a href="https://www.youtube.com/@Investoursworld" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-secondary/80 hover:bg-primary/20 flex items-center justify-center text-muted-foreground hover:text-primary transition-all">
+                <Youtube className="w-5 h-5" />
+              </a>
             </div>
           </motion.div>
         </motion.div>

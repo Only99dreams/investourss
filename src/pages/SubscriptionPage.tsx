@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 
 const planHierarchy: Record<string, number> = {
   monthly: 1,
-  quarterly: 2,
+  biennial: 2,
   annual: 3,
 };
 
@@ -22,7 +22,7 @@ const SubscriptionPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, profile } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'annual' | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'biennial' | 'annual' | 'b2b_annual' | null>(null);
 
   const currentSubType = profile?.subscription_type || null;
   const currentPlanLevel = currentSubType ? planHierarchy[currentSubType] || 0 : 0;
@@ -46,10 +46,12 @@ const SubscriptionPage = () => {
     if (planParam) {
       if (planParam.includes('monthly')) {
         setSelectedPlan('monthly');
-      } else if (planParam.includes('quarterly')) {
-        setSelectedPlan('quarterly');
+      } else if (planParam.includes('biennial') || planParam.includes('bi-annual')) {
+        setSelectedPlan('biennial');
       } else if (planParam.includes('annual')) {
         setSelectedPlan('annual');
+      } else if (planParam.includes('b2b')) {
+        setSelectedPlan('b2b_annual');
       }
     }
   }, [user, profile, searchParams, navigate, isPremium, currentSubType]);
@@ -116,17 +118,17 @@ const SubscriptionPage = () => {
       ],
     },
     {
-      key: 'quarterly' as const,
-      name: 'Quarterly Plan',
+      key: 'biennial' as const,
+      name: 'Bi-annual Plan',
       description: 'Best value for committed learners',
-      price: 8000,
-      period: '3 months',
-      savings: 'Save ₦1,000',
+      price: 15000,
+      period: '6 months',
+      savings: 'Save ₦3,000',
       icon: Star,
       featured: true,
       features: [
         'All Monthly features',
-        '11% savings vs monthly',
+        '17% savings vs monthly',
         'Extended support period',
         'Priority feature access',
       ],
@@ -141,10 +143,28 @@ const SubscriptionPage = () => {
       icon: Shield,
       featured: false,
       features: [
-        'All Quarterly features',
-        '17% savings vs monthly',
+        'All Bi-annual features',
         'VIP support',
         'Early access to new features',
+        'Certificate of completion',
+      ],
+    },
+    {
+      key: 'b2b_annual' as const,
+      name: 'B2B Plan',
+      description: 'For organizations and teams',
+      price: 120000,
+      period: 'year',
+      savings: null,
+      icon: Shield,
+      featured: false,
+      features: [
+        'All Annual features',
+        'Up to 25 team members',
+        'Dedicated account manager',
+        'Custom learning paths',
+        'Analytics dashboard',
+        'Priority 24/7 support',
       ],
     },
   ];

@@ -71,7 +71,7 @@ const Home = () => {
               <span className="text-primary">Stay Safe with AI.</span>
             </h1>
             <p className="text-lg text-muted-foreground mb-8">
-            AI Tutor and Scam Detector, Community and Safe Offers.
+            AI Tutor, Scam Detector &amp; Grassroots Educators Community
             </p>
             
             {/* AI Financial Tutor Search Bar */}

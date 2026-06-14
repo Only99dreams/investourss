@@ -1268,6 +1268,38 @@ export type Database = {
           updated_at?: string | null
         }
       }
+      user_certificates: {
+        Row: {
+          id: string
+          user_id: string
+          level: string
+          level_label: string
+          xp_earned: number | null
+          certificate_id: string
+          issued_at: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          level: string
+          level_label: string
+          xp_earned?: number | null
+          certificate_id: string
+          issued_at?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          level?: string
+          level_label?: string
+          xp_earned?: number | null
+          certificate_id?: string
+          issued_at?: string | null
+          created_at?: string | null
+        }
+      }
       promo_code_uses: {
         Row: {
           id: string
@@ -1317,6 +1349,28 @@ export type Database = {
           action: string
         }
         Returns: boolean
+      }
+      get_tutor_leaderboard: {
+        Args: Record<string, never>
+        Returns: Array<{
+          user_id: string
+          full_name: string
+          email: string
+          xp_total: number
+          level: string
+          streak_days: number
+          badges: any
+        }>
+      }
+      get_referral_leaderboard: {
+        Args: Record<string, never>
+        Returns: Array<{
+          user_id: string
+          full_name: string
+          referral_count: number
+          total_earnings: number
+          rank: number
+        }>
       }
       generate_promo_code: {
         Args: {

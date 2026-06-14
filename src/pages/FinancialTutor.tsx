@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, ArrowLeft, Loader2, LogIn, Sparkles } from "lucide-react";
+import { Send, Bot, User, ArrowLeft, Loader2, LogIn, Sparkles, ArrowUp, RotateCcw, Award, Crown, Lock, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,7 +72,7 @@ const FinancialTutor = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showVettingPrompt, setShowVettingPrompt] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, profile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -98,6 +99,14 @@ const FinancialTutor = () => {
   const [userLevel, setUserLevel] = useState<UserLevel>(null);
   const [userXp, setUserXp] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(!initialQuery && !initialPath && !localStorage.getItem("tutor_onboarding"));
+  const logoImageRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => { logoImageRef.current = img; };
+    img.src = investoursLogo;
+  }, []);
 
   useEffect(() => {
     const savedOnboarding = localStorage.getItem("tutor_onboarding");
@@ -305,6 +314,265 @@ const FinancialTutor = () => {
     advanced: "Portfolio Mastery",
   };
 
+  const nextLevel: Record<string, string | null> = {
+    beginner: "intermediate",
+    intermediate: "advanced",
+    advanced: null,
+  };
+
+  const levelXPRequirements: Record<string, number> = {
+    beginner: 100,
+    intermediate: 250,
+    advanced: 500,
+  };
+
+  const handleStageUpgrade = async (targetLevel: string) => {
+    const currentLevel = userLevel;
+    if (!currentLevel || targetLevel === currentLevel) return;
+
+    // Check premium gating for intermediate and advanced
+    if ((targetLevel === "intermediate" || targetLevel === "advanced") && profile?.user_tier === "free") {
+      toast({
+        title: "Premium Required",
+        description: "Upgrade to a Premium plan to access Intermediate and Advanced stages.",
+        variant: "destructive",
+      });
+      navigate("/subscribe");
+      return;
+    }
+
+    // Check if current stage XP requirement met
+    const requiredXP = levelXPRequirements[currentLevel] || 100;
+    if (userXp < requiredXP) {
+      toast({
+        title: "Keep Learning!",
+        description: `You need ${requiredXP} XP to advance. You currently have ${userXp} XP.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("tutor_user_levels")
+        .upsert({
+          user_id: user!.id,
+          level: targetLevel,
+          xp_total: userXp,
+          last_active_date: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+
+      if (error) throw error;
+
+      setUserLevel(targetLevel as UserLevel);
+      toast({
+        title: "Stage Upgraded!",
+        description: `You've advanced to ${levelLabels[targetLevel]}!`,
+      });
+    } catch (err) {
+      console.error("Stage upgrade failed:", err);
+      toast({
+        title: "Error",
+        description: "Failed to upgrade stage. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleResetStage = async () => {
+    if (!user || !userLevel) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to reset your "${levelLabels[userLevel]}" stage? Your XP for this stage will be reset to 0 and you'll start over from Beginner.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from("tutor_user_levels")
+        .upsert({
+          user_id: user.id,
+          level: "beginner",
+          xp_total: 0,
+          last_active_date: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+
+      if (error) throw error;
+
+      // Also clear progress for lessons in this stage
+      await supabase
+        .from("tutor_user_progress")
+        .delete()
+        .eq("user_id", user.id);
+
+      setUserLevel("beginner");
+      setUserXp(0);
+      toast({
+        title: "Stage Reset",
+        description: "Your progress has been reset. You're now back at Beginner stage.",
+      });
+    } catch (err) {
+      console.error("Stage reset failed:", err);
+      toast({
+        title: "Error",
+        description: "Failed to reset stage. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownloadCertificate = () => {
+    if (!user || !userLevel) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 1000;
+    canvas.height = 720;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // White background
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, 1000, 720);
+
+    // Outer border - thick purple
+    ctx.strokeStyle = "#7c3aed";
+    ctx.lineWidth = 8;
+    ctx.strokeRect(30, 30, 940, 660);
+
+    // Inner border - thin purple
+    ctx.strokeStyle = "#a78bfa";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(50, 50, 900, 620);
+
+    // Corner ornaments
+    ctx.strokeStyle = "#7c3aed";
+    ctx.lineWidth = 2;
+    const corners = [
+      [50, 50], [950, 50], [950, 670], [50, 670]
+    ];
+    corners.forEach(([x, y], i) => {
+      ctx.beginPath();
+      if (i === 0) { ctx.moveTo(x + 20, y); ctx.lineTo(x + 20, y + 20); ctx.lineTo(x, y + 20); }
+      if (i === 1) { ctx.moveTo(x - 20, y); ctx.lineTo(x - 20, y + 20); ctx.lineTo(x, y + 20); }
+      if (i === 2) { ctx.moveTo(x, y - 20); ctx.lineTo(x - 20, y - 20); ctx.lineTo(x - 20, y); }
+      if (i === 3) { ctx.moveTo(x + 20, y); ctx.lineTo(x + 20, y - 20); ctx.lineTo(x, y - 20); }
+      ctx.stroke();
+    });
+
+    // Logo
+    if (logoImageRef.current) {
+      ctx.drawImage(logoImageRef.current, 410, 68, 180, 55);
+    }
+
+    // Top decorative separator
+    ctx.strokeStyle = "#7c3aed";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(250, 150);
+    ctx.lineTo(750, 150);
+    ctx.stroke();
+
+    // Certificate title
+    ctx.fillStyle = "#1a1a2e";
+    ctx.font = "bold 52px Georgia, 'Times New Roman', serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Certificate of Completion", 500, 215);
+
+    // Decorative diamond separator
+    ctx.fillStyle = "#7c3aed";
+    ctx.beginPath();
+    ctx.moveTo(500, 232);
+    ctx.lineTo(508, 240);
+    ctx.lineTo(500, 248);
+    ctx.lineTo(492, 240);
+    ctx.closePath();
+    ctx.fill();
+
+    // Subtitle
+    ctx.fillStyle = "#555555";
+    ctx.font = "20px Georgia, 'Times New Roman', serif";
+    ctx.fillText("This certifies that", 500, 290);
+
+    // User name
+    ctx.fillStyle = "#1a1a2e";
+    ctx.font = "bold 40px Georgia, 'Times New Roman', serif";
+    ctx.fillText(profile?.full_name || "User", 500, 350);
+
+    // Completion text
+    ctx.fillStyle = "#555555";
+    ctx.font = "18px Georgia, 'Times New Roman', serif";
+    ctx.fillText("has successfully completed the", 500, 400);
+
+    // Stage name
+    ctx.fillStyle = "#7c3aed";
+    ctx.font = "bold 32px Georgia, 'Times New Roman', serif";
+    ctx.fillText(`${levelLabels[userLevel]} Stage`, 500, 455);
+
+    // XP and date
+    ctx.fillStyle = "#888888";
+    ctx.font = "15px Arial, sans-serif";
+    const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    ctx.fillText(`Total XP Earned: ${userXp}  |  Issued: ${date}`, 500, 505);
+
+    // Bottom decorative separator
+    ctx.strokeStyle = "#7c3aed";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(300, 550);
+    ctx.lineTo(700, 550);
+    ctx.stroke();
+
+    // Signature line
+    ctx.strokeStyle = "#333333";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(360, 600);
+    ctx.lineTo(640, 600);
+    ctx.stroke();
+
+    // Signature name
+    ctx.fillStyle = "#1a1a2e";
+    ctx.font = "italic 24px Georgia, 'Times New Roman', serif";
+    ctx.fillText("Olusegun Emmanuel", 500, 593);
+
+    // Title
+    ctx.fillStyle = "#888888";
+    ctx.font = "13px Arial, sans-serif";
+    ctx.fillText("Founder & CEO, Investours", 500, 630);
+
+    // Certificate ID
+    const certId = `INV-${userLevel.toUpperCase().slice(0, 4)}-${Date.now().toString(36).toUpperCase()}`;
+    ctx.fillStyle = "#aaaaaa";
+    ctx.font = "10px Arial, sans-serif";
+    ctx.fillText(`Certificate ID: ${certId}`, 500, 670);
+
+    // Download
+    const link = document.createElement("a");
+    link.download = `Investours-${levelLabels[userLevel]}-Certificate.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+
+    // Save certificate record to database
+    supabase.from("user_certificates").insert({
+      user_id: user.id,
+      level: userLevel,
+      level_label: levelLabels[userLevel],
+      xp_earned: userXp,
+      certificate_id: certId,
+      issued_at: new Date().toISOString(),
+    }).then(({ error }) => {
+      if (error) {
+        console.error("Failed to save certificate record:", error);
+      }
+    });
+
+    toast({
+      title: "Certificate Downloaded!",
+      description: `Your ${levelLabels[userLevel]} certificate has been downloaded.`,
+    });
+  };
+
   if (showOnboarding) {
     return <FinancialTutorOnboarding onComplete={handleOnboardingComplete} />;
   }
@@ -371,12 +639,90 @@ const FinancialTutor = () => {
                       <div className="text-primary font-bold text-sm">{userXp} XP</div>
                     </div>
                   </div>
-                  <div className="w-full bg-border rounded-full h-2">
+                  <div className="w-full bg-border rounded-full h-2 mb-3">
                     <div
                       className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all"
                       style={{ width: `${Math.min((userXp / 100) * 100, 100)}%` }}
                     />
                   </div>
+                  {/* Stage Progression Buttons */}
+                  <div className="flex flex-wrap gap-2">
+                    {/* Beginner Stage */}
+                    <div className="flex items-center gap-1 text-xs bg-background/50 rounded-full px-3 py-1">
+                      {userLevel === "beginner" ? (
+                        <Sparkles className="w-3 h-3 text-primary" />
+                      ) : (
+                        <CheckCircle className="w-3 h-3 text-emerald-500" />
+                      )}
+                      <span>Beginner</span>
+                    </div>
+                    <span className="text-muted-foreground text-xs self-center">→</span>
+                    {/* Intermediate Stage */}
+                    <button
+                      onClick={() => handleStageUpgrade("intermediate")}
+                      disabled={userLevel === "intermediate" || userLevel === "advanced" || profile?.user_tier === "free"}
+                      className={`flex items-center gap-1 text-xs rounded-full px-3 py-1 transition-colors ${
+                        userLevel === "intermediate" || userLevel === "advanced"
+                          ? "bg-emerald-500/20 text-emerald-600 cursor-default"
+                          : profile?.user_tier === "free"
+                          ? "bg-background/50 text-muted-foreground cursor-not-allowed opacity-60"
+                          : "bg-background/50 hover:bg-primary/20 text-muted-foreground hover:text-primary cursor-pointer"
+                      }`}
+                      title={profile?.user_tier === "free" ? "Premium required" : "Upgrade to Intermediate"}
+                    >
+                      {userLevel === "intermediate" || userLevel === "advanced" ? (
+                        <CheckCircle className="w-3 h-3 text-emerald-500" />
+                      ) : profile?.user_tier === "free" ? (
+                        <Lock className="w-3 h-3" />
+                      ) : (
+                        <ArrowUp className="w-3 h-3" />
+                      )}
+                      <span>Intermediate</span>
+                      {profile?.user_tier === "free" && <Crown className="w-3 h-3 text-amber-500" />}
+                    </button>
+                    <span className="text-muted-foreground text-xs self-center">→</span>
+                    {/* Advanced Stage */}
+                    <button
+                      onClick={() => handleStageUpgrade("advanced")}
+                      disabled={userLevel === "advanced" || profile?.user_tier === "free"}
+                      className={`flex items-center gap-1 text-xs rounded-full px-3 py-1 transition-colors ${
+                        userLevel === "advanced"
+                          ? "bg-emerald-500/20 text-emerald-600 cursor-default"
+                          : profile?.user_tier === "free"
+                          ? "bg-background/50 text-muted-foreground cursor-not-allowed opacity-60"
+                          : "bg-background/50 hover:bg-primary/20 text-muted-foreground hover:text-primary cursor-pointer"
+                      }`}
+                      title={profile?.user_tier === "free" ? "Premium required" : "Upgrade to Advanced"}
+                    >
+                      {userLevel === "advanced" ? (
+                        <CheckCircle className="w-3 h-3 text-emerald-500" />
+                      ) : profile?.user_tier === "free" ? (
+                        <Lock className="w-3 h-3" />
+                      ) : (
+                        <ArrowUp className="w-3 h-3" />
+                      )}
+                      <span>Advanced</span>
+                      {profile?.user_tier === "free" && <Crown className="w-3 h-3 text-amber-500" />}
+                    </button>
+                    {/* Reset Stage */}
+                    <button
+                      onClick={handleResetStage}
+                      className="flex items-center gap-1 text-xs bg-background/50 rounded-full px-3 py-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-auto"
+                      title="Reset stage and start over"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset</span>
+                    </button>
+                  </div>
+                  {/* Certificate Button */}
+                  <button
+                    onClick={handleDownloadCertificate}
+                    className="mt-2 flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                    title="Download stage certificate"
+                  >
+                    <Award className="w-3 h-3" />
+                    <span>Download {levelLabels[userLevel]} Certificate</span>
+                  </button>
                 </div>
               )}
 

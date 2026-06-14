@@ -330,7 +330,103 @@ const CommunitySection = () => {
 
   return (
     <section className="py-16 bg-secondary/30">
-      <div className="container mx-auto px-4">
+        <div className="container mx-auto px-4">
+
+        {/* Evidence of Activity & Impact */}
+        <div className="mb-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center max-w-2xl mx-auto mb-12"
+          >
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
+              Evidence of Activity &amp; Impact
+            </h2>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+            >
+              <div className="aspect-video rounded-xl overflow-hidden mb-4 bg-muted">
+                <iframe
+                  src="https://www.youtube.com/embed/acm7ESTAwIY"
+                  title="AI Financial Intelligence Awareness — NYSC Camp"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                AI Financial Intelligence Awareness — NYSC Camp
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                200+ corps members participating in live financial intelligence engagement.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+            >
+              <div className="aspect-video rounded-xl overflow-hidden mb-4 bg-muted">
+                <iframe
+                  src="https://www.youtube.com/embed/5qDIG0ucOLI"
+                  title="Real User Experience"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Real User Experience
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Corps member testimonial after interacting with Investours.
+              </p>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.3 }}
+            >
+              <div className="aspect-video rounded-xl overflow-hidden mb-4 bg-muted">
+                <iframe
+                  src="https://www.youtube.com/embed/Vzb-R1bRil0"
+                  title="Community Training Session"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Community Training Session
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Live training and financial empowerment activities with youth participants.
+              </p>
+            </motion.div>
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.4 }}
+            className="text-center text-muted-foreground italic mt-10 max-w-3xl mx-auto text-sm md:text-base"
+          >
+            &ldquo;Investours is combining AI, financial education, mentorship, and grassroots engagement to improve economic resilience for underserved communities.&rdquo;
+          </motion.p>
+        </div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -341,7 +437,7 @@ const CommunitySection = () => {
             <Users className="w-7 h-7 text-investours-coral" />
           </div>
           <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-            Community Feed
+            Educators Community
           </h2>
           <p className="text-muted-foreground">
             Connect, share insights, and learn from other members

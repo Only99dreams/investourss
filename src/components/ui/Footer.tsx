@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Facebook, Twitter, Linkedin, Mail, MapPin, Phone } from "lucide-react";
+import { Twitter, Mail, MapPin, Instagram, Youtube, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Footer() {
@@ -70,19 +70,31 @@ export function Footer() {
             <p className="text-sm text-muted-foreground mb-4">
               Follow us on social media for the latest updates and financial tips.
             </p>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="icon" className="hover:text-primary">
-                <Twitter className="w-5 h-5" />
-                <span className="sr-only">Twitter</span>
-              </Button>
-              <Button variant="ghost" size="icon" className="hover:text-primary">
-                <Facebook className="w-5 h-5" />
-                <span className="sr-only">Facebook</span>
-              </Button>
-              <Button variant="ghost" size="icon" className="hover:text-primary">
-                <Linkedin className="w-5 h-5" />
-                <span className="sr-only">LinkedIn</span>
-              </Button>
+            <div className="flex gap-2 flex-wrap">
+              <a href="https://x.com/Investoursworld" target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="icon" className="hover:text-primary">
+                  <Twitter className="w-5 h-5" />
+                  <span className="sr-only">X (Twitter)</span>
+                </Button>
+              </a>
+              <a href="https://www.instagram.com/investoursworld/" target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="icon" className="hover:text-primary">
+                  <Instagram className="w-5 h-5" />
+                  <span className="sr-only">Instagram</span>
+                </Button>
+              </a>
+              <a href="https://chat.whatsapp.com/Go5HpKeLiqz5NpPWLcVy1Q" target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="icon" className="hover:text-primary">
+                  <MessageCircle className="w-5 h-5" />
+                  <span className="sr-only">WhatsApp</span>
+                </Button>
+              </a>
+              <a href="https://www.youtube.com/@Investoursworld" target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="icon" className="hover:text-primary">
+                  <Youtube className="w-5 h-5" />
+                  <span className="sr-only">YouTube</span>
+                </Button>
+              </a>
             </div>
           </div>
         </div>

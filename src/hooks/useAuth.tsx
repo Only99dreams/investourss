@@ -13,7 +13,7 @@ interface Profile {
   gender: string | null;
   user_type: 'individual' | 'group' | 'firm';
   user_tier: 'free' | 'premium' | 'exclusive';
-  subscription_type: 'monthly' | 'quarterly' | 'annual' | null;
+  subscription_type: 'monthly' | 'biennial' | 'annual' | 'b2b_annual' | null;
   is_gfe: boolean;
   referral_code: string | null;
   onboarding_completed: boolean;

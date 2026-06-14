@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { 
   User, Wallet, GraduationCap, TrendingUp, FileText, Users, 
   Settings, Bell, MessageSquare, AlertCircle, Share2, Trophy,
-  Target, LogOut, Shield, Umbrella
+  Target, LogOut, Shield, Umbrella, Award
 } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
@@ -12,6 +12,7 @@ const sidebarItems = [
   { icon: GraduationCap, label: "Education", path: "/dashboard/education" },
   { icon: User, label: "Profile", path: "/dashboard/profile" },
   { icon: Bell, label: "Notifications", path: "/dashboard/notifications" },
+  { icon: Award, label: "My Certificates", path: "/dashboard/certificates" },
   { icon: FileText, label: "AI Reports", path: "/dashboard/ai-reports", subtitle: "Searches & Scam Checks" },
   { icon: TrendingUp, label: "Investments", path: "/dashboard/investments" },
   { icon: Umbrella, label: "Microinsurance", path: "/dashboard/microinsurance" },

@@ -10,6 +10,7 @@ import { InvestmentsSection } from "@/components/dashboard/sections/InvestmentsS
 import { ReferralsSection } from "@/components/dashboard/sections/ReferralsSection";
 import { MessagesSection } from "@/components/dashboard/sections/MessagesSection";
 import { AIReportsSection } from "@/components/dashboard/sections/AIReportsSection";
+import { CertificatesSection } from "@/components/dashboard/sections/CertificatesSection";
 import { SettingsSection } from "@/components/dashboard/sections/SettingsSection";
 import { NotificationsSection } from "@/components/dashboard/sections/NotificationsSection";
 import { LeaderboardSection } from "@/components/dashboard/sections/LeaderboardSection";
@@ -83,6 +84,12 @@ const Dashboard = () => {
             <>
               <DashboardHeader title="My Investments" onMenuClick={() => setSidebarOpen(true)} />
               <InvestmentsSection />
+            </>
+          } />
+          <Route path="/certificates" element={
+            <>
+              <DashboardHeader title="My Certificates" onMenuClick={() => setSidebarOpen(true)} />
+              <CertificatesSection />
             </>
           } />
           <Route path="/followers" element={

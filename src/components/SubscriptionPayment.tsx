@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { ManualDepositForm } from './ManualDepositForm';
 
 interface SubscriptionPaymentProps {
-  planType: 'monthly' | 'quarterly' | 'annual';
+  planType: 'monthly' | 'biennial' | 'annual' | 'b2b_annual';
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -34,21 +34,27 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
   const planDetails = {
     monthly: {
       name: 'Premium Monthly',
-      price: 3000, // Base price excluding VAT
+      price: 3000,
       period: 'month',
       savings: null
     },
-    quarterly: {
-      name: 'Premium Quarterly',
-      price: 8000, // Base price excluding VAT
-      period: '3 months',
-      savings: 'Save ₦1,075'
+    biennial: {
+      name: 'Premium Bi-annual',
+      price: 15000,
+      period: '6 months',
+      savings: 'Save ₦3,000'
     },
     annual: {
       name: 'Premium Annual',
-      price: 30000, // Base price excluding VAT
+      price: 30000,
       period: 'year',
-      savings: 'Save ₦6,450'
+      savings: 'Save ₦6,000'
+    },
+    b2b_annual: {
+      name: 'B2B Annual',
+      price: 120000,
+      period: 'year',
+      savings: null
     }
   };
 

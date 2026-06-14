@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Check, Users, MousePointer, UserCheck, Crown, TrendingUp, Eye, EyeOff } from "lucide-react";
+import { Copy, Check, Users, MousePointer, UserCheck, Crown, TrendingUp, Eye, EyeOff, Link2, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ReferralsSection() {
@@ -19,7 +19,7 @@ export function ReferralsSection() {
   const [copied, setCopied] = useState(false);
   const [showReferralCode, setShowReferralCode] = useState(false);
 
-  const referralLink = `${window.location.origin}/signup/individual?ref=${profile?.referral_code}`;
+  const referralLink = `${window.location.origin}/signup?ref=${profile?.referral_code}`;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,12 +55,21 @@ export function ReferralsSection() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const copyCode = () => {
+    navigator.clipboard.writeText(profile?.referral_code || "");
+    setCopied(true);
+    toast({ title: "Copied!", description: "Referral code copied to clipboard" });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const referredCount = followers.length;
+
   const statCards = [
+    { label: "People Referred", value: referredCount, icon: UserPlus },
     { label: "Total Clicks", value: stats?.total_clicks || 0, icon: MousePointer },
     { label: "Sign-ups", value: stats?.total_signups || 0, icon: Users },
     { label: "Verified Users", value: stats?.total_verified || 0, icon: UserCheck },
     { label: "Subscribed", value: stats?.total_subscribed || 0, icon: Crown },
-    { label: "Investing", value: stats?.total_investing || 0, icon: TrendingUp },
   ];
 
   return (
@@ -70,34 +79,48 @@ export function ReferralsSection() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <Card className="bg-gradient-to-r from-primary/5 to-accent/5">
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row md:items-center gap-4">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold mb-1">Share Education Videos</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Share free education videos to earn followers and commissions automatically.
-                </p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-background/80 rounded-lg px-4 py-2 text-sm font-mono truncate">
-                    {showReferralCode ? profile?.referral_code : "••••••••"}
+          <Card className="bg-gradient-to-r from-primary/5 to-accent/5">
+            <CardContent className="p-6">
+              <div className="flex flex-col md:flex-row md:items-center gap-4">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold mb-1">Share Your Referral Link</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Share your referral link or code to earn followers and 30% commission automatically.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-background/80 rounded-lg px-4 py-2 text-sm font-mono truncate">
+                        {showReferralCode ? referralLink : "••••••••"}
+                      </div>
+                      <Button 
+                        onClick={() => setShowReferralCode(!showReferralCode)} 
+                        variant="outline"
+                        size="icon"
+                      >
+                        {showReferralCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                    {showReferralCode && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button onClick={copyLink} variant="default" size="sm" className="gap-2">
+                          {copied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                          {copied ? "Copied" : "Copy Link"}
+                        </Button>
+                        <Button onClick={copyCode} variant="outline" size="sm" className="gap-2">
+                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          {copied ? "Copied" : "Copy Code"}
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <Button 
-                    onClick={() => setShowReferralCode(!showReferralCode)} 
-                    variant="outline"
-                    size="icon"
-                  >
-                    {showReferralCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </Button>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
       </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {statCards.map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -137,11 +160,11 @@ export function ReferralsSection() {
                   Lifetime referral earnings
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="font-semibold">40%</p>
-                  <p className="text-muted-foreground">Direct Earnings</p>
-                </div>
+                  <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="font-semibold">30%</p>
+                      <p className="text-muted-foreground">Direct Earnings</p>
+                    </div>
                 <div className="text-center p-3 bg-muted/50 rounded-lg">
                   <p className="font-semibold">5%</p>
                   <p className="text-muted-foreground">Indirect Earnings</p>

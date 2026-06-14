@@ -188,17 +188,17 @@ const Pricing = () => {
 
                     <div className="bg-accent/10 rounded-lg p-4 border-2 border-accent/30 relative">
                       <Badge className="absolute -top-2 -right-2 bg-accent text-accent-foreground">
-                        Save ₦1,075
+                        Save ₦3,000
                       </Badge>
                       <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm font-medium">Quarterly Payment</span>
+                        <span className="text-sm font-medium">Bi-annual Payment</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold text-foreground">₦8,000</span>
-                          <span className="text-sm text-muted-foreground"> / 3 months</span>
+                          <span className="text-2xl font-bold text-foreground">₦15,000</span>
+                          <span className="text-sm text-muted-foreground"> / 6 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
-                      <Link to="/subscribe?plan=premium-quarterly">
+                      <Link to="/subscribe?plan=premium-biennial">
                         <Button variant="accent" className="w-full" size="sm">
                           Upgrade Now
                         </Button>
@@ -207,7 +207,7 @@ const Pricing = () => {
 
                     <div className="bg-investours-gold/10 rounded-lg p-4 border-2 border-investours-gold/30 relative">
                       <Badge className="absolute -top-2 -right-2 bg-investours-gold text-foreground">
-                        Save ₦6,450
+                        Save ₦6,000
                       </Badge>
                       <div className="flex items-baseline justify-between mb-2">
                         <span className="text-sm font-medium">Annual Payment</span>
@@ -219,6 +219,25 @@ const Pricing = () => {
                       </div>
                       <Link to="/subscribe?plan=premium-annual">
                         <Button variant="default" className="w-full bg-investours-gold hover:bg-investours-gold/90 text-foreground" size="sm">
+                          Upgrade Now
+                        </Button>
+                      </Link>
+                    </div>
+
+                    <div className="bg-primary/10 rounded-lg p-4 border-2 border-primary/30 relative">
+                      <Badge className="absolute -top-2 -right-2 bg-primary text-primary-foreground">
+                        Best for Teams
+                      </Badge>
+                      <div className="flex items-baseline justify-between mb-2">
+                        <span className="text-sm font-medium">B2B Subscription</span>
+                        <div className="text-right">
+                          <span className="text-2xl font-bold text-foreground">₦120,000</span>
+                          <span className="text-sm text-muted-foreground"> / year</span>
+                          <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
+                        </div>
+                      </div>
+                      <Link to="/subscribe?plan=b2b-annual">
+                        <Button variant="default" className="w-full" size="sm">
                           Upgrade Now
                         </Button>
                       </Link>
