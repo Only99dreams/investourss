@@ -52,7 +52,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="text-lg md:text-xl text-muted-foreground mb-10 leading-relaxed"
           >
-            An AI-powered platform advancing financial intelligence and income mobility for underserved communities. <br/><br/> <b>Improve your income and build valuable skills from anywhere in 6 months with AI.</b>
+            An AI-powered platform advancing financial intelligence and income mobility for underserved communities. <br/><br/> <b>Improve your income and build valuable skills from anywhere in 3-6 months with AI.</b>
           </motion.p>
 
           {/* CTA Button */}
@@ -63,7 +63,7 @@ const Welcome = () => {
           >
 <Link to="/home">
                <Button variant="hero" size="xl" className="group">
-                 Start Learning Journey
+                 Get Started Now
                  <motion.span
                    className="ml-2 inline-block"
                    animate={{ x: [0, 4, 0] }}
@@ -82,6 +82,12 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 1.2 }}
             className="mt-16 flex flex-wrap items-center justify-center gap-6 text-muted-foreground text-sm"
           >
+           < div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-accent" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>AI Business Plan Generator</span>
+            </div>
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-accent" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />

@@ -422,7 +422,7 @@ const FinancialTutor = () => {
     }
   };
 
-  const handleDownloadCertificate = () => {
+  const handleDownloadCertificate = async () => {
     if (!user || !userLevel) return;
 
     const canvas = document.createElement("canvas");
@@ -465,12 +465,18 @@ const FinancialTutor = () => {
       ctx.drawImage(logoImageRef.current, 410, 68, 180, 55);
     }
 
+    // Tagline
+    ctx.fillStyle = "#888888";
+    ctx.font = "bold 13px Georgia, 'Times New Roman', serif";
+    ctx.textAlign = "center";
+    ctx.fillText("AI-Powered Platform Advancing Financial Intelligence and Income Mobility", 500, 138);
+
     // Top decorative separator
     ctx.strokeStyle = "#7c3aed";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(250, 150);
-    ctx.lineTo(750, 150);
+    ctx.moveTo(250, 155);
+    ctx.lineTo(750, 155);
     ctx.stroke();
 
     // Certificate title
@@ -547,25 +553,26 @@ const FinancialTutor = () => {
     ctx.font = "10px Arial, sans-serif";
     ctx.fillText(`Certificate ID: ${certId}`, 500, 670);
 
-    // Download
-    const link = document.createElement("a");
-    link.download = `Investours-${levelLabels[userLevel]}-Certificate.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-
-    // Save certificate record to database
-    supabase.from("user_certificates").insert({
+    // Save certificate record to database first
+    const { error: insertError } = await supabase.from("user_certificates").insert({
       user_id: user.id,
       level: userLevel,
       level_label: levelLabels[userLevel],
       xp_earned: userXp,
       certificate_id: certId,
       issued_at: new Date().toISOString(),
-    }).then(({ error }) => {
-      if (error) {
-        console.error("Failed to save certificate record:", error);
-      }
+      download_count: 1,
     });
+
+    if (insertError) {
+      console.error("Failed to save certificate record:", insertError);
+    }
+
+    // Download
+    const link = document.createElement("a");
+    link.download = `Investours-${levelLabels[userLevel]}-Certificate.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
 
     toast({
       title: "Certificate Downloaded!",

@@ -348,6 +348,7 @@ BEGIN
       SET user_tier = 'premium',
           subscription_type = CASE
             WHEN deposit_record.narration LIKE '%monthly%' THEN 'monthly'
+            WHEN deposit_record.narration LIKE '%quarterly%' THEN 'quarterly'
             WHEN deposit_record.narration LIKE '%biennial%' OR deposit_record.narration LIKE '%bi-annual%' THEN 'biennial'
             WHEN deposit_record.narration LIKE '%annual%' THEN 'annual'
             WHEN deposit_record.narration LIKE '%b2b%' THEN 'b2b_annual'

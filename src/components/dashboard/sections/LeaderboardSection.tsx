@@ -195,9 +195,9 @@ function ReferralLeaderboard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Users className="w-5 h-5 text-primary" />
-          Top Referrers
+          Top Followers
         </CardTitle>
-        <CardDescription>Ranked by number of successful referrals</CardDescription>
+        <CardDescription>Ranked by number of followers</CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -207,7 +207,7 @@ function ReferralLeaderboard() {
         ) : entries.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No referrers yet. Share your link to get started!</p>
+            <p className="text-muted-foreground">No followers yet. Share your link to get started!</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -248,7 +248,7 @@ function ReferralLeaderboard() {
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-foreground">{entry.referral_count} referrals</p>
+                    <p className="font-bold text-foreground">{entry.referral_count} follower{entry.referral_count !== 1 ? 's' : ''}</p>
                     <p className="text-xs text-muted-foreground">₦{entry.total_earnings.toLocaleString()} earned</p>
                   </div>
                 </motion.div>
@@ -269,9 +269,9 @@ export function LeaderboardSection() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">FinIQ Challenge Leaderboard</h2>
+          <h2 className="text-2xl font-bold text-foreground">Investours AI Challenge Leaderboard</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Top learners and referrers compete for rewards
+            Top learners and followers compete for rewards
           </p>
         </div>
         {profile && (

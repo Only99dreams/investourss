@@ -10,12 +10,15 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, UserCheck } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, UserCheck, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const GFEsTab = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [gfes, setGfes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchGFEs();
@@ -38,12 +41,27 @@ const GFEsTab = () => {
     }
   };
 
+  const filteredGfes = gfes.filter(
+    (gfe) =>
+      (gfe.full_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (gfe.email || "").toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <UserCheck className="w-5 h-5" /> GFE Management
         </CardTitle>
+        <div className="relative mt-2">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -64,14 +82,14 @@ const GFEsTab = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {gfes.length === 0 ? (
+                {filteredGfes.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center h-24">
-                      No GFEs found.
+                      {searchQuery ? "No GFEs match your search." : "No GFEs found."}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  gfes.map((gfe) => (
+                  filteredGfes.map((gfe) => (
                     <TableRow key={gfe.id}>
                       <TableCell className="font-medium">{gfe.full_name}</TableCell>
                       <TableCell>{gfe.email}</TableCell>
@@ -98,4 +116,3 @@ const GFEsTab = () => {
 };
 
 export default GFEsTab;
-

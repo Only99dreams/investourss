@@ -125,6 +125,7 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
             profile?.user_tier === "premium" ? 
               profile?.subscription_type === "annual" ? "bg-investours-gold/20 text-investours-gold" :
               profile?.subscription_type === "biennial" ? "bg-accent/20 text-accent" :
+              profile?.subscription_type === "quarterly" ? "bg-primary/20 text-primary" :
               "bg-primary/20 text-primary" :
             profile?.user_tier === "exclusive" ? "bg-primary/20 text-primary" :
             "bg-muted text-muted-foreground"

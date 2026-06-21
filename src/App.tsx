@@ -14,6 +14,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Vetting from "./pages/Vetting";
 import Community from "./pages/Community";
 import FinancialTutor from "./pages/FinancialTutor";
+import BusinessPlanGenerator from "./pages/BusinessPlanGenerator";
 import Pricing from "./pages/Pricing";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import NotFound from "./pages/NotFound";
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/vetting" element={<Vetting />} />
             <Route path="/community" element={<Community />} />
             <Route path="/tutor" element={<FinancialTutor />} />
+            <Route path="/business-plan" element={<BusinessPlanGenerator />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/subscribe" element={<SubscriptionPage />} />
             <Route path="/reset-password" element={<ResetPassword />} />

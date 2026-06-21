@@ -1278,6 +1278,7 @@ export type Database = {
           certificate_id: string
           issued_at: string | null
           created_at: string | null
+          download_count: number | null
         }
         Insert: {
           id?: string
@@ -1288,6 +1289,7 @@ export type Database = {
           certificate_id: string
           issued_at?: string | null
           created_at?: string | null
+          download_count?: number | null
         }
         Update: {
           id?: string
@@ -1298,6 +1300,7 @@ export type Database = {
           certificate_id?: string
           issued_at?: string | null
           created_at?: string | null
+          download_count?: number | null
         }
       }
       promo_code_uses: {
@@ -1324,6 +1327,38 @@ export type Database = {
           used_at?: string | null
           discount_applied?: number | null
           plan_type?: string | null
+        }
+      }
+      business_plans: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          form_data: Json | null
+          plan_content: string
+          version: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name?: string
+          form_data?: Json | null
+          plan_content: string
+          version?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          form_data?: Json | null
+          plan_content?: string
+          version?: string
+          created_at?: string
+          updated_at?: string
         }
       }
     }

@@ -14,15 +14,17 @@ import { cn } from '@/lib/utils';
 
 const planHierarchy: Record<string, number> = {
   monthly: 1,
-  biennial: 2,
-  annual: 3,
+  quarterly: 2,
+  biennial: 3,
+  annual: 4,
+  b2b_annual: 5,
 };
 
 const SubscriptionPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, profile } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'biennial' | 'annual' | 'b2b_annual' | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'biennial' | 'annual' | 'b2b_annual' | null>(null);
 
   const currentSubType = profile?.subscription_type || null;
   const currentPlanLevel = currentSubType ? planHierarchy[currentSubType] || 0 : 0;
@@ -46,6 +48,8 @@ const SubscriptionPage = () => {
     if (planParam) {
       if (planParam.includes('monthly')) {
         setSelectedPlan('monthly');
+      } else if (planParam.includes('quarterly')) {
+        setSelectedPlan('quarterly');
       } else if (planParam.includes('biennial') || planParam.includes('bi-annual')) {
         setSelectedPlan('biennial');
       } else if (planParam.includes('annual')) {
@@ -105,7 +109,7 @@ const SubscriptionPage = () => {
       key: 'monthly' as const,
       name: 'Monthly Plan',
       description: 'Perfect for getting started',
-      price: 3000,
+      price: 4500,
       period: 'month',
       savings: null,
       icon: Crown,
@@ -118,12 +122,28 @@ const SubscriptionPage = () => {
       ],
     },
     {
+      key: 'quarterly' as const,
+      name: 'Quarterly Plan',
+      description: 'Great mid-term commitment',
+      price: 12000,
+      period: '3 months',
+      savings: 'Save ₦1,500',
+      icon: Star,
+      featured: false,
+      features: [
+        'All Monthly features',
+        '11% savings vs monthly',
+        'Extended support period',
+        'Priority feature access',
+      ],
+    },
+    {
       key: 'biennial' as const,
       name: 'Bi-annual Plan',
       description: 'Best value for committed learners',
-      price: 15000,
+      price: 22500,
       period: '6 months',
-      savings: 'Save ₦3,000',
+      savings: 'Save ₦4,500',
       icon: Star,
       featured: true,
       features: [
@@ -137,9 +157,9 @@ const SubscriptionPage = () => {
       key: 'annual' as const,
       name: 'Annual Plan',
       description: 'Maximum savings for power users',
-      price: 30000,
+      price: 45000,
       period: 'year',
-      savings: 'Save ₦6,000',
+      savings: 'Save ₦9,000',
       icon: Shield,
       featured: false,
       features: [

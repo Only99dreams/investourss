@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Wallet, Plus, Minus } from "lucide-react";
+import { Loader2, Wallet, Plus, Minus, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -37,6 +37,7 @@ const WalletsTab = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [wallets, setWallets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedWallet, setSelectedWallet] = useState<any>(null);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
   const [transactionForm, setTransactionForm] = useState({
@@ -168,12 +169,31 @@ const WalletsTab = () => {
     }
   };
 
+  const filteredWallets = wallets.filter(wallet => {
+    if (!searchTerm.trim()) return true;
+    const q = searchTerm.toLowerCase();
+    const name = wallet.profile?.full_name?.toLowerCase() || "";
+    const email = wallet.profile?.email?.toLowerCase() || "";
+    return name.includes(q) || email.includes(q);
+  });
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Wallet className="w-5 h-5" /> Wallets Management
-        </CardTitle>
+        <div className="flex items-center justify-between gap-4">
+          <CardTitle className="flex items-center gap-2">
+            <Wallet className="w-5 h-5" /> Wallets Management
+          </CardTitle>
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -194,14 +214,14 @@ const WalletsTab = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {wallets.length === 0 ? (
+                {filteredWallets.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center h-24">
-                      No wallets found.
+                      {searchTerm ? "No users match your search." : "No wallets found."}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  wallets.map((wallet) => (
+                  filteredWallets.map((wallet) => (
                     <TableRow key={wallet.id}>
                       <TableCell className="font-medium">
                         {wallet.profile?.full_name || "N/A"}

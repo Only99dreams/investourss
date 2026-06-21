@@ -14,6 +14,7 @@ import { CertificatesSection } from "@/components/dashboard/sections/Certificate
 import { SettingsSection } from "@/components/dashboard/sections/SettingsSection";
 import { NotificationsSection } from "@/components/dashboard/sections/NotificationsSection";
 import { LeaderboardSection } from "@/components/dashboard/sections/LeaderboardSection";
+import { SavedPlansSection } from "@/components/dashboard/sections/SavedPlansSection";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Loader2 } from "lucide-react";
 
@@ -114,6 +115,12 @@ const Dashboard = () => {
             <>
               <DashboardHeader title="Notifications" onMenuClick={() => setSidebarOpen(true)} />
               <NotificationsSection />
+            </>
+          } />
+          <Route path="/plans" element={
+            <>
+              <DashboardHeader title="My Business Plans" onMenuClick={() => setSidebarOpen(true)} />
+              <SavedPlansSection />
             </>
           } />
           <Route path="/ai-reports" element={

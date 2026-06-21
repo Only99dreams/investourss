@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Menu, X, User, LogOut, Settings, LayoutDashboard, ChevronDown, Shield, Building } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, LayoutDashboard, ChevronDown, Shield, Building, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +66,12 @@ const Header = () => {
               className="text-foreground/80 hover:text-primary transition-colors font-medium"
             >
               Home
+            </Link>
+            <Link 
+              to="/dashboard/plans" 
+              className="text-foreground/80 hover:text-primary transition-colors font-medium"
+            >
+              My Plans
             </Link>
             <Link 
               to="/learning" 
@@ -232,6 +238,13 @@ const Header = () => {
               onClick={() => setIsMenuOpen(false)}
             >
               Home
+            </Link>
+            <Link 
+              to="/dashboard/plans" 
+              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              My Plans
             </Link>
             <Link 
               to="/learning" 

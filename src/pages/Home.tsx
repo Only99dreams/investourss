@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { 
+import {
   BookOpen, 
   Shield, 
   TrendingUp, 
@@ -11,7 +11,10 @@ import {
   Lock,
   Globe,
   Sparkles,
-  Trophy
+  Trophy,
+  FileText,
+  BrainCircuit,
+  Wallet
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -67,13 +70,37 @@ const Home = () => {
             className="text-center max-w-3xl mx-auto"
           >
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-6">
-              Learn Smart. Earn Better.{" "}
-              <span className="text-primary">Stay Safe with AI.</span>
+              Build smarter, earn better, {" "}
+              <span className="text-primary">and stay financially safe with AI.</span>
             </h1>
             <p className="text-lg text-muted-foreground mb-8">
-            AI Tutor, Scam Detector &amp; Grassroots Educators Community
+           Turn your idea into a funding-ready business plan in 2 minutes.
             </p>
             
+            {/* AI Business Plan Generator */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="max-w-xl mx-auto mb-6"
+            >
+              <Link to="/business-plan">
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-accent/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all opacity-50" />
+                  <div className="relative flex items-center gap-5 bg-primary rounded-2xl p-6 border border-primary shadow-lg hover:brightness-110 transition-all cursor-pointer">
+                    <div className="w-14 h-14 rounded-xl bg-primary-foreground/20 flex items-center justify-center shrink-0">
+                      <FileText className="w-7 h-7 text-primary-foreground" />
+                    </div>
+                    <div className="text-left flex-1">
+                      <h3 className="font-semibold text-base text-primary-foreground">AI Business Plan Generator</h3>
+                      <p className="text-sm text-primary-foreground/70">Generate business plans, financial projections & funding readiness reports</p>
+                    </div>
+                    <ArrowRight className="w-6 h-6 text-primary-foreground/60 group-hover:text-primary-foreground group-hover:translate-x-1 transition-all shrink-0" />
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+
             {/* AI Financial Tutor Search Bar */}
             <motion.form 
               onSubmit={handleTutorSearch}
@@ -303,7 +330,7 @@ const Home = () => {
             </p>
           </motion.div>
           
-          <div className="grid md:grid-cols-3 gap-8">
+            <div className="grid md:grid-cols-3 gap-8">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -312,11 +339,11 @@ const Home = () => {
               className="text-center"
             >
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-8 h-8 text-primary" />
+                <BrainCircuit className="w-8 h-8 text-primary" />
               </div>
               <h3 className="font-semibold text-foreground mb-2">AI-Powered Intelligence</h3>
               <p className="text-sm text-muted-foreground">
-              Our AI tutor and scam detector help you identify potential scams and make safer financial decisions.
+              Generate business plans, strengthen financial intelligence, and detect potential scams using practical AI tools designed for everyday decision-making.
               </p>
             </motion.div>
             
@@ -328,11 +355,11 @@ const Home = () => {
               className="text-center"
             >
               <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                <Globe className="w-8 h-8 text-accent" />
+                <Wallet className="w-8 h-8 text-accent" />
               </div>
               <h3 className="font-semibold text-foreground mb-2">Income Mobility</h3>
               <p className="text-sm text-muted-foreground">
-              Improve your imcome anywhere in the world through learning, execution and mentorship leveraging AI
+              Move from idea to execution with AI-powered business development, mentorship, funding readiness support, and income-building opportunities.
               </p>
             </motion.div>
             
@@ -344,11 +371,11 @@ const Home = () => {
               className="text-center"
             >
               <div className="w-16 h-16 rounded-full bg-investours-gold/10 flex items-center justify-center mx-auto mb-4">
-                <Leaf className="w-8 h-8 text-investours-gold" />
+                <Users className="w-8 h-8 text-investours-gold" />
               </div>
               <h3 className="font-semibold text-foreground mb-2">Community Impact</h3>
               <p className="text-sm text-muted-foreground">
-              Join a growing network of users and Grassroots Financial Educators learning, sharing, and building lasting financial resilience in our society.
+              Become part of a movement helping underserved communities learn, build businesses, access opportunities, and create lasting wealth through technology and collective action.
               </p>
             </motion.div>
           </div>
@@ -367,9 +394,9 @@ const Home = () => {
             <h2 className="text-2xl md:text-3xl font-bold mb-4">
               Ready to Start Your Journey?
             </h2>
-            <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
-             Join thousands of youth, women, and microenterprises learning, protecting their money, and accessing trusted opportunities with AI.
-            </p>
+             <p className="text-primary-foreground/80 mb-8 max-w-xl mx-auto">
+              Join thousands of youth, women, and microenterprises using AI to build smarter businesses, improve financial intelligence, stay financially safe, and increase their income potential.
+             </p>
             <Link to="/signup">
               <Button variant="glass" size="lg">
                 Get Started for Free
