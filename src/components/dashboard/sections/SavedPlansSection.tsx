@@ -167,29 +167,30 @@ export function SavedPlansSection() {
                         {new Date(plan.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex gap-1 sm:gap-2 shrink-0">
                       <Button size="sm" variant="outline" onClick={() => handleView(plan)}>
-                        <Eye className="w-3.5 h-3.5 mr-1" /> View
+                        <Eye className="w-3.5 h-3.5 sm:mr-1" />
+                        <span className="hidden sm:inline">View</span>
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleDownloadPDF(plan)}
                         disabled={!isPremium}
-                        title={!isPremium ? "Upgrade to Premium to download" : ""}
+                        title={!isPremium ? "Upgrade to Premium to download" : "Download PDF"}
                       >
-                        {!isPremium ? <Lock className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5 mr-1" />}
-                        {isPremium ? "PDF" : ""}
+                        {!isPremium ? <Lock className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5 sm:mr-1" />}
+                        <span className="hidden sm:inline">{isPremium ? "PDF" : ""}</span>
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleDownloadDOCX(plan)}
                         disabled={!isPremium}
-                        title={!isPremium ? "Upgrade to Premium to download" : ""}
+                        title={!isPremium ? "Upgrade to Premium to download" : "Download DOCX"}
                       >
-                        {!isPremium ? <Lock className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5 mr-1" />}
-                        {isPremium ? "DOCX" : ""}
+                        {!isPremium ? <Lock className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5 sm:mr-1" />}
+                        <span className="hidden sm:inline">{isPremium ? "DOCX" : ""}</span>
                       </Button>
                       <Button
                         size="sm"

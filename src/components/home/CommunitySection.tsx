@@ -437,7 +437,7 @@ const CommunitySection = () => {
             <Users className="w-7 h-7 text-investours-coral" />
           </div>
           <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-            Educators Community
+            Investours Growth Community
           </h2>
           <p className="text-muted-foreground">
             Connect, share insights, and learn from other members

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminHeader from "@/components/admin/AdminHeader";
 import UsersTab from "@/components/admin/tabs/UsersTab";
@@ -24,11 +25,12 @@ import SettingsTab from "@/components/admin/tabs/SettingsTab";
 import AdminOverview from "@/components/admin/AdminOverview";
 import { Loader2 } from "lucide-react";
 import { DepositRequestsManager } from "@/components/admin/DepositRequestsManager";
-
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 const AdminDashboard = () => {
   const { user, roles, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isMobile = useIsMobile();
 
   if (isLoading) {
     return (
@@ -46,10 +48,21 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <AdminSidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-      <div className={`transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-16'}`}>
+      {/* Desktop Animated Sidebar */}
+      <div className="hidden lg:block">
+        <AdminSidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+      </div>
+
+      {/* Mobile Sheet Sidebar */}
+      <Sheet open={isMobile && sidebarOpen} onOpenChange={setSidebarOpen}>
+        <SheetContent side="left" className="p-0 w-64">
+          <AdminSidebar isOpen={true} onToggle={() => setSidebarOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
+      <div className={`transition-all duration-300 ${!isMobile && sidebarOpen ? 'lg:ml-64' : 'lg:ml-16'}`}>
         <AdminHeader onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="p-6">
+        <main className="p-4 md:p-6">
           <Routes>
             <Route index element={<AdminOverview />} />
             <Route path="users" element={<UsersTab />} />

@@ -345,6 +345,7 @@ export default function PromoCodesTab() {
               No promo codes created yet
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -402,6 +403,7 @@ export default function PromoCodesTab() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

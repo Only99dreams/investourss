@@ -73,7 +73,7 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 sm:gap-3">
           <div className="hidden md:block relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
@@ -101,10 +101,10 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
               variant="default" 
               size="sm"
               onClick={() => navigate('/subscribe')}
-              className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+              className="hidden xs:inline-flex bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
             >
-              <Crown className="w-4 h-4 mr-2" />
-              Upgrade
+              <Crown className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Upgrade</span>
             </Button>
           )}
 
@@ -113,15 +113,15 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
               variant="outline" 
               size="sm"
               onClick={() => navigate('/subscribe')}
-              className="border-primary/50 text-primary hover:bg-primary/10"
+              className="hidden xs:inline-flex border-primary/50 text-primary hover:bg-primary/10"
             >
-              <Crown className="w-4 h-4 mr-2" />
-              Upgrade Plan
+              <Crown className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Upgrade Plan</span>
             </Button>
           )}
 
           <div className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1",
+            "px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1",
             profile?.user_tier === "premium" ? 
               profile?.subscription_type === "annual" ? "bg-investours-gold/20 text-investours-gold" :
               profile?.subscription_type === "biennial" ? "bg-accent/20 text-accent" :
@@ -132,7 +132,7 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
           )}>
             {profile?.user_tier?.toUpperCase() || "FREE"}
             {profile?.user_tier === "premium" && profile?.subscription_type && (
-              <span className="text-xs opacity-75">
+              <span className="hidden sm:inline text-xs opacity-75">
                 ({profile.subscription_type})
               </span>
             )}

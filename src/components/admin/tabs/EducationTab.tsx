@@ -392,6 +392,7 @@ const EducationTab = () => {
               No modules yet. Click "Add Module" to create your first one.
             </p>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -457,6 +458,7 @@ const EducationTab = () => {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

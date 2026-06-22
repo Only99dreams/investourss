@@ -12,7 +12,7 @@ const AdminHeader = ({ onMenuClick }: AdminHeaderProps) => {
   const { profile } = useAuth();
 
   return (
-    <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
+    <header className="h-16 border-b border-border bg-card px-4 md:px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={onMenuClick} className="lg:hidden">
           <Menu className="w-5 h-5" />
