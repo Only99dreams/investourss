@@ -101,9 +101,9 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
               variant="default" 
               size="sm"
               onClick={() => navigate('/subscribe')}
-              className="hidden xs:inline-flex bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+              className="inline-flex bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
             >
-              <Crown className="w-4 h-4 mr-1" />
+              <Crown className="w-4 h-4 sm:mr-1" />
               <span className="hidden sm:inline">Upgrade</span>
             </Button>
           )}
@@ -113,9 +113,9 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
               variant="outline" 
               size="sm"
               onClick={() => navigate('/subscribe')}
-              className="hidden xs:inline-flex border-primary/50 text-primary hover:bg-primary/10"
+              className="inline-flex border-primary/50 text-primary hover:bg-primary/10"
             >
-              <Crown className="w-4 h-4 mr-1" />
+              <Crown className="w-4 h-4 sm:mr-1" />
               <span className="hidden sm:inline">Upgrade Plan</span>
             </Button>
           )}
