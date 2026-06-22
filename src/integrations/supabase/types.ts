@@ -1361,6 +1361,29 @@ export type Database = {
           updated_at?: string
         }
       }
+      business_plan_analytics: {
+        Row: {
+          id: string
+          user_id: string | null
+          event_type: string
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          event_type: string
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          event_type?: string
+          metadata?: Json
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never

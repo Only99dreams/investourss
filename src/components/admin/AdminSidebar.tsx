@@ -21,7 +21,8 @@ import {
   Radio,
   Settings,
   Banknote,
-  Tag
+  Tag,
+  BarChart3
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ const menuItems = [
   { icon: Building2, label: "Firms", path: "/admin/firms" },
   { icon: TrendingUp, label: "Investments", path: "/admin/investments" },
   { icon: Brain, label: "AI Tools", path: "/admin/ai-tools" },
+  { icon: BarChart3, label: "BP Stats", path: "/admin/business-plan-stats" },
   { icon: GraduationCap, label: "Education", path: "/admin/education" },
   { icon: MessageSquare, label: "Community", path: "/admin/community" },
   { icon: Wallet, label: "Wallets", path: "/admin/wallets" },

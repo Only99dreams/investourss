@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, ArrowLeft, Loader2, Sparkles, Building2,
@@ -78,6 +78,8 @@ const initialForm: BusinessPlanForm = {
   fundingSource: "",
 };
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const BusinessPlanGenerator = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -98,6 +100,24 @@ const BusinessPlanGenerator = () => {
   const [isAdjustingLength, setIsAdjustingLength] = useState(false);
   const [savePlanId, setSavePlanId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const trackedEvents = useRef<Set<string>>(new Set());
+
+  const trackEvent = useCallback((eventType: string, metadata: Record<string, unknown> = {}) => {
+    if (trackedEvents.current.has(eventType)) return;
+    trackedEvents.current.add(eventType);
+    supabase.from("business_plan_analytics").insert({
+      user_id: user?.id,
+      event_type: eventType,
+      metadata,
+    }).then(({ error }) => {
+      if (error) console.error("Analytics error:", error);
+    });
+  }, [user?.id]);
+
+  // Track tool open once per session
+  useEffect(() => {
+    trackEvent("opened_tool");
+  }, [trackEvent]);
 
   // Load a saved plan from dashboard navigation
   useEffect(() => {
@@ -112,7 +132,12 @@ const BusinessPlanGenerator = () => {
   }, []);
 
   const updateField = (field: keyof BusinessPlanForm, value: string) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm(prev => {
+      if (!trackedEvents.current.has("started_form") && value) {
+        trackEvent("started_form");
+      }
+      return { ...prev, [field]: value };
+    });
   };
 
   const canRevise = isPremium || revisionCount < 1;
@@ -149,14 +174,11 @@ const BusinessPlanGenerator = () => {
     if (plan) {
       setGeneratedPlan(plan);
       setRevisionCount(0);
+      trackEvent("generated_plan", { version: activeVersion });
     }
   };
 
   const handleSwitchVersion = async (version: VersionType) => {
-    if (!isPremium) {
-      toast({ title: "Premium Feature", description: "Upgrade to Premium to switch between plan versions.", variant: "destructive" });
-      return;
-    }
     if (!canRevise) {
       toast({ title: "Revision Limit Reached", description: "Upgrade to Premium for unlimited revisions.", variant: "destructive" });
       return;
@@ -276,10 +298,28 @@ const BusinessPlanGenerator = () => {
     if (!generatedPlan) return;
     const sectionHeader = SECTIONS[section - 1];
     if (!window.confirm(`Delete "${sectionHeader}"? This cannot be undone.`)) return;
-    const pattern = new RegExp(`##\\s+${section}\\.\\s+${sectionHeader}[\\s\\S]*?(?=##\\s+\\d+\\.\\s+|$)`, 'i');
-    const updated = generatedPlan.replace(pattern, '').trim();
+    const pattern = new RegExp(`##\\s+${section}\\.\\s+${escapeRegExp(sectionHeader)}[\\s\\S]*?(?=##\\s+\\d+\\.\\s+|$)`, 'i');
+    let updated = generatedPlan.replace(pattern, '').trim();
+    // Renumber remaining sections sequentially
+    let sectionNum = 1;
+    updated = updated.replace(/^##\s+(\d+)\.\s+(.+)/gm, (match, _num, name) => {
+      return `## ${sectionNum++}. ${name}`;
+    });
     setGeneratedPlan(updated);
-    toast({ title: "Section Deleted", description: `${sectionHeader} has been removed.` });
+    // Clear stale editing/improve state
+    if (editingSection !== null) {
+      const maxSection = SECTIONS.length;
+      const remainingHeaders = updated.match(/^##\s+\d+\.\s+(.+)/gm);
+      const remainingCount = remainingHeaders?.length ?? 0;
+      if (editingSection > remainingCount || editingSection === section) {
+        setEditingSection(null);
+        setEditContent('');
+      }
+    }
+    if (improveInput && improveInput.section >= section) {
+      setImproveInput(null);
+    }
+    toast({ title: "Section Deleted", description: `${sectionHeader} has been removed and sections renumbered.` });
   };
 
   const startEditSection = (section: number, content: string) => {
@@ -514,7 +554,7 @@ const BusinessPlanGenerator = () => {
             <Alert className="mt-4 border-primary/30 bg-primary/5">
               <Crown className="h-4 w-4 text-primary" />
               <AlertDescription className="text-sm">
-                <strong>Free Plan:</strong> You get 1 revision cycle. <Button variant="link" className="h-auto p-0 text-xs" onClick={() => navigate('/pricing')}>Upgrade to Premium</Button> for unlimited revisions, DOCX/PDF download, and version switching.
+                <strong>Free Plan:</strong> You get 1 revision cycle. <Button variant="link" className="h-auto p-0 text-xs" onClick={() => { trackEvent("attempted_upgrade"); navigate('/pricing'); }}>Upgrade to Premium</Button> for unlimited revisions and DOCX/PDF download.
               </AlertDescription>
             </Alert>
           )}
@@ -707,12 +747,11 @@ const BusinessPlanGenerator = () => {
                   <Tabs value={activeVersion} onValueChange={v => handleSwitchVersion(v as VersionType)} className="w-full">
                     <TabsList className="w-full flex-wrap h-auto">
                       <TabsTrigger value="standard" className="text-xs flex-1 min-w-[80px]">
-                        {!isPremium && activeVersion !== 'standard' ? null : null}
                         <LayoutList className="w-3 h-3 mr-1" /> Standard
                       </TabsTrigger>
                       {['grant', 'investor', 'loan', 'accelerator'].map(v => (
-                        <TabsTrigger key={v} value={v} className="text-xs flex-1 min-w-[80px]" disabled={!isPremium}>
-                          {!isPremium ? <Lock className="w-3 h-3 mr-1" /> : <Target className="w-3 h-3 mr-1" />}
+                        <TabsTrigger key={v} value={v} className="text-xs flex-1 min-w-[80px]">
+                          <Target className="w-3 h-3 mr-1" />
                           {v.charAt(0).toUpperCase() + v.slice(1)}
                         </TabsTrigger>
                       ))}
@@ -733,10 +772,10 @@ const BusinessPlanGenerator = () => {
                     {isSaving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : savePlanId ? <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
                     {savePlanId ? "Saved" : "Save Plan"}
                   </Button>
-                  <Button size="sm" variant="default" onClick={() => downloadPDF(generatedPlan, form.businessName)} disabled={!isPremium} title={!isPremium ? 'Upgrade to Premium to download PDF' : ''}>
+                  <Button size="sm" variant="default" onClick={() => { trackEvent("attempted_download", { format: "pdf" }); downloadPDF(generatedPlan, form.businessName); }} disabled={!isPremium} title={!isPremium ? 'Upgrade to Premium to download PDF' : ''}>
                     <Book className="w-3.5 h-3.5 mr-1.5" /> PDF {!isPremium && <Lock className="w-3 h-3 ml-1" />}
                   </Button>
-                  <Button size="sm" variant="default" onClick={() => downloadDOCX(generatedPlan, form.businessName)} disabled={!isPremium} title={!isPremium ? 'Upgrade to Premium to download DOCX' : ''}>
+                  <Button size="sm" variant="default" onClick={() => { trackEvent("attempted_download", { format: "docx" }); downloadDOCX(generatedPlan, form.businessName); }} disabled={!isPremium} title={!isPremium ? 'Upgrade to Premium to download DOCX' : ''}>
                     <Download className="w-3.5 h-3.5 mr-1.5" /> DOCX {!isPremium && <Lock className="w-3 h-3 ml-1" />}
                   </Button>
                 </div>
@@ -760,7 +799,7 @@ const BusinessPlanGenerator = () => {
                 Generate Another Plan
               </Button>
               {!isPremium && (
-                <Button variant="default" onClick={() => navigate('/pricing')}>
+                <Button variant="default" onClick={() => { trackEvent("attempted_upgrade"); navigate('/pricing'); }}>
                   <Crown className="w-4 h-4 mr-2" /> Upgrade to Premium
                 </Button>
               )}
