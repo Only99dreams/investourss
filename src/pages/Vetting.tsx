@@ -188,17 +188,17 @@ const Vetting = () => {
           >
             <Tabs defaultValue="search" className="w-full">
               <TabsList className="grid w-full grid-cols-3 mb-8">
-                <TabsTrigger value="search" className="flex items-center gap-2">
-                  <Search className="w-4 h-4" />
-                  Search
+                <TabsTrigger value="search" className="flex items-center justify-center gap-2">
+                  <Search className="w-4 h-4 shrink-0" />
+                  <span className="hidden xs:inline">Search</span>
                 </TabsTrigger>
-                <TabsTrigger value="analyze" className="flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
-                  Analyze
+                <TabsTrigger value="analyze" className="flex items-center justify-center gap-2">
+                  <Shield className="w-4 h-4 shrink-0" />
+                  <span className="hidden xs:inline">Analyze</span>
                 </TabsTrigger>
-                <TabsTrigger value="support" className="flex items-center gap-2">
-                  <HelpCircle className="w-4 h-4" />
-                  Support
+                <TabsTrigger value="support" className="flex items-center justify-center gap-2">
+                  <HelpCircle className="w-4 h-4 shrink-0" />
+                  <span className="hidden xs:inline">Support</span>
                 </TabsTrigger>
               </TabsList>
 

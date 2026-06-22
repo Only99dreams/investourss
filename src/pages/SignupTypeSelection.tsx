@@ -17,42 +17,47 @@ import { Footer } from "@/components/ui/Footer";
 const userTypes = [
   {
     id: "individual",
-    title: "Individual",
+    title: "Individual (Builders & Learners)",
     icon: User,
-    description: "Perfect for individuals who want to learn, grow, and make smart investment decisions for the future.",
+    description: "Perfect for individuals who want to learn, build, and grow their income through better financial decisions and business creation.",
     features: [
-      "Access financial education",
-      "AI scam detection",
-      "Verified investments",
-      "Earn as a GFE"
+      "AI Financial Education & Guidance",
+      "AI Scam Detection & Protection",
+      "AI Business Plan Generator (Turn ideas into funding-ready businesses)",
+      "Personal Growth & Income Mobility Tools",
+      "Access to vetted opportunities (where available)"
     ],
-    color: "primary"
+    color: "primary",
+    buttonLabel: "Start building your future"
   },
   {
-    id: "group",
-    title: "Group",
+    id: "b2b",
+    title: "B2B Partner (Training Centers, Cooperatives, NGOs & Communities)",
     icon: Users,
-    description: "Good for cooperatives, NGOs, and local groups who want to learn and invest together.",
+    description: "For Training centers, cooperatives, NGOs, and organized groups.",
     features: [
-      "Group learning modules",
-      "Collective investments",
-      "Community tools",
-      "Custom API access"
+      "Cooperative Financial Learning Modules",
+      "Collective Income & Investment Planning",
+      "Community Growth Dashboard",
+      "Admin & Member Management Tools"
     ],
-    color: "accent"
+    color: "accent",
+    buttonLabel: "Grow together"
   },
   {
     id: "firm",
-    title: "Licensed Partner",
+    title: "Licensed Firm (Financial Institutions & Firms)",
     icon: Building2,
-    description: "For licensed investment firms looking to share opportunities with qualified investors.",
+    description: "For licensed investment, microinsurance, and financial service providers who want to reach and serve verified users with trusted opportunities.",
     features: [
-      "Submit listings",
-      "AI & Admin tools",
-      "Secure messaging",
-      "Analytics dashboard"
+      "Opportunity Submission & Distribution Tools",
+      "Verified User Access Channels",
+      "AI-assisted Matching & Screening",
+      "Analytics & Performance Dashboard",
+      "Secure Messaging & Engagement Tools"
     ],
-    color: "investours-gold"
+    color: "investours-gold",
+    buttonLabel: "Connect with ready, verified users"
   }
 ];
 
@@ -96,9 +101,9 @@ const SignupTypeSelection = () => {
     gender: "",
     country: "",
     referralCode: getInitialReferralCode(),
-    // Group fields
-    groupName: "",
-    groupType: "",
+    // B2B fields
+    b2bName: "",
+    b2bType: "",
     contactName: "",
     contactPhone: "",
     // Firm fields
@@ -166,18 +171,18 @@ const SignupTypeSelection = () => {
           phone: selectedType === 'individual' ? formData.phone : formData.contactPhone,
           country: formData.country,
           gender: formData.gender || null,
-          user_type: selectedType as 'individual' | 'group' | 'firm',
+          user_type: selectedType as 'individual' | 'b2b' | 'firm',
           email_opt_in: emailOptIn
         };
 
         await supabase.from('profiles').update(profileUpdate).eq('id', user.id);
 
         // Create group or firm record if applicable
-        if (selectedType === 'group') {
+        if (selectedType === 'b2b') {
           await supabase.from('groups').insert({
             owner_id: user.id,
-            group_name: formData.groupName,
-            group_type: formData.groupType,
+            group_name: formData.b2bName,
+            group_type: formData.b2bType,
             contact_person_name: formData.contactName,
             contact_person_phone: formData.contactPhone,
             country: formData.country
@@ -239,10 +244,10 @@ const SignupTypeSelection = () => {
           <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
         </div>
 
-        <div className="flex-1 container mx-auto max-w-lg relative z-10 py-8 px-4">
+        <div className="flex-1 container mx-auto max-w-lg relative z-10 py-6 md:py-8 px-4">
           <button 
             onClick={handleBackToSelection}
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4 md:mb-6 transition-colors text-sm md:text-base"
           >
             <ArrowLeft className="w-4 h-4" />
             Change account type
@@ -261,8 +266,8 @@ const SignupTypeSelection = () => {
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
                   <IconComponent className="w-6 h-6 text-primary" />
                 </div>
-                <CardTitle className="text-xl">{config.title}</CardTitle>
-                <CardDescription>{config.description}</CardDescription>
+                <CardTitle className="text-lg md:text-xl">{config.title}</CardTitle>
+                <CardDescription className="text-sm md:text-base">{config.description}</CardDescription>
               </CardHeader>
 
               <CardContent>
@@ -280,7 +285,7 @@ const SignupTypeSelection = () => {
                           required 
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid xs:grid-cols-2 gap-3">
                         <div className="space-y-2">
                           <Label htmlFor="phone">Phone Number *</Label>
                           <Input 
@@ -310,30 +315,31 @@ const SignupTypeSelection = () => {
                     </>
                   )}
 
-                  {/* Group Fields */}
-                  {selectedType === "group" && (
+                  {/* B2B Fields */}
+                  {selectedType === "b2b" && (
                     <>
                       <div className="space-y-2">
-                        <Label htmlFor="groupName">Group Name *</Label>
+                        <Label htmlFor="b2bName">Organization Name *</Label>
                         <Input 
-                          id="groupName" 
+                          id="b2bName" 
                           placeholder="Enter organization name"
-                          value={formData.groupName}
-                          onChange={(e) => setFormData({ ...formData, groupName: e.target.value })}
+                          value={formData.b2bName}
+                          onChange={(e) => setFormData({ ...formData, b2bName: e.target.value })}
                           required 
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="groupType">Type of Group *</Label>
-                        <Select value={formData.groupType} onValueChange={(v) => setFormData({ ...formData, groupType: v })}>
+                        <Label htmlFor="b2bType">Type of Organization *</Label>
+                        <Select value={formData.b2bType} onValueChange={(v) => setFormData({ ...formData, b2bType: v })}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="coop">Cooperative</SelectItem>
                             <SelectItem value="ngo">NGO</SelectItem>
-                            <SelectItem value="school">School</SelectItem>
+                            <SelectItem value="school">Training Center</SelectItem>
                             <SelectItem value="religious">Religious Organization</SelectItem>
+                            <SelectItem value="community">Community Group</SelectItem>
                             <SelectItem value="other">Other</SelectItem>
                           </SelectContent>
                         </Select>
@@ -391,7 +397,7 @@ const SignupTypeSelection = () => {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid xs:grid-cols-2 gap-3">
                         <div className="space-y-2">
                           <Label htmlFor="contactName">Contact Name *</Label>
                           <Input 
@@ -505,7 +511,7 @@ const SignupTypeSelection = () => {
                     </div>
                   )}
 
-                  {selectedType === "group" && (
+                  {selectedType === "b2b" && (
                     <div className="flex items-start gap-2">
                       <Checkbox 
                         id="confirmAuthorized"
@@ -514,7 +520,7 @@ const SignupTypeSelection = () => {
                         required 
                       />
                       <Label htmlFor="confirmAuthorized" className="text-sm text-muted-foreground leading-tight">
-                        I confirm I'm authorized to register this group
+                        I confirm I'm authorized to register this organization
                       </Label>
                     </div>
                   )}
@@ -569,7 +575,7 @@ const SignupTypeSelection = () => {
             </Card>
           </motion.div>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
+          <p className="text-center text-sm text-muted-foreground mt-4 md:mt-6">
             Already have an account?{" "}
             <Link to="/auth?mode=login" className="text-primary font-medium hover:underline">
               Sign in
@@ -605,20 +611,20 @@ const SignupTypeSelection = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-12"
+          className="text-center mb-8 md:mb-12"
         >
-          <Link to="/" className="inline-block mb-6">
+          <Link to="/" className="inline-block mb-4 md:mb-6">
             <img 
               src={investoursLogo} 
               alt="Investours" 
-              className="w-16 h-16 mx-auto"
+              className="w-12 h-12 md:w-16 md:h-16 mx-auto"
             />
           </Link>
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+          <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-3 md:mb-4">
             Let's get you started
           </h1>
-          <p className="text-lg text-muted-foreground">
-            Tell us who you are signing up as so we can get you started.
+          <p className="text-base md:text-lg text-muted-foreground">
+            Tell us who you are so we can personalize your experience and guide your financial progress.
           </p>
         </motion.div>
 
@@ -627,7 +633,7 @@ const SignupTypeSelection = () => {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="grid md:grid-cols-3 gap-6"
+          className="grid md:grid-cols-3 gap-4 md:gap-6"
         >
           {userTypes.map((type, index) => {
             const IconComponent = type.icon;
@@ -658,13 +664,13 @@ const SignupTypeSelection = () => {
                     <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-colors ${colorClasses[type.color as keyof typeof colorClasses]}`}>
                       <IconComponent className="w-8 h-8" />
                     </div>
-                    <CardTitle className="text-xl">{type.title}</CardTitle>
-                    <CardDescription className="text-base">
+                    <CardTitle className="text-lg md:text-xl">{type.title}</CardTitle>
+                    <CardDescription className="text-sm md:text-base">
                       {type.description}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ul className="space-y-2 mb-6">
+                    <ul className="space-y-1.5 md:space-y-2 mb-4 md:mb-6">
                       {type.features.map((feature, i) => (
                         <li key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Check className="w-4 h-4 text-accent flex-shrink-0" />
@@ -676,7 +682,7 @@ const SignupTypeSelection = () => {
                       variant="outline" 
                       className="w-full group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-colors"
                     >
-                      Select {type.title}
+                      {type.buttonLabel || `Select ${type.title}`}
                       <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
                   </CardContent>
@@ -691,7 +697,7 @@ const SignupTypeSelection = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.8 }}
-          className="text-center text-sm text-muted-foreground mt-12"
+          className="text-center text-sm text-muted-foreground mt-8 md:mt-12"
         >
           Already have an account?{" "}
           <Link to="/auth?mode=login" className="text-primary font-medium hover:underline">

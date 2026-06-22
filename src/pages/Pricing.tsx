@@ -56,11 +56,10 @@ const Pricing = () => {
               Investours Pricing
             </h1>
             <p className="text-xl md:text-2xl text-muted-foreground mb-2">
-              Grow Safer. Decide Smarter.
+              Build Smarter. Earn Better. Stay Financially Safe.
             </p>
             <p className="text-lg text-muted-foreground">
-              Choose the plan that fits your learning and protection needs. All plans include access to our AI 
-              Tutor, Scam Detector, and educational resources — designed to help you grow smarter and safer.
+              Choose the plan that fits your goals. All plans include access to our AI Business Plan Generator, AI Financial Tutor, Scam Detector, and learning resources designed to help you improve your income and make smarter financial decisions.
             </p>
           </motion.div>
         </div>
@@ -79,7 +78,7 @@ const Pricing = () => {
               Individual Plans
             </h2>
             <p className="text-muted-foreground">
-              Start with a 30-day full access trial, then choose your plan
+              Start with the Free Plan, then upgrade whenever you're ready for more AI tools, mentorship, and opportunities.
             </p>
           </motion.div>
 
@@ -95,9 +94,6 @@ const Pricing = () => {
               <Card variant="elevated" className="h-full border-2 border-border/50">
                 <CardHeader className="text-center pb-4">
                   <CardTitle className="text-2xl font-bold">Free Plan</CardTitle>
-                  <CardDescription className="text-base">
-                    (After 30-Day Full Access Trial)
-                  </CardDescription>
                   <div className="mt-4">
                     <span className="text-4xl font-bold text-foreground">₦0</span>
                     <span className="text-muted-foreground"> / Month</span>
@@ -111,19 +107,25 @@ const Pricing = () => {
                     <li className="flex items-start gap-3">
                       <Sparkles className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                       <span className="text-sm">
-                        <strong>AI Tutor</strong> → limited access
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <Shield className="w-5 h-5 text-accent mt-0.5 shrink-0" />
-                      <span className="text-sm">
-                        <strong>Scam Detector</strong> → 1 check per month
+                        <strong>AI Business Plan Generator</strong> → Generate and preview business plans (download unavailable)
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
                       <BookOpen className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                       <span className="text-sm">
-                        <strong>Education</strong> → Free financial literacy modules only
+                        <strong>AI Financial Tutor</strong> → Free for all with limited usage
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <Shield className="w-5 h-5 text-accent mt-0.5 shrink-0" />
+                      <span className="text-sm">
+                        <strong>Scam Detector</strong> → Free for all with limited usage
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <TrendingUp className="w-5 h-5 text-investours-gold mt-0.5 shrink-0" />
+                      <span className="text-sm">
+                        <strong>Learning &amp; Mentorship</strong> → Access to selected financial literacy modules
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
@@ -133,15 +135,15 @@ const Pricing = () => {
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
-                      <TrendingUp className="w-5 h-5 text-investours-gold mt-0.5 shrink-0" />
+                      <Award className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                       <span className="text-sm">
-                        <strong>Access to Licensed Partners</strong> → Coming soon (depends on regulation & rollout)
+                        <strong>Access to Licensed Partners</strong> → Coming soon (depends on regulation &amp; rollout)
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
-                      <Award className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                      <Sparkles className="w-5 h-5 text-investours-gold mt-0.5 shrink-0" />
                       <span className="text-sm">
-                        <strong>Become a Grassroots Financial Educator (GFE)</strong> → Optional income pathways
+                        <strong>Become an Investours Growth Partner (IGP)</strong> → Earn through referrals and community impact
                       </span>
                     </li>
                   </ul>
@@ -164,7 +166,7 @@ const Pricing = () => {
                 <CardHeader className="text-center pb-4 pt-8">
                   <CardTitle className="text-2xl font-bold text-primary">Premium Plan</CardTitle>
                   <CardDescription className="text-base">
-                    For learners ready to unlock full AI tools and opportunities.
+                    For users ready to unlock full AI tools and opportunities.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -269,27 +271,39 @@ const Pricing = () => {
                     <ul className="space-y-2">
                       <li className="flex items-start gap-2">
                         <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                        <span className="text-sm">Unlimited AI Tutor access</span>
+                        <span className="text-sm">Unlimited AI Business Plan Generator Usage</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                        <span className="text-sm">Deep Scam Analysis → unlimited</span>
+                        <span className="text-sm">Download Business Plans (PDF &amp; DOC)</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                        <span className="text-sm">Premium educational content & video modules</span>
+                        <span className="text-sm">Save Business Plan History</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                        <span className="text-sm">Ongoing mentorship & special support</span>
+                        <span className="text-sm">Unlimited AI Financial Tutor Access</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                        <span className="text-sm">GFE / Optional Income Pathways (lower withdrawal fees)</span>
+                        <span className="text-sm">Unlimited Deep Scam Analysis</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                        <span className="text-sm">Early access to licensed investment & microinsurance partners → As available</span>
+                        <span className="text-sm">Premium Learning &amp; Mentorship Content</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                        <span className="text-sm">Additional Support</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                        <span className="text-sm">Investours Growth Partner (IGP) Benefits (Lower Withdrawal Fees)</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                        <span className="text-sm">Early Access to Licensed Investment &amp; Microinsurance Partners (As Available)</span>
                       </li>
                     </ul>
                   </div>
@@ -317,9 +331,12 @@ const Pricing = () => {
                 <CardTitle className="text-2xl md:text-3xl font-bold">
                   Institutional Access
                 </CardTitle>
-                <CardDescription className="text-base">
-                  Tailored for Government MDAs, NGOs, Unions, Cooperatives, and Corporations
+                <CardDescription className="text-base max-w-2xl mx-auto">
+                  Empowering Youth, Women, Entrepreneurs, and Communities with AI-Powered Financial Intelligence and Income Mobility
                 </CardDescription>
+                <p className="text-sm text-muted-foreground mt-3 max-w-xl mx-auto">
+                  Tailored for Government MDAs, NYSC Programs, NGOs, Development Partners, Unions, Cooperatives, Educational Institutions, and Corporations.
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid md:grid-cols-2 gap-6">
@@ -329,30 +346,48 @@ const Pricing = () => {
                       Included Benefits
                     </h3>
                     <ul className="space-y-2 text-sm text-muted-foreground ml-7">
-                      <li>3-day AI for Financial Safety & Resilience Program (free for participants)</li>
-                      <li>Sponsored Premium access for beneficiaries</li>
-                      <li>Onboarding and general support</li>
+                      <li>AI for Financial Intelligence &amp; Scam Protection Program</li>
+                      <li>AI Business Plan Generator for aspiring entrepreneurs and business owners</li>
+                      <li>Sponsored Premium Access for beneficiaries</li>
+                      <li>Financial literacy, business development, and income mobility resources</li>
+                      <li>Community engagement and impact tracking</li>
+                      <li>Onboarding, training, and ongoing support</li>
                     </ul>
                   </div>
                   <div className="space-y-3">
                     <h3 className="font-semibold text-lg flex items-center gap-2">
                       <Check className="w-5 h-5 text-primary" />
-                      Requirements & Pricing
+                      Requirements &amp; Pricing
                     </h3>
                     <ul className="space-y-2 text-sm text-muted-foreground ml-7">
-                      <li>Minimum sponsorship: 25 per participants</li>
+                      <li>Minimum sponsorship: 25 beneficiaries</li>
                       <li>Annual billing only</li>
                       <li>Discounts available for 101+ beneficiaries</li>
-                      <li>White-label solution starts from 5,000 users</li>
-                      <li>Extra concession available for sponsorships of 100+ participants</li>
+                      <li>White-label solutions available from 5,000+ users</li>
+                      <li>Additional concessions available for large-scale sponsorship programs</li>
                       <li>Pilot partnerships may be considered on a case-by-case basis</li>
                     </ul>
                   </div>
                 </div>
 
+                <div className="pt-4">
+                  <h3 className="font-semibold text-lg flex items-center gap-2 justify-center mb-3">
+                    <Check className="w-5 h-5 text-primary" />
+                    Ideal For
+                  </h3>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground ml-7 max-w-xl mx-auto">
+                    <li>&bull; Youth empowerment programs</li>
+                    <li>&bull; Women's economic empowerment initiatives</li>
+                    <li>&bull; Entrepreneurship and business incubation programs</li>
+                    <li>&bull; Financial inclusion projects</li>
+                    <li>&bull; Cooperative and union capacity building</li>
+                    <li>&bull; Workforce and community development initiatives</li>
+                  </ul>
+                </div>
+
                 <div className="pt-6 border-t border-border text-center">
                   <p className="text-muted-foreground mb-4">
-                    Ready to provide financial education and protection to your organization?
+                    Ready to equip your beneficiaries with AI-powered tools for financial intelligence, entrepreneurship, and income mobility?
                   </p>
                   <a href="mailto:institutional@investours.com?subject=Institutional Access Request">
                     <Button variant="hero" size="lg">
