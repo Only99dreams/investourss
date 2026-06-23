@@ -6,7 +6,7 @@ import {
   Download, Crown, CheckCircle, X, Shrink, Expand,
   LayoutList, Book, Target, Lock, Trash2, Save
 } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -530,6 +530,8 @@ const BusinessPlanGenerator = () => {
 
     return elements;
   };
+
+  if (!user) return <Navigate to="/auth?mode=login" replace />;
 
   return (
     <div className="min-h-screen bg-background">

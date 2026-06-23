@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { GraduationCap, Play, CheckCircle, Lock, Clock, Trophy, Share2, Copy, Twitter, Facebook, Linkedin, Link as LinkIcon, Shield, Sparkles, Instagram, MessageCircle } from "lucide-react";
+import { GraduationCap, Play, CheckCircle, Lock, Clock, Trophy, Share2, Copy, Twitter, Facebook, Linkedin, Link as LinkIcon, Shield, Sparkles, FileText, Instagram, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useSearchParams, Link } from "react-router-dom";
@@ -567,17 +567,23 @@ export function EducationSection() {
                   <span>{completedCount}/{totalModules}</span>
                 </div>
                 <Progress value={progressPercent} className="h-3" />
-                <div className="flex gap-2">
-                  <Link to="/tutor" className="flex-1">
+                <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
+                  <Link to="/tutor">
                     <Button className="w-full" size="sm">
                       <Sparkles className="w-4 h-4 mr-2" />
                       Use AI Tutor
                     </Button>
                   </Link>
-                  <Link to="/vetting" className="flex-1">
+                  <Link to="/vetting">
                     <Button className="w-full" size="sm">
                       <Shield className="w-4 h-4 mr-2" />
                       Use Scam Detector
+                    </Button>
+                  </Link>
+                  <Link to="/business-plan-generator">
+                    <Button className="w-full" size="sm">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Business Plan
                     </Button>
                   </Link>
                 </div>
