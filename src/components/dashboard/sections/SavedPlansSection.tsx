@@ -111,17 +111,25 @@ export function SavedPlansSection() {
 
       {!isPremium && remainingSlots <= 1 && (
         <Card className="border-amber-500/30 bg-amber-50/50">
-          <CardContent className="p-4 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-            <p className="text-sm text-amber-800 flex-1">
-              {remainingSlots === 0
-                ? "You've used all free save slots. Upgrade to Premium to save unlimited plans."
-                : "You have only 1 free save slot remaining."
-              }
-            </p>
-            <Button size="sm" variant="default" onClick={() => navigate("/pricing")}>
-              <Crown className="w-4 h-4 mr-1" /> Upgrade
-            </Button>
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-amber-800">
+                  {remainingSlots === 0
+                    ? "You've used all free save slots. Upgrade to Premium to save unlimited plans."
+                    : "You have only 1 free save slot remaining."
+                  }
+                </p>
+                <p className="text-sm text-amber-700 mt-1.5 italic">
+                  Unlock <Lock className="w-3 h-3 inline-block align-text-top" /> Download (PDF/DOC) with{" "}
+                  <strong className="not-italic">₦4,500 Premium Plan for a Month</strong>
+                </p>
+              </div>
+              <Button size="sm" variant="default" onClick={() => navigate("/pricing")}>
+                <Crown className="w-4 h-4 mr-1" /> Upgrade
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
