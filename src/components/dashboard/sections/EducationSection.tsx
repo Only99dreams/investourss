@@ -568,22 +568,22 @@ export function EducationSection() {
                 </div>
                 <Progress value={progressPercent} className="h-3" />
                 <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
+                  <Link to="/business-plan-generator">
+                    <Button className="w-full" size="sm">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Business Plan
+                    </Button>
+                  </Link>
                   <Link to="/tutor">
                     <Button className="w-full" size="sm">
                       <Sparkles className="w-4 h-4 mr-2" />
-                      Use AI Tutor
+                      AI Tutor
                     </Button>
                   </Link>
                   <Link to="/vetting">
                     <Button className="w-full" size="sm">
                       <Shield className="w-4 h-4 mr-2" />
-                      Use Scam Detector
-                    </Button>
-                  </Link>
-                  <Link to="/business-plan-generator">
-                    <Button className="w-full" size="sm">
-                      <FileText className="w-4 h-4 mr-2" />
-                      Business Plan
+                      Scam Detector
                     </Button>
                   </Link>
                 </div>
