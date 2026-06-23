@@ -568,7 +568,7 @@ export function EducationSection() {
                 </div>
                 <Progress value={progressPercent} className="h-3" />
                 <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
-                  <Link to="/business-plan-generator">
+                  <Link to="/business-plan">
                     <Button className="w-full" size="sm">
                       <FileText className="w-4 h-4 mr-2" />
                       Business Plan
