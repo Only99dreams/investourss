@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Users, Heart, MessageCircle, Share2, Lock, Send, Image, ChevronDown, ChevronUp } from "lucide-react";
+import { Users, Heart, MessageCircle, Share2, Lock, Send, Image, ChevronDown, ChevronUp, FileText, Play, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
+import { LinkifiedText } from "@/lib/LinkifiedText";
 
 interface Post {
   id: string;
@@ -21,6 +22,8 @@ interface Post {
   comments_count: number;
   shares_count: number;
   author_id: string;
+  attachment_url: string | null;
+  attachment_type: string | null;
   profiles?: {
     full_name: string | null;
     avatar_url: string | null;
@@ -40,6 +43,7 @@ interface Comment {
 
 const CommunitySection = () => {
   const { user, profile } = useAuth();
+  const [searchParams] = useSearchParams();
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState("");
   const [isPosting, setIsPosting] = useState(false);
@@ -49,6 +53,10 @@ const CommunitySection = () => {
   const [postComments, setPostComments] = useState<Record<string, Comment[]>>({});
   const [newComments, setNewComments] = useState<Record<string, string>>({});
   const [loadingComments, setLoadingComments] = useState<Set<string>>(new Set());
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [videoThumbnails, setVideoThumbnails] = useState<Record<string, string>>({});
+  const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -59,11 +67,40 @@ const CommunitySection = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  useEffect(() => {
+    const postId = searchParams.get("post");
+    if (postId && posts.length > 0) {
+      const post = posts.find((p) => p.id === postId);
+      if (post) {
+        const shareUrl = `${window.location.origin}/community?post=${postId}`;
+        updateShareOGTags({
+          title: `${post.profiles?.full_name || "Investours Member"} shared a post`,
+          description: post.content.substring(0, 200),
+          image: post.attachment_type === "image" ? post.attachment_url : undefined,
+          url: shareUrl,
+        });
+      }
+    }
+  }, [searchParams, posts]);
+
+  useEffect(() => {
+    posts.forEach((post) => {
+      if (post.attachment_type === "video" && post.attachment_url && !videoThumbnails[post.id]) {
+        generateVideoThumbnail(post.attachment_url).then((thumb) => {
+          if (thumb) {
+            setVideoThumbnails((prev) => ({ ...prev, [post.id]: thumb }));
+          }
+        });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts]);
+
   const fetchPosts = async () => {
     try {
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
-        .select('id, content, created_at, likes_count, comments_count, shares_count, author_id')
+        .select('id, content, created_at, likes_count, comments_count, shares_count, author_id, attachment_url, attachment_type')
         .eq('is_approved', true)
         .eq('is_hidden', false)
         .order('created_at', { ascending: false })
@@ -145,17 +182,61 @@ const CommunitySection = () => {
     }
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Please select a file smaller than 10MB", variant: "destructive" });
+      return;
+    }
+    setSelectedFile(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setFilePreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else if (file.type.startsWith("video/")) {
+      const objectUrl = URL.createObjectURL(file);
+      const thumb = await generateVideoThumbnail(objectUrl);
+      setFilePreview(thumb);
+      URL.revokeObjectURL(objectUrl);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
   const handlePost = async () => {
     if (!newPost.trim() || !user) return;
 
     setIsPosting(true);
     try {
+      let attachmentUrl = null;
+      let attachmentType = null;
+
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split(".").pop();
+        const filePath = `post-attachments/${user.id}/${Date.now()}.${fileExt}`;
+        if (selectedFile.type.startsWith("image/")) attachmentType = "image";
+        else if (selectedFile.type.startsWith("video/")) attachmentType = "video";
+        else attachmentType = "document";
+
+        const { data, error: uploadError } = await supabase.storage
+          .from("attachments")
+          .upload(filePath, selectedFile, { cacheControl: "3600", upsert: false });
+        if (uploadError) throw uploadError;
+        if (data) {
+          const { data: { publicUrl } } = supabase.storage.from("attachments").getPublicUrl(filePath);
+          attachmentUrl = publicUrl;
+        }
+      }
+
       const { error } = await supabase
         .from('posts')
         .insert({
           content: newPost.trim(),
           author_id: user.id,
           category: 'finance',
+          attachment_url: attachmentUrl,
+          attachment_type: attachmentType,
           is_approved: true
         });
 
@@ -166,6 +247,8 @@ const CommunitySection = () => {
         description: "Your post has been shared with the community."
       });
       setNewPost("");
+      setSelectedFile(null);
+      setFilePreview(null);
       fetchPosts();
     } catch (error) {
       console.error("Error posting:", error);
@@ -278,9 +361,15 @@ const CommunitySection = () => {
   const handleShare = async (postId: string) => {
     const referralCode = profile?.referral_code || "";
     const shareUrl = `${window.location.origin}/community?post=${postId}${referralCode ? `&ref=${referralCode}` : ""}`;
+    const post = posts.find((p) => p.id === postId);
+    const shareText = `Check out this post from Investours Community: "${post?.content?.substring(0, 100)}..."\n\n${shareUrl}`;
 
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      if (navigator.share && navigator.canShare?.({ text: shareText })) {
+        await navigator.share({ title: "Investours Community", text: shareText, url: shareUrl });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+      }
       
       if (user) {
         await supabase
@@ -466,11 +555,44 @@ const CommunitySection = () => {
                         placeholder="Share your thoughts, ask questions, or share investment insights..."
                         className="resize-none min-h-[80px]"
                       />
+                      {filePreview && (
+                        <div className="relative rounded-lg overflow-hidden border">
+                          {selectedFile?.type.startsWith("image/") ? (
+                            <img src={filePreview} alt="Preview" className="w-full max-h-40 object-cover" />
+                          ) : (
+                            <div className="relative">
+                              <img src={filePreview} alt="Video preview" className="w-full max-h-40 object-cover" />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center">
+                                  <Play className="w-5 h-5 text-foreground ml-0.5" />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <button
+                            onClick={() => { setSelectedFile(null); setFilePreview(null); }}
+                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80"
+                          >
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center">
-                        <Button variant="ghost" size="sm" disabled>
-                          <Image className="w-4 h-4 mr-2" />
-                          Photo
-                        </Button>
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*,video/*"
+                            className="hidden"
+                            onChange={handleFileSelect}
+                            disabled={isPosting}
+                          />
+                          <Button variant="ghost" size="sm" asChild>
+                            <span>
+                              <Image className="w-4 h-4 mr-2" />
+                              Photo/Video
+                            </span>
+                          </Button>
+                        </label>
                         <Button 
                           onClick={handlePost} 
                           disabled={!newPost.trim() || isPosting}
@@ -550,9 +672,45 @@ const CommunitySection = () => {
                               {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
                             </span>
                           </div>
-                          <p className="text-sm text-foreground mb-3 whitespace-pre-wrap">
-                            {post.content}
-                          </p>
+                          <div className="text-sm text-foreground mb-3 whitespace-pre-wrap">
+                            <LinkifiedText text={post.content || ""} />
+                          </div>
+                          {post.attachment_url && post.attachment_type === "image" && (
+                            <div className="mb-3 rounded-lg overflow-hidden">
+                              <img src={post.attachment_url} alt="Post" className="w-full object-cover max-h-64" />
+                            </div>
+                          )}
+                          {post.attachment_url && post.attachment_type === "video" && (
+                            <div className="mb-3 rounded-lg overflow-hidden bg-black relative">
+                              {videoThumbnails[post.id] && !playingVideos.has(post.id) && (
+                                <div
+                                  className="relative cursor-pointer"
+                                  onClick={() => setPlayingVideos(prev => new Set([...prev, post.id]))}
+                                >
+                                  <img src={videoThumbnails[post.id]} alt="Video" className="w-full object-cover max-h-64" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
+                                    <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center hover:scale-110 transition-transform">
+                                      <Play className="w-6 h-6 text-foreground ml-0.5" />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              <video
+                                src={post.attachment_url}
+                                controls
+                                autoPlay={playingVideos.has(post.id)}
+                                className={`w-full max-h-64 ${!playingVideos.has(post.id) && videoThumbnails[post.id] ? "hidden" : ""}`}
+                              />
+                            </div>
+                          )}
+                          {post.attachment_url && post.attachment_type === "document" && (
+                            <div className="mb-3 p-2 bg-muted rounded-lg flex items-center gap-2">
+                              <FileText className="w-5 h-5 text-primary" />
+                              <a href={post.attachment_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                                Download Document
+                              </a>
+                            </div>
+                          )}
                           <div className="flex items-center gap-4 text-muted-foreground">
                             <button 
                               onClick={() => handleLike(post.id)}
@@ -622,7 +780,7 @@ const CommunitySection = () => {
                                             {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
                                           </span>
                                         </div>
-                                        <p className="text-sm">{comment.content}</p>
+                                        <p className="text-sm"><LinkifiedText text={comment.content} /></p>
                                       </div>
                                     </div>
                                   ))

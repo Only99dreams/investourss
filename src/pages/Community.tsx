@@ -21,9 +21,11 @@ import {
   Linkedin,
   MessageCircle,
   Copy,
-  Mail
+  Mail,
+  Play,
+  X
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +53,8 @@ import { Footer } from "@/components/ui/Footer";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
+import { LinkifiedText } from "@/lib/LinkifiedText";
 
 interface Post {
   id: string;
@@ -95,6 +99,7 @@ const categories = [
 ];
 
 const Community = () => {
+  const [searchParams] = useSearchParams();
   const [activeCategory, setActiveCategory] = useState("all");
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +108,9 @@ const Community = () => {
   const [newPostCategory, setNewPostCategory] = useState<string>("education");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [videoThumbnails, setVideoThumbnails] = useState<Record<string, string>>({});
+  const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>({});
   const [newCommentMap, setNewCommentMap] = useState<Record<string, string>>({});
@@ -224,7 +232,36 @@ const Community = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    const postId = searchParams.get("post");
+    if (postId && posts.length > 0) {
+      const post = posts.find((p) => p.id === postId);
+      if (post) {
+        const shareUrl = `${window.location.origin}/community?post=${postId}`;
+        updateShareOGTags({
+          title: `${post.author?.full_name || "Investours Member"} shared a post`,
+          description: post.content.substring(0, 200),
+          image: post.attachment_type === "image" ? post.attachment_url : undefined,
+          url: shareUrl,
+        });
+      }
+    }
+  }, [searchParams, posts]);
+
+  useEffect(() => {
+    posts.forEach((post) => {
+      if (post.attachment_type === "video" && post.attachment_url && !videoThumbnails[post.id]) {
+        generateVideoThumbnail(post.attachment_url).then((thumb) => {
+          if (thumb) {
+            setVideoThumbnails((prev) => ({ ...prev, [post.id]: thumb }));
+          }
+        });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts]);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
@@ -236,6 +273,18 @@ const Community = () => {
         return;
       }
       setSelectedFile(file);
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (ev) => setFilePreview(ev.target?.result as string);
+        reader.readAsDataURL(file);
+      } else if (file.type.startsWith("video/")) {
+        const objectUrl = URL.createObjectURL(file);
+        const thumb = await generateVideoThumbnail(objectUrl);
+        setFilePreview(thumb);
+        URL.revokeObjectURL(objectUrl);
+      } else {
+        setFilePreview(null);
+      }
     }
   };
 
@@ -327,6 +376,7 @@ const Community = () => {
       setNewPostContent("");
       setNewPostCategory("education");
       setSelectedFile(null);
+      setFilePreview(null);
       setIsCreateOpen(false);
       fetchPosts();
     } catch (error: any) {
@@ -391,6 +441,7 @@ const Community = () => {
       const post = posts.find(p => p.id === postId);
       const shareUrl = `${window.location.origin}/community?post=${postId}&ref=${profile?.referral_code}`;
       const shareText = `Check out this post from Investours Community: "${post?.content?.substring(0, 100)}..."\n\n${shareUrl}`;
+      const hasImage = post?.attachment_type === "image" && post?.attachment_url;
 
       // Record share in database
       await supabase.from('post_shares').insert({
@@ -657,7 +708,9 @@ const Community = () => {
                         </div>
 
                         {/* Post Content */}
-                        <p className="text-foreground mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                        <div className="text-foreground mb-4 leading-relaxed whitespace-pre-wrap">
+                          <LinkifiedText text={post.content || ""} />
+                        </div>
 
                         {/* Attachment */}
                         {post.attachment_url && post.attachment_type === 'image' && (
@@ -671,11 +724,29 @@ const Community = () => {
                         )}
 
                         {post.attachment_url && post.attachment_type === 'video' && (
-                          <div className="mb-4 rounded-lg overflow-hidden bg-black">
-                            <video 
-                              src={post.attachment_url} 
+                          <div className="mb-4 rounded-lg overflow-hidden bg-black relative">
+                            {videoThumbnails[post.id] && !playingVideos.has(post.id) && (
+                              <div
+                                className="relative cursor-pointer"
+                                onClick={() => setPlayingVideos(prev => new Set([...prev, post.id]))}
+                              >
+                                <img
+                                  src={videoThumbnails[post.id]}
+                                  alt="Video thumbnail"
+                                  className="w-full object-cover max-h-96"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
+                                  <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center hover:scale-110 transition-transform">
+                                    <Play className="w-8 h-8 text-foreground ml-1" />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            <video
+                              src={post.attachment_url}
                               controls
-                              className="w-full max-h-96"
+                              autoPlay={playingVideos.has(post.id)}
+                              className={`w-full max-h-96 ${!playingVideos.has(post.id) && videoThumbnails[post.id] ? 'hidden' : ''}`}
                             />
                           </div>
                         )}
@@ -734,6 +805,27 @@ const Community = () => {
                                     Share on your favorite platform
                                   </DialogDescription>
                                 </DialogHeader>
+                                {(() => {
+                                  const sharePost = posts.find((p) => p.id === post.id);
+                                  if (sharePost?.attachment_url && sharePost.attachment_type === "image") {
+                                    return (
+                                      <div className="rounded-lg overflow-hidden mb-2 border">
+                                        <img src={sharePost.attachment_url} alt="Post" className="w-full max-h-32 object-cover" />
+                                      </div>
+                                    );
+                                  }
+                                  if (sharePost?.attachment_url && sharePost.attachment_type === "video" && videoThumbnails[sharePost.id]) {
+                                    return (
+                                      <div className="relative rounded-lg overflow-hidden mb-2 border">
+                                        <img src={videoThumbnails[sharePost.id]} alt="Video" className="w-full max-h-32 object-cover" />
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                          <Play className="w-6 h-6 text-white" />
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                                 <div className="grid grid-cols-2 gap-3 py-4">
                                   <Button
                                     variant="outline"
@@ -809,7 +901,7 @@ const Community = () => {
                                     {comment.author?.full_name || "Anonymous"}
                                     <span className="text-muted-foreground ml-2">{formatTimeAgo(comment.created_at)}</span>
                                   </p>
-                                  <p className="text-sm text-foreground">{comment.content}</p>
+                                  <p className="text-sm text-foreground"><LinkifiedText text={comment.content} /></p>
                                 </div>
                               </div>
                             ))}
@@ -866,7 +958,7 @@ const Community = () => {
                       </Button>
                     </DialogTrigger>
                     {user && (
-                      <DialogContent className="max-w-2xl">
+                      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle>Create a Post</DialogTitle>
                           <DialogDescription>
@@ -911,15 +1003,41 @@ const Community = () => {
                               disabled={isSubmitting}
                             />
                             {selectedFile && (
-                              <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                                <FileText className="w-4 h-4" />
-                                {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-                                <button
-                                  onClick={() => setSelectedFile(null)}
-                                  className="ml-auto text-destructive hover:underline"
-                                >
-                                  Remove
-                                </button>
+                              <div className="mt-2">
+                                {filePreview && (
+                                  <div className="relative mb-2 rounded-lg overflow-hidden border">
+                                    {selectedFile.type.startsWith("image/") ? (
+                                      <img src={filePreview} alt="Preview" className="w-full max-h-48 object-cover" />
+                                    ) : selectedFile.type.startsWith("video/") ? (
+                                      <div className="relative">
+                                        <img src={filePreview} alt="Video preview" className="w-full max-h-48 object-cover" />
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                          <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
+                                            <Play className="w-6 h-6 text-foreground ml-0.5" />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                    <button
+                                      onClick={() => { setSelectedFile(null); setFilePreview(null); }}
+                                      className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors"
+                                    >
+                                      <X className="w-3 h-3 text-white" />
+                                    </button>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <FileText className="w-4 h-4" />
+                                  {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                                  {!filePreview && (
+                                    <button
+                                      onClick={() => { setSelectedFile(null); setFilePreview(null); }}
+                                      className="ml-auto text-destructive hover:underline"
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
