@@ -364,13 +364,14 @@ const CommunitySection = () => {
 
   const handleShare = async (postId: string) => {
     const referralCode = profile?.referral_code || "";
-    const shareUrl = `${window.location.origin}/community?post=${postId}${referralCode ? `&ref=${referralCode}` : ""}`;
+    const shareUrl = `${window.location.origin}/api/share?post=${postId}${referralCode ? `&ref=${referralCode}` : ""}`;
+    const pageUrl = `${window.location.origin}/community?post=${postId}${referralCode ? `&ref=${referralCode}` : ""}`;
     const post = posts.find((p) => p.id === postId);
-    const shareText = `Check out this post from Investours Community: "${post?.content?.substring(0, 100)}..."\n\n${shareUrl}`;
+    const shareText = `Check out this post from Investours Opportunity Hub: "${post?.content?.substring(0, 100)}..."\n\n${pageUrl}`;
 
     try {
       if (navigator.share && navigator.canShare?.({ text: shareText })) {
-        await navigator.share({ title: "Investours Community", text: shareText, url: shareUrl });
+        await navigator.share({ title: "Investours Opportunity Hub", text: shareText, url: shareUrl });
       } else {
         await navigator.clipboard.writeText(shareUrl);
       }

@@ -447,8 +447,9 @@ const Community = () => {
 
     try {
       const post = posts.find(p => p.id === postId);
-      const shareUrl = `${window.location.origin}/community?post=${postId}&ref=${profile?.referral_code}`;
-      const shareText = `Check out this post from Investours Opportunity Hub: "${post?.content?.substring(0, 100)}..."\n\n${shareUrl}`;
+      const shareUrl = `${window.location.origin}/api/share?post=${postId}&ref=${profile?.referral_code || ""}`;
+      const pageUrl = `${window.location.origin}/community?post=${postId}&ref=${profile?.referral_code || ""}`;
+      const shareText = `Check out this post from Investours Opportunity Hub: "${post?.content?.substring(0, 100)}..."\n\n${pageUrl}`;
 
       await supabase.from('post_shares').insert({ post_id: postId, user_id: user.id, platform: platform });
 
