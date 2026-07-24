@@ -185,8 +185,12 @@ const CommunitySection = () => {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: "File too large", description: "Please select a file smaller than 10MB", variant: "destructive" });
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    const maxSize = isVideo ? 5 * 1024 * 1024 : isImage ? 3 * 1024 * 1024 : 10 * 1024 * 1024;
+    const label = isVideo ? "Videos" : isImage ? "Images" : "Files";
+    if (file.size > maxSize) {
+      toast({ title: "File too large", description: `${label} must be under ${(maxSize / 1024 / 1024).toFixed(0)}MB`, variant: "destructive" });
       return;
     }
     setSelectedFile(file);
@@ -525,12 +529,12 @@ const CommunitySection = () => {
           <div className="w-14 h-14 rounded-2xl bg-investours-coral/10 flex items-center justify-center mx-auto mb-4">
             <Users className="w-7 h-7 text-investours-coral" />
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-            Investours Growth Community
-          </h2>
-          <p className="text-muted-foreground">
-            Connect, share insights, and learn from other members
-          </p>
+           <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
+             Investours Opportunity Hub
+           </h2>
+           <p className="text-muted-foreground">
+             Growth Community for Opportunities, Grants, Funding, Partnerships, Mentorship, Jobs & Gigs.
+           </p>
         </motion.div>
 
         <div className="max-w-2xl mx-auto space-y-4">
@@ -836,10 +840,10 @@ const CommunitySection = () => {
           )}
 
           {/* View All Link */}
-          <div className="text-center pt-4">
+           <div className="text-center pt-4">
             <Link to="/community">
               <Button variant="outline">
-                View All Posts
+                View All Opportunities
               </Button>
             </Link>
           </div>

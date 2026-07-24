@@ -95,7 +95,7 @@ const Header = () => {
               to="/community" 
               className="text-foreground/80 hover:text-primary transition-colors font-medium"
             >
-              Community
+              Opportunity Hub
             </Link>
             <Link 
               to="/pricing" 
@@ -272,7 +272,7 @@ const Header = () => {
               className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
-              Community
+              Opportunity Hub
             </Link>
             <Link 
               to="/pricing" 

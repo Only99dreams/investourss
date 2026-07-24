@@ -42,7 +42,7 @@ const menuItems = [
   { icon: Brain, label: "AI Tools", path: "/admin/ai-tools" },
   { icon: BarChart3, label: "BP Stats", path: "/admin/business-plan-stats" },
   { icon: GraduationCap, label: "Education", path: "/admin/education" },
-  { icon: MessageSquare, label: "Community", path: "/admin/community" },
+  { icon: MessageSquare, label: "Opportunity Hub", path: "/admin/community" },
   { icon: Wallet, label: "Wallets", path: "/admin/wallets" },
   { icon: Banknote, label: "Deposit Requests", path: "/admin/deposit-requests" },
   { icon: CreditCard, label: "Payouts", path: "/admin/payouts" },

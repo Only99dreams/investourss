@@ -38,7 +38,7 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/community" className="text-muted-foreground hover:text-primary transition-colors">
-                  Community
+                  Opportunity Hub
                 </Link>
               </li>
               <li>

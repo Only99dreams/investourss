@@ -6,13 +6,7 @@ import {
   Heart, 
   Share2, 
   PlusCircle,
-  Leaf,
   Filter,
-  TrendingUp,
-  AlertTriangle,
-  Megaphone,
-  BookOpen,
-  Banknote,
   Loader2,
   Send,
   FileText,
@@ -23,7 +17,17 @@ import {
   Copy,
   Mail,
   Play,
-  X
+  X,
+  Trash2,
+  Banknote,
+  Briefcase,
+  Handshake,
+  Rocket,
+  GraduationCap,
+  Calendar,
+  Megaphone,
+  Tag,
+  Search
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -55,6 +59,31 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
 import { LinkifiedText } from "@/lib/LinkifiedText";
+
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  Banknote, Briefcase, Handshake, Rocket, GraduationCap, Calendar, Megaphone, MessageSquare, Tag, Search,
+  Users, Heart, Share2, Filter
+};
+
+interface Category {
+  id: string;
+  name: string;
+  label: string;
+  icon: string;
+  color: string;
+}
+
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: "all", name: "all", label: "All Posts", icon: "MessageSquare", color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100" },
+  { id: "funding_grants", name: "funding_grants", label: "Funding & Grants", icon: "Banknote", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" },
+  { id: "jobs_gigs", name: "jobs_gigs", label: "Jobs & Gigs", icon: "Briefcase", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" },
+  { id: "partnerships", name: "partnerships", label: "Partnerships", icon: "Handshake", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100" },
+  { id: "accelerators", name: "accelerators", label: "Accelerators & Competitions", icon: "Rocket", color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100" },
+  { id: "scholarships", name: "scholarships", label: "Scholarships & Fellowships", icon: "GraduationCap", color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100" },
+  { id: "training_events", name: "training_events", label: "Training & Events", icon: "Calendar", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" },
+  { id: "announcements", name: "announcements", label: "Community Announcements", icon: "Megaphone", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100" },
+  { id: "general", name: "general", label: "General", icon: "Tag", color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100" },
+];
 
 interface Post {
   id: string;
@@ -88,24 +117,18 @@ interface Comment {
   };
 }
 
-const categories = [
-  { id: "all", label: "All Posts", icon: MessageSquare },
-  { id: "education", label: "Education", icon: BookOpen },
-  { id: "finance", label: "Finance", icon: Banknote },
-  { id: "climate", label: "Climate", icon: Leaf },
-  { id: "investment", label: "Investment", icon: TrendingUp },
-  { id: "scam_alert", label: "Scam Alert", icon: AlertTriangle },
-  { id: "announcement", label: "Announcement", icon: Megaphone },
-];
+const MAX_IMAGE_SIZE = 3 * 1024 * 1024;
+const MAX_VIDEO_SIZE = 5 * 1024 * 1024;
 
 const Community = () => {
   const [searchParams] = useSearchParams();
   const [activeCategory, setActiveCategory] = useState("all");
   const [posts, setPosts] = useState<Post[]>([]);
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newPostContent, setNewPostContent] = useState("");
-  const [newPostCategory, setNewPostCategory] = useState<string>("education");
+  const [newPostCategory, setNewPostCategory] = useState<string>("general");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -119,12 +142,36 @@ const Community = () => {
     totalMembers: 0,
     totalPosts: 0,
     activeToday: 0,
-    scamsReported: 0
   });
   const { toast } = useToast();
-  const { user, profile } = useAuth();
+  const { user, profile, roles } = useAuth();
+  const isAdmin = roles?.includes('admin') || profile?.assigned_role === 'admin';
 
-  // Fetch posts
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('post_categories')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order');
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setCategories([
+          { id: "all", name: "all", label: "All Posts", icon: "MessageSquare", color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100" },
+          ...data.map((c: any) => ({
+            id: c.name,
+            name: c.name,
+            label: c.label,
+            icon: c.icon || "Tag",
+            color: c.color || "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100",
+          }))
+        ]);
+      }
+    } catch {
+      // fallback to defaults
+    }
+  };
+
   const fetchPosts = async () => {
     try {
       setIsLoading(true);
@@ -137,10 +184,7 @@ const Community = () => {
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (error) {
-        console.error('Error fetching posts:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       if (!postsData) {
         setPosts([]);
@@ -148,14 +192,12 @@ const Community = () => {
         return;
       }
 
-      // Fetch author profiles for each post
       const authorIds = [...new Set(postsData.map(p => p.author_id))];
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, full_name, avatar_url, country')
         .in('id', authorIds);
 
-      // Check if user has liked each post
       let userLikes: string[] = [];
       if (user) {
         const { data: likes } = await supabase
@@ -194,16 +236,10 @@ const Community = () => {
         .from('posts')
         .select('*', { count: 'exact', head: true });
 
-      const { count: scamsCount } = await supabase
-        .from('posts')
-        .select('*', { count: 'exact', head: true })
-        .eq('category', 'scam_alert');
-
       setCommunityStats({
         totalMembers: membersCount || 0,
         totalPosts: postsCount || 0,
         activeToday: Math.floor((membersCount || 0) * 0.1),
-        scamsReported: scamsCount || 0
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -213,8 +249,8 @@ const Community = () => {
   useEffect(() => {
     fetchPosts();
     fetchStats();
+    fetchCategories();
     
-    // Subscribe to realtime updates
     const channel = supabase
       .channel('posts-realtime')
       .on('postgres_changes', {
@@ -264,20 +300,25 @@ const Community = () => {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+      const maxSize = isVideo ? MAX_VIDEO_SIZE : isImage ? MAX_IMAGE_SIZE : 10 * 1024 * 1024;
+      const label = isVideo ? "Videos" : isImage ? "Images" : "Files";
+
+      if (file.size > maxSize) {
         toast({
           title: "File too large",
-          description: "Please select a file smaller than 10MB",
+          description: `${label} must be under ${(maxSize / 1024 / 1024).toFixed(0)}MB`,
           variant: "destructive"
         });
         return;
       }
       setSelectedFile(file);
-      if (file.type.startsWith("image/")) {
+      if (isImage) {
         const reader = new FileReader();
         reader.onload = (ev) => setFilePreview(ev.target?.result as string);
         reader.readAsDataURL(file);
-      } else if (file.type.startsWith("video/")) {
+      } else if (isVideo) {
         const objectUrl = URL.createObjectURL(file);
         const thumb = await generateVideoThumbnail(objectUrl);
         setFilePreview(thumb);
@@ -290,19 +331,12 @@ const Community = () => {
 
   const handleCreatePost = async () => {
     if (!user) {
-      toast({
-        title: "Login Required",
-        description: "Please login to create a post.",
-      });
+      toast({ title: "Login Required", description: "Please login to create a post." });
       return;
     }
 
     if (!newPostContent.trim()) {
-      toast({
-        title: "Content Required",
-        description: "Please enter some content for your post.",
-        variant: "destructive"
-      });
+      toast({ title: "Content Required", description: "Please enter some content for your post.", variant: "destructive" });
       return;
     }
 
@@ -318,40 +352,23 @@ const Community = () => {
           const fileName = `${user.id}/${Date.now()}.${fileExt}`;
           const filePath = `post-attachments/${fileName}`;
 
-          if (selectedFile.type.startsWith('image/')) {
-            attachmentType = 'image';
-          } else if (selectedFile.type.startsWith('video/')) {
-            attachmentType = 'video';
-          } else {
-            attachmentType = 'document';
-          }
+          if (selectedFile.type.startsWith('image/')) attachmentType = 'image';
+          else if (selectedFile.type.startsWith('video/')) attachmentType = 'video';
+          else attachmentType = 'document';
 
           const { data, error: uploadError } = await supabase.storage
             .from('attachments')
-            .upload(filePath, selectedFile, {
-              cacheControl: '3600',
-              upsert: false
-            });
+            .upload(filePath, selectedFile, { cacheControl: '3600', upsert: false });
 
-          if (uploadError) {
-            console.error('Upload error:', uploadError);
-            throw new Error(`Upload failed: ${uploadError.message}`);
-          }
+          if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
 
           if (data) {
-            const { data: { publicUrl } } = supabase.storage
-              .from('attachments')
-              .getPublicUrl(filePath);
-
+            const { data: { publicUrl } } = supabase.storage.from('attachments').getPublicUrl(filePath);
             attachmentUrl = publicUrl;
           }
         } catch (uploadError) {
           console.error('File upload error:', uploadError);
-          toast({
-            title: "Upload Failed",
-            description: "Failed to upload file. You can still post without it.",
-            variant: "destructive"
-          });
+          toast({ title: "Upload Failed", description: "Failed to upload file. You can still post without it.", variant: "destructive" });
           attachmentUrl = null;
           attachmentType = null;
         }
@@ -368,59 +385,53 @@ const Community = () => {
 
       if (error) throw error;
 
-      toast({
-        title: "Success!",
-        description: "Your post has been published.",
-      });
+      toast({ title: "Success!", description: "Your post has been published." });
       
       setNewPostContent("");
-      setNewPostCategory("education");
+      setNewPostCategory("general");
       setSelectedFile(null);
       setFilePreview(null);
       setIsCreateOpen(false);
       fetchPosts();
     } catch (error: any) {
       console.error('Error creating post:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create post. Please try again.",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: error.message || "Failed to create post. Please try again.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleDeletePost = async (postId: string) => {
+    if (!isAdmin) return;
+    if (!confirm("Are you sure you want to delete this post?")) return;
+
+    try {
+      const { error } = await supabase.from('posts').delete().eq('id', postId);
+      if (error) throw error;
+      toast({ title: "Deleted", description: "Post has been deleted." });
+      setPosts(prev => prev.filter(p => p.id !== postId));
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      toast({ title: "Error", description: "Failed to delete post.", variant: "destructive" });
+    }
+  };
+
   const handleLike = async (postId: string, isLiked: boolean) => {
     if (!user) {
-      toast({
-        title: "Login Required",
-        description: "Please login to like posts.",
-      });
+      toast({ title: "Login Required", description: "Please login to like posts." });
       return;
     }
 
     try {
       if (isLiked) {
-        await supabase.from('post_likes').delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
-        
+        await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', user.id);
         setPosts(prev => prev.map(p => 
-          p.id === postId 
-            ? { ...p, likes_count: Math.max(0, (p.likes_count || 1) - 1), user_liked: false }
-            : p
+          p.id === postId ? { ...p, likes_count: Math.max(0, (p.likes_count || 1) - 1), user_liked: false } : p
         ));
       } else {
-        await supabase.from('post_likes').insert({
-          post_id: postId,
-          user_id: user.id
-        });
-        
+        await supabase.from('post_likes').insert({ post_id: postId, user_id: user.id });
         setPosts(prev => prev.map(p => 
-          p.id === postId 
-            ? { ...p, likes_count: (p.likes_count || 0) + 1, user_liked: true }
-            : p
+          p.id === postId ? { ...p, likes_count: (p.likes_count || 0) + 1, user_liked: true } : p
         ));
       }
     } catch (error) {
@@ -430,75 +441,43 @@ const Community = () => {
 
   const handleShare = async (postId: string, platform: string) => {
     if (!user) {
-      toast({
-        title: "Login Required",
-        description: "Please login to share posts.",
-      });
+      toast({ title: "Login Required", description: "Please login to share posts." });
       return;
     }
 
     try {
       const post = posts.find(p => p.id === postId);
       const shareUrl = `${window.location.origin}/community?post=${postId}&ref=${profile?.referral_code}`;
-      const shareText = `Check out this post from Investours Community: "${post?.content?.substring(0, 100)}..."\n\n${shareUrl}`;
-      const hasImage = post?.attachment_type === "image" && post?.attachment_url;
+      const shareText = `Check out this post from Investours Opportunity Hub: "${post?.content?.substring(0, 100)}..."\n\n${shareUrl}`;
 
-      // Record share in database
-      await supabase.from('post_shares').insert({
-        post_id: postId,
-        user_id: user.id,
-        platform: platform
-      });
+      await supabase.from('post_shares').insert({ post_id: postId, user_id: user.id, platform: platform });
 
-      // Handle different platforms
       switch (platform) {
         case 'facebook':
-          window.open(
-            `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
-            'facebook-share',
-            'width=600,height=400'
-          );
+          window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, 'facebook-share', 'width=600,height=400');
           break;
         case 'twitter':
-          window.open(
-            `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`,
-            'twitter-share',
-            'width=600,height=400'
-          );
+          window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`, 'twitter-share', 'width=600,height=400');
           break;
         case 'linkedin':
-          window.open(
-            `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
-            'linkedin-share',
-            'width=600,height=400'
-          );
+          window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, 'linkedin-share', 'width=600,height=400');
           break;
         case 'whatsapp':
-          window.open(
-            `https://wa.me/?text=${encodeURIComponent(shareText)}`,
-            'whatsapp-share'
-          );
+          window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, 'whatsapp-share');
           break;
         case 'email':
           window.location.href = `mailto:?subject=Check this out from Investours&body=${encodeURIComponent(shareText)}`;
           break;
         case 'copy':
           await navigator.clipboard.writeText(shareUrl);
-          toast({
-            title: "Copied!",
-            description: "Link copied to clipboard with your referral code.",
-          });
+          toast({ title: "Copied!", description: "Link copied to clipboard with your referral code." });
           break;
       }
 
       setSharePostId(null);
     } catch (error) {
       console.error('Error sharing:', error);
-      toast({
-        title: "Error",
-        description: "Failed to share post.",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to share post.", variant: "destructive" });
     }
   };
 
@@ -524,10 +503,7 @@ const Community = () => {
         author: profiles?.find(p => p.id === comment.author_id)
       })) || [];
 
-      setCommentsMap(prev => ({
-        ...prev,
-        [postId]: enrichedComments
-      }));
+      setCommentsMap(prev => ({ ...prev, [postId]: enrichedComments }));
     } catch (error) {
       console.error('Error fetching comments:', error);
     }
@@ -535,10 +511,7 @@ const Community = () => {
 
   const handleAddComment = async (postId: string) => {
     if (!user) {
-      toast({
-        title: "Login Required",
-        description: "Please login to comment.",
-      });
+      toast({ title: "Login Required", description: "Please login to comment." });
       return;
     }
 
@@ -546,24 +519,10 @@ const Community = () => {
     if (!newComment.trim()) return;
 
     try {
-      await supabase.from('post_comments').insert({
-        post_id: postId,
-        author_id: user.id,
-        content: newComment
-      });
-
-      setNewCommentMap(prev => ({
-        ...prev,
-        [postId]: ""
-      }));
-      
+      await supabase.from('post_comments').insert({ post_id: postId, author_id: user.id, content: newComment });
+      setNewCommentMap(prev => ({ ...prev, [postId]: "" }));
       fetchComments(postId);
-      
-      setPosts(prev => prev.map(p => 
-        p.id === postId 
-          ? { ...p, comments_count: (p.comments_count || 0) + 1 }
-          : p
-      ));
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p));
     } catch (error) {
       console.error('Error adding comment:', error);
     }
@@ -574,16 +533,13 @@ const Community = () => {
     : posts.filter(post => post.category === activeCategory);
 
   const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      education: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
-      finance: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-      climate: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-      investment: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100",
-      scam_alert: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100",
-      announcement: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100",
-      advert: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100"
-    };
-    return colors[category] || "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100";
+    const cat = categories.find(c => c.name === category);
+    return cat?.color || "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100";
+  };
+
+  const getCategoryLabel = (category: string) => {
+    const cat = categories.find(c => c.name === category);
+    return cat?.label || category.replace("_", " ");
   };
 
   const formatTimeAgo = (date: string) => {
@@ -612,10 +568,10 @@ const Community = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
-                  Community
+                  Investours Opportunity Hub
                 </h1>
                 <p className="text-muted-foreground">
-                  Connect, share insight, and learn from other members.
+                  Growth Community for Opportunities, Grants, Funding, Partnerships, Mentorship, Jobs & Gigs.
                 </p>
               </div>
               <div className="flex items-center gap-6">
@@ -634,13 +590,13 @@ const Community = () => {
             <div className="flex items-center gap-2 overflow-x-auto pb-2">
               <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               {categories.map((cat) => {
-                const IconComponent = cat.icon;
+                const IconComponent = ICON_MAP[cat.icon] || Tag;
                 return (
                   <Button
                     key={cat.id}
-                    variant={activeCategory === cat.id ? "default" : "outline"}
+                    variant={activeCategory === cat.name ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setActiveCategory(cat.id)}
+                    onClick={() => setActiveCategory(cat.name)}
                     className="flex-shrink-0"
                   >
                     <IconComponent className="w-4 h-4 mr-1" />
@@ -702,9 +658,22 @@ const Community = () => {
                               </p>
                             </div>
                           </div>
-                          <Badge className={getCategoryColor(post.category)}>
-                            {post.category.replace("_", " ").toUpperCase()}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge className={getCategoryColor(post.category)}>
+                              {getCategoryLabel(post.category).toUpperCase()}
+                            </Badge>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeletePost(post.id)}
+                                title="Delete post"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
 
                         {/* Post Content */}
@@ -827,53 +796,23 @@ const Community = () => {
                                   return null;
                                 })()}
                                 <div className="grid grid-cols-2 gap-3 py-4">
-                                  <Button
-                                    variant="outline"
-                                    className="flex items-center justify-center gap-2"
-                                    onClick={() => handleShare(post.id, 'facebook')}
-                                  >
-                                    <Facebook className="w-5 h-5" />
-                                    <span>Facebook</span>
+                                  <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'facebook')}>
+                                    <Facebook className="w-5 h-5" /><span>Facebook</span>
                                   </Button>
-                                  <Button
-                                    variant="outline"
-                                    className="flex items-center justify-center gap-2"
-                                    onClick={() => handleShare(post.id, 'twitter')}
-                                  >
-                                    <Twitter className="w-5 h-5" />
-                                    <span>Twitter</span>
+                                  <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'twitter')}>
+                                    <Twitter className="w-5 h-5" /><span>Twitter</span>
                                   </Button>
-                                  <Button
-                                    variant="outline"
-                                    className="flex items-center justify-center gap-2"
-                                    onClick={() => handleShare(post.id, 'linkedin')}
-                                  >
-                                    <Linkedin className="w-5 h-5" />
-                                    <span>LinkedIn</span>
+                                  <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'linkedin')}>
+                                    <Linkedin className="w-5 h-5" /><span>LinkedIn</span>
                                   </Button>
-                                  <Button
-                                    variant="outline"
-                                    className="flex items-center justify-center gap-2"
-                                    onClick={() => handleShare(post.id, 'whatsapp')}
-                                  >
-                                    <MessageCircle className="w-5 h-5" />
-                                    <span>WhatsApp</span>
+                                  <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'whatsapp')}>
+                                    <MessageCircle className="w-5 h-5" /><span>WhatsApp</span>
                                   </Button>
-                                  <Button
-                                    variant="outline"
-                                    className="flex items-center justify-center gap-2"
-                                    onClick={() => handleShare(post.id, 'email')}
-                                  >
-                                    <Mail className="w-5 h-5" />
-                                    <span>Email</span>
+                                  <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'email')}>
+                                    <Mail className="w-5 h-5" /><span>Email</span>
                                   </Button>
-                                  <Button
-                                    variant="outline"
-                                    className="flex items-center justify-center gap-2"
-                                    onClick={() => handleShare(post.id, 'copy')}
-                                  >
-                                    <Copy className="w-5 h-5" />
-                                    <span>Copy Link</span>
+                                  <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'copy')}>
+                                    <Copy className="w-5 h-5" /><span>Copy Link</span>
                                   </Button>
                                 </div>
                               </DialogContent>
@@ -910,10 +849,7 @@ const Community = () => {
                               <div className="flex gap-2 mt-2">
                                 <Input
                                   value={newCommentMap[post.id] || ""}
-                                  onChange={(e) => setNewCommentMap(prev => ({
-                                    ...prev,
-                                    [post.id]: e.target.value
-                                  }))}
+                                  onChange={(e) => setNewCommentMap(prev => ({ ...prev, [post.id]: e.target.value }))}
                                   placeholder="Add a comment..."
                                   className="text-sm"
                                   onKeyDown={(e) => {
@@ -973,8 +909,8 @@ const Community = () => {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {categories.filter(c => c.id !== 'all').map(cat => (
-                                  <SelectItem key={cat.id} value={cat.id}>
+                                {categories.filter(c => c.name !== 'all').map(cat => (
+                                  <SelectItem key={cat.name} value={cat.name}>
                                     {cat.label}
                                   </SelectItem>
                                 ))}
@@ -995,6 +931,7 @@ const Community = () => {
 
                           <div>
                             <Label htmlFor="file">Attachment (Optional)</Label>
+                            <p className="text-xs text-muted-foreground mb-1">Images max 3MB, Videos max 5MB</p>
                             <Input
                               id="file"
                               type="file"
@@ -1043,25 +980,13 @@ const Community = () => {
                           </div>
 
                           <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              onClick={() => setIsCreateOpen(false)}
-                              disabled={isSubmitting}
-                            >
+                            <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isSubmitting}>
                               Cancel
                             </Button>
-                            <Button
-                              onClick={handleCreatePost}
-                              disabled={isSubmitting || !newPostContent.trim()}
-                            >
+                            <Button onClick={handleCreatePost} disabled={isSubmitting || !newPostContent.trim()}>
                               {isSubmitting ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  Posting...
-                                </>
-                              ) : (
-                                'Post'
-                              )}
+                                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Posting...</>
+                              ) : 'Post'}
                             </Button>
                           </div>
                         </div>
@@ -1088,10 +1013,6 @@ const Community = () => {
                     <span className="text-muted-foreground">Total Posts</span>
                     <span className="font-semibold">{communityStats.totalPosts}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Scams Reported</span>
-                    <span className="font-semibold text-destructive">{communityStats.scamsReported}</span>
-                  </div>
                 </CardContent>
               </Card>
 
@@ -1099,7 +1020,7 @@ const Community = () => {
               {!user && (
                 <Card>
                   <CardContent className="pt-6 text-center">
-                    <h3 className="font-semibold mb-2">Join the Community</h3>
+                    <h3 className="font-semibold mb-2">Join the Opportunity Hub</h3>
                     <p className="text-sm text-muted-foreground mb-4">
                       Sign up to create posts and engage with other members.
                     </p>
