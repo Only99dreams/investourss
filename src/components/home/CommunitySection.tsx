@@ -79,6 +79,17 @@ const CommunitySection = () => {
           image: post.attachment_type === "image" ? post.attachment_url : undefined,
           url: shareUrl,
         });
+
+        setTimeout(() => {
+          const el = document.getElementById(`post-${postId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.classList.add("ring-2", "ring-primary", "ring-offset-2", "rounded-lg");
+            setTimeout(() => {
+              el.classList.remove("ring-2", "ring-primary", "ring-offset-2", "rounded-lg");
+            }, 3000);
+          }
+        }, 500);
       }
     }
   }, [searchParams, posts]);
@@ -654,6 +665,7 @@ const CommunitySection = () => {
               {posts.map((post, index) => (
                 <motion.div
                   key={post.id}
+                  id={`post-${post.id}`}
                   initial={{ opacity: 0, y: 10 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}

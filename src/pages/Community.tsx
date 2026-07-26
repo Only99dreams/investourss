@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { 
   Users, 
@@ -280,6 +280,19 @@ const Community = () => {
           image: post.attachment_type === "image" ? post.attachment_url : undefined,
           url: shareUrl,
         });
+
+        // Scroll to the exact post after a short delay for rendering
+        setTimeout(() => {
+          const el = document.getElementById(`post-${postId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            // Brief highlight effect
+            el.classList.add("ring-2", "ring-primary", "ring-offset-2", "rounded-lg");
+            setTimeout(() => {
+              el.classList.remove("ring-2", "ring-primary", "ring-offset-2", "rounded-lg");
+            }, 3000);
+          }
+        }, 500);
       }
     }
   }, [searchParams, posts]);
@@ -636,6 +649,7 @@ const Community = () => {
                 filteredPosts.map((post) => (
                   <motion.div
                     key={post.id}
+                    id={`post-${post.id}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                   >
