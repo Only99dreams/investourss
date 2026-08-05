@@ -8,6 +8,13 @@ import Welcome from "./pages/Welcome";
 import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import SignupTypeSelection from "./pages/SignupTypeSelection";
+import AmbassadorApply from "./pages/Ambassador";
+import AmbassadorDashboard from "./pages/AmbassadorDashboard";
+import AuditorLanding from "./pages/AuditorLanding";
+import AuditorConnect from "./pages/AuditorConnect";
+import AuditorDashboard from "./pages/AuditorDashboard";
+import AuditorPacks from "./pages/AuditorPacks";
+import AuditorMonitoring from "./pages/AuditorMonitoring";
 import CompleteProfile from "./pages/CompleteProfile";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -34,6 +41,13 @@ const App = () => (
             <Route path="/home" element={<Home />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignupTypeSelection />} />
+            <Route path="/ambassador" element={<AmbassadorApply />} />
+            <Route path="/ambassador-dashboard" element={<AmbassadorDashboard />} />
+            <Route path="/auditor" element={<AuditorLanding />} />
+            <Route path="/auditor/connect" element={<AuditorConnect />} />
+            <Route path="/auditor/audit" element={<AuditorDashboard />} />
+            <Route path="/auditor/packs" element={<AuditorPacks />} />
+            <Route path="/auditor/monitoring" element={<AuditorMonitoring />} />
             <Route path="/complete-profile" element={<CompleteProfile />} />
             <Route path="/dashboard/*" element={<Dashboard />} />
             <Route path="/admin/*" element={<AdminDashboard />} />

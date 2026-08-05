@@ -12,7 +12,6 @@ import {
   Globe,
   Sparkles,
   Trophy,
-  FileText,
   BrainCircuit,
   Wallet
 } from "lucide-react";
@@ -23,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Header from "@/components/Header";
 import { Footer } from "@/components/ui/Footer";
 import CommunitySection from "@/components/home/CommunitySection";
+import { FeaturedSolutions } from "@/components/home/FeaturedSolutions";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -77,28 +77,14 @@ const Home = () => {
            Turn your idea into a funding-ready business plan in 2 minutes.
             </p>
             
-            {/* AI Business Plan Generator */}
+            {/* Featured AI Solutions (configurable via admin) */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.5 }}
               className="max-w-xl mx-auto mb-6"
             >
-              <Link to="/business-plan">
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-accent/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all opacity-50" />
-                  <div className="relative flex items-center gap-5 bg-primary rounded-2xl p-6 border border-primary shadow-lg hover:brightness-110 transition-all cursor-pointer">
-                    <div className="w-14 h-14 rounded-xl bg-primary-foreground/20 flex items-center justify-center shrink-0">
-                      <FileText className="w-7 h-7 text-primary-foreground" />
-                    </div>
-                    <div className="text-left flex-1">
-                      <h3 className="font-semibold text-base text-primary-foreground">AI Business Plan Generator</h3>
-                      <p className="text-sm text-primary-foreground/70">Generate business plans, financial projections & funding readiness reports</p>
-                    </div>
-                    <ArrowRight className="w-6 h-6 text-primary-foreground/60 group-hover:text-primary-foreground group-hover:translate-x-1 transition-all shrink-0" />
-                  </div>
-                </div>
-              </Link>
+              <FeaturedSolutions />
             </motion.div>
 
             {/* AI Financial Tutor Search Bar */}

@@ -22,6 +22,10 @@ import SupportTab from "@/components/admin/tabs/SupportTab";
 import AdvertisingTab from "@/components/admin/tabs/AdvertisingTab";
 import PromoCodesTab from "@/components/admin/tabs/PromoCodesTab";
 import BusinessPlanStatsTab from "@/components/admin/tabs/BusinessPlanStatsTab";
+import AuditPacksTab from "@/components/admin/tabs/AuditPacksTab";
+import FeaturedSolutionsTab from "@/components/admin/tabs/FeaturedSolutionsTab";
+import AuditOrdersTab from "@/components/admin/tabs/AuditOrdersTab";
+import AuditAnalyticsTab from "@/components/admin/tabs/AuditAnalyticsTab";
 import SettingsTab from "@/components/admin/tabs/SettingsTab";
 import AdminOverview from "@/components/admin/AdminOverview";
 import { Loader2 } from "lucide-react";
@@ -80,6 +84,10 @@ const AdminDashboard = () => {
             <Route path="referrals" element={<ReferralsTab />} />
             <Route path="campaigns" element={<CampaignsTab />} />
             <Route path="business-plan-stats" element={<BusinessPlanStatsTab />} />
+            <Route path="audit-packs" element={<AuditPacksTab />} />
+            <Route path="featured-solutions" element={<FeaturedSolutionsTab />} />
+            <Route path="audit-orders" element={<AuditOrdersTab />} />
+            <Route path="audit-analytics" element={<AuditAnalyticsTab />} />
             <Route path="promo-codes" element={<PromoCodesTab />} />
             <Route path="resources" element={<ResourcesTab />} />
             <Route path="messages" element={<MessagesTab />} />

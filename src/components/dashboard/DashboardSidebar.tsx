@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { 
   User, Wallet, GraduationCap, TrendingUp, FileText, Users, 
   Settings, Bell, MessageSquare, AlertCircle, Share2, Trophy,
-  Target, LogOut, Shield, Umbrella, Award
+  Target, LogOut, Shield, Umbrella, Award, ScanSearch
 } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
@@ -15,10 +15,12 @@ const sidebarItems = [
   { icon: Bell, label: "Notifications", path: "/dashboard/notifications" },
   { icon: Award, label: "My Certificates", path: "/dashboard/certificates" },
   { icon: FileText, label: "AI Reports", path: "/dashboard/ai-reports", subtitle: "Searches & Scam Checks" },
+  { icon: ScanSearch, label: "AI Auditor", path: "/dashboard/auditor", subtitle: "Financial Health" },
   { icon: TrendingUp, label: "Investments", path: "/dashboard/investments" },
   { icon: Umbrella, label: "Microinsurance", path: "/dashboard/microinsurance" },
-  { icon: Share2, label: "Followers", path: "/dashboard/followers" },
-  { icon: Trophy, label: "Leaderboard", path: "/dashboard/leaderboard" },
+   { icon: Share2, label: "Followers", path: "/dashboard/followers" },
+   { icon: Trophy, label: "Leaderboard", path: "/dashboard/leaderboard" },
+   { icon: Award, label: "Ambassador Dashboard", path: "/ambassador-dashboard" },
   { icon: Wallet, label: "Wallets", path: "/dashboard/wallets" },
   { icon: Target, label: "SDG Impact", path: "/dashboard/sdg" },
   { icon: MessageSquare, label: "Messages", path: "/dashboard/messages" },
