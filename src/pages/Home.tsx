@@ -22,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Header from "@/components/Header";
 import { Footer } from "@/components/ui/Footer";
 import CommunitySection from "@/components/home/CommunitySection";
-import { FeaturedSolutions } from "@/components/home/FeaturedSolutions";
+import { LivelihoodKit } from "@/components/home/LivelihoodKit";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -77,14 +77,14 @@ const Home = () => {
            Turn your idea into a funding-ready business plan in 2 minutes.
             </p>
             
-            {/* Featured AI Solutions (configurable via admin) */}
+            {/* Livelihood Kit (expandable AI tool cards) */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.5 }}
               className="max-w-xl mx-auto mb-6"
             >
-              <FeaturedSolutions />
+              <LivelihoodKit />
             </motion.div>
 
             {/* AI Financial Tutor Search Bar */}
