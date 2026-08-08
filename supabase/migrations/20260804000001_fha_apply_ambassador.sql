@@ -30,10 +30,10 @@ BEGIN
   END IF;
 
   -- Already registered?
-  SELECT referral_code, tier, is_active
+  SELECT a.referral_code, a.tier, a.is_active
   INTO v_referral_code, v_tier
-  FROM ambassadors
-  WHERE user_id = p_user_id;
+  FROM ambassadors a
+  WHERE a.user_id = p_user_id;
 
   IF v_referral_code IS NOT NULL THEN
     -- Reactivate if previously deactivated
@@ -52,9 +52,9 @@ BEGIN
   END IF;
 
   -- Reuse the user's existing referral code; generate one if missing (defensive)
-  SELECT referral_code INTO v_profile_code
-  FROM profiles
-  WHERE id = p_user_id;
+  SELECT p.referral_code INTO v_profile_code
+  FROM profiles p
+  WHERE p.id = p_user_id;
 
   IF v_profile_code IS NULL THEN
     v_profile_code := 'INV' || UPPER(SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 8));

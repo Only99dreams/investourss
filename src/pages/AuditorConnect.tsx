@@ -38,6 +38,19 @@ const AUDIT_STEPS = [
   "Generating recommendations",
 ];
 
+// supabase.functions.invoke() throws a generic FunctionsHttpError on non-2xx.
+// The real reason is in the edge function's response body, which lives on error.context.
+async function functionErrorMessage(err: unknown): Promise<string> {
+  const e = err as { message?: string; context?: Response };
+  if (e?.context) {
+    try {
+      const body = await e.context.clone().json();
+      if (body?.error) return String(body.error);
+    } catch { /* body wasn't JSON */ }
+  }
+  return e?.message || "Request failed";
+}
+
 const AuditorConnect = () => {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -96,7 +109,7 @@ const AuditorConnect = () => {
           months: emailMonths,
         },
       });
-      if (error) throw new Error(error.message || "Failed to fetch emails");
+      if (error) throw new Error(await functionErrorMessage(error));
       if (!data?.success) throw new Error(data?.error || "Failed to fetch emails");
       if (!data.text) {
         setFetchResult({
@@ -173,7 +186,7 @@ const AuditorConnect = () => {
         },
       });
 
-      if (aiError) throw new Error(aiError.message || "AI audit failed");
+      if (aiError) throw new Error(await functionErrorMessage(aiError));
       if (!aiData?.success) throw new Error(aiData?.error || "AI audit failed");
 
       const report = aiData.report;
@@ -321,13 +334,13 @@ const AuditorConnect = () => {
                   key={s.type}
                   onClick={() => setSourceType(s.type)}
                   className={cn(
-                    "rounded-xl border p-4 text-center transition-all hover:border-primary/50",
+                    "rounded-xl border p-3 sm:p-4 text-center transition-all hover:border-primary/50",
                     sourceType === s.type ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border",
                   )}
                 >
                   <s.icon className={cn("w-6 h-6 mx-auto mb-2", sourceType === s.type ? "text-primary" : "text-muted-foreground")} />
                   <p className="text-sm font-medium">{s.label}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{s.hint}</p>
+                  <p className="text-xs text-muted-foreground mt-1 hidden sm:block">{s.hint}</p>
                 </button>
               ))}
             </div>

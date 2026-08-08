@@ -36,10 +36,10 @@ const AuditorLanding = () => {
           <Badge variant="outline" className="mb-4">
             <Sparkles className="w-3 h-3 mr-1 text-primary" /> FREE 6-Month Financial Audit
           </Badge>
-          <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-4">
+          <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-foreground mb-4">
             AI Financial Auditor
           </h1>
-          <p className="text-xl text-primary font-medium mb-4 max-w-3xl mx-auto">
+          <p className="text-lg sm:text-xl text-primary font-medium mb-4 max-w-3xl mx-auto">
             Understand your financial health, detect hidden leakages, and recover lost money.
           </p>
           <p className="text-sm text-muted-foreground max-w-2xl mx-auto mb-8">

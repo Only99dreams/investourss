@@ -244,12 +244,12 @@ const AuditorPacks = () => {
             </CardHeader>
             <CardContent className="space-y-2">
               {orders.map((o) => (
-                <div key={o.id} className="flex items-center justify-between p-3 rounded-lg border bg-card/40">
-                  <div>
-                    <p className="text-sm font-medium">{o.pack_name} · {o.credits} credits</p>
-                    <p className="text-xs text-muted-foreground font-mono">{o.reference}</p>
+                <div key={o.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border bg-card/40">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{o.pack_name} · {o.credits} credits</p>
+                    <p className="text-xs text-muted-foreground font-mono truncate">{o.reference}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-left sm:text-right shrink-0">
                     <p className="text-sm font-semibold">₦{o.amount.toLocaleString()}</p>
                     <Badge variant={o.status === "active" ? "default" : o.status === "pending" ? "outline" : "secondary"} className="text-xs capitalize">
                       {o.status}

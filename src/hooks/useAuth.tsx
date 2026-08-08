@@ -27,6 +27,7 @@ interface Profile {
   preferred_language: string | null;
   assigned_role: string | null;
   gfe_terms_agreed_at: string | null;
+  must_reset_password: boolean | null;
   created_at: string;
 }
 
@@ -131,11 +132,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     });
-    return { error };
+
+    if (error || !data.user) {
+      return { error };
+    }
+
+    return { error: null };
   };
 
   const signOut = async () => {

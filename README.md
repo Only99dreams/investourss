@@ -1,73 +1,41 @@
-# Welcome to your Lovable project
+# Investours
 
-## Project info
+Investours is a fintech platform for African investors with opportunity vetting, financial literacy tutoring, business plan generation, and financial health audits.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Tech stack
 
-## How can I edit this code?
+- Vite + React + TypeScript
+- Tailwind CSS + shadcn-ui
+- Supabase (database, auth, Edge Functions)
+- Google Gemini (`gemini-3.6-flash`) for all AI features
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Getting started
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
 npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Copy the environment variables used by the frontend from `.env` (Supabase project URL + publishable key).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## AI / Edge Functions
 
-**Use GitHub Codespaces**
+All AI features run as Supabase Edge Functions in `supabase/functions`:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- `scam-detection` - investment scam vetting
+- `financial-tutor` - AI financial tutor chat
+- `business-plan` - business plan generator
+- `financial-audit` - financial health audit
 
-## What technologies are used for this project?
+They call the Google Gemini API (`models/gemini-3.6-flash:generateContent`) using the `GEMINI_API_KEY` secret.
 
-This project is built with:
+### Setting `GEMINI_API_KEY`
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+The key must be set server-side only. Never put it in frontend code or commit it to git.
 
-## How can I deploy this project?
+1. **Local development**: add `GEMINI_API_KEY="..."` to `.env` (already git-ignored).
+2. **Supabase (where the functions run)**: Dashboard > Edge Functions (or the `supabase/functions` section) > Secret management, add `GEMINI_API_KEY`.
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## Deployment
 
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+The frontend is a static Vite build served on your host of choice (e.g. Vercel or Render) - no backend environment variables are needed for the client. The AI backend lives in Supabase Edge Functions, so the Gemini key is configured there, not on the static host.

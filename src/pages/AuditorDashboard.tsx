@@ -179,7 +179,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
                   </Button>
                 </div>
               </div>
-              <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 p-5 text-center min-w-[200px]">
+              <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 p-5 text-center min-w-[200px] w-full md:w-auto">
                 <p className="text-sm text-muted-foreground mb-1">Estimated Recoverable</p>
                 <p className="text-2xl font-bold text-primary">{formatNaira(latestAudit.recoverable_amount)}</p>
                 <p className="text-xs text-muted-foreground mt-1">Potential leakage & overcharges</p>
@@ -429,8 +429,8 @@ const AuditDetail = ({ audit }: { audit: FinancialAudit }) => {
             {showTransactions ? "Hide" : "Show"} Transactions
           </Button>
           {showTransactions && (
-            <div className="mt-4 max-h-72 overflow-y-auto rounded-lg border">
-              <table className="w-full text-sm">
+            <div className="mt-4 max-h-72 overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm min-w-[480px]">
                 <thead className="bg-secondary/40 sticky top-0">
                   <tr>
                     <th className="text-left py-2 px-3 font-medium">Date</th>

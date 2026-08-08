@@ -286,11 +286,11 @@ BEGIN
     SELECT 1 FROM financial_audits WHERE user_id = v_user_id AND is_free = TRUE
   ) INTO v_free_used;
 
-  SELECT COALESCE(SUM(credits_remaining), 0)::INTEGER INTO v_credits
-  FROM user_credit_packs
-  WHERE user_id = v_user_id
-    AND status = 'active'
-    AND (expires_at IS NULL OR expires_at > now());
+  SELECT COALESCE(SUM(ucp.credits_remaining), 0)::INTEGER INTO v_credits
+  FROM user_credit_packs ucp
+  WHERE ucp.user_id = v_user_id
+    AND ucp.status = 'active'
+    AND (ucp.expires_at IS NULL OR ucp.expires_at > now());
 
   RETURN QUERY
     SELECT (v_sub OR NOT v_free_used OR v_credits > 0) AS can_audit,

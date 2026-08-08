@@ -211,17 +211,17 @@ BEGIN
   ON CONFLICT (ambassador_id, referred_user_id) DO UPDATE
     SET status = 'active';
 
-  SELECT id INTO v_referral_id
-  FROM referrals
-  WHERE ambassador_id = v_ambassador_id
-    AND referred_user_id = p_user_id;
+  SELECT r.id INTO v_referral_id
+  FROM referrals r
+  WHERE r.ambassador_id = v_ambassador_id
+    AND r.referred_user_id = p_user_id;
 
   -- Decide commission type.
   -- A referral earns first_time (30%) exactly once; anything after is recurring (15%).
   SELECT EXISTS (
-    SELECT 1 FROM commissions
-    WHERE referral_id = v_referral_id
-      AND commission_type = 'first_time'
+    SELECT 1 FROM commissions c
+    WHERE c.referral_id = v_referral_id
+      AND c.commission_type = 'first_time'
   ) INTO v_first_exists;
 
   IF v_first_exists THEN

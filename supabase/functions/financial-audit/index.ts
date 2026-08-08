@@ -322,34 +322,37 @@ function clampReport(r: any, accountType: string) {
 }
 
 async function callAI(text: string, sourceType: string, accountType: string) {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [
+          { role: "user", parts: [{ text: buildUserPrompt({ text, sourceType, accountType }) }] },
+        ],
+        generationConfig: { responseMimeType: "application/json" },
+      }),
     },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserPrompt({ text, sourceType, accountType }) },
-      ],
-    }),
-  });
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
     if (response.status === 429) throw { status: 429, message: "Rate limit exceeded. Please try again in a moment." };
     if (response.status === 402) throw { status: 402, message: "Service temporarily unavailable. Please try again later." };
-    throw new Error(`AI Gateway error: ${response.status} - ${errorText}`);
+    throw new Error(`Gemini AI error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || '';
+  const content = data.candidates?.[0]?.content?.parts
+    ?.map((p: any) => p.text || "")
+    .join("") || '';
   const start = content.indexOf('{');
   const end = content.lastIndexOf('}');
   if (start === -1 || end === -1) throw new Error("AI returned invalid JSON");

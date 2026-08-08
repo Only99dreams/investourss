@@ -50,6 +50,7 @@ export type Database = {
           tutor_interest: string | null
           tutor_level: string | null
           tutor_goal: string | null
+          must_reset_password: boolean | null
           created_at: string | null
           updated_at: string | null
         }
@@ -90,6 +91,7 @@ export type Database = {
           ai_tutor_used?: number | null
           videos_watched?: number | null
           posts_created?: number | null
+          must_reset_password?: boolean | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -130,6 +132,7 @@ export type Database = {
           ai_tutor_used?: number | null
           videos_watched?: number | null
           posts_created?: number | null
+          must_reset_password?: boolean | null
           created_at?: string | null
           updated_at?: string | null
         }

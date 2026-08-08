@@ -257,12 +257,12 @@ const AuditorMonitoring = () => {
                 <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center justify-between">
+                      <CardTitle className="text-base flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <span className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-primary" />
+                          <FileText className="w-4 h-4 text-primary shrink-0" />
                           {r.report_type === "weekly" ? "Weekly" : "Monthly"} Monitoring Report
                         </span>
-                        <Badge variant="outline">
+                        <Badge variant="outline" className="w-fit">
                           {new Date(r.created_at).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
                         </Badge>
                       </CardTitle>
@@ -273,28 +273,28 @@ const AuditorMonitoring = () => {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {r.score != null && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <TrendingUp className="w-4 h-4 text-primary" />
-                          <span>{content.healthChanges}</span>
-                          <Badge className="ml-auto">{r.score}</Badge>
+                        <div className="flex items-start gap-2 text-sm">
+                          <TrendingUp className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                          <span className="flex-1">{content.healthChanges}</span>
+                          <Badge className="shrink-0">{r.score}</Badge>
                         </div>
                       )}
                       {(content.newLeakages ?? []).map((l, i) => (
-                        <div key={`l${i}`} className="flex items-center gap-2 text-sm">
-                          <TrendingDown className="w-4 h-4 text-red-500" />
-                          <span>New leakage detected: {l}</span>
+                        <div key={`l${i}`} className="flex items-start gap-2 text-sm">
+                          <TrendingDown className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                          <span className="flex-1">New leakage detected: {l}</span>
                         </div>
                       ))}
                       {(content.spendingAlerts ?? []).map((s, i) => (
-                        <div key={`s${i}`} className="flex items-center gap-2 text-sm">
-                          <AlertTriangle className="w-4 h-4 text-amber-500" />
-                          <span>{s}</span>
+                        <div key={`s${i}`} className="flex items-start gap-2 text-sm">
+                          <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                          <span className="flex-1">{s}</span>
                         </div>
                       ))}
                       {content.recoveryOpportunities && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <CheckCircle2 className="w-4 h-4 text-green-500" />
-                          <span>{content.recoveryOpportunities}</span>
+                        <div className="flex items-start gap-2 text-sm">
+                          <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                          <span className="flex-1">{content.recoveryOpportunities}</span>
                         </div>
                       )}
                       {(content.recommendations ?? []).length > 0 && (

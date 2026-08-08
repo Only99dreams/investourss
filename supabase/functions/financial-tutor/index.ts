@@ -12,10 +12,10 @@ serve(async (req) => {
 
   try {
     const { messages, userId, userLevel } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY is not configured");
     }
 
     const levelPrompts = {
@@ -49,22 +49,32 @@ Personalization for ${level} level: ${levelPrompts[level as keyof typeof levelPr
 
 Remember: You're an educator, not a financial advisor. Always recommend users consult with licensed professionals for personalized financial advice.`;
 
-    console.log("Calling Lovable AI with messages:", messages.length);
+    console.log("Calling Gemini AI with messages:", messages?.length);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+    const contents = (messages || [])
+      .filter((m: any) => m.role !== "system")
+      .map((m: any) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content || "" }],
+      }));
+
+    if (contents.length === 0) {
+      contents.push({ role: "user", parts: [{ text: "Hello" }] });
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents,
+        }),
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages
-        ],
-      }),
-    });
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -92,7 +102,10 @@ Remember: You're an educator, not a financial advisor. Always recommend users co
     }
 
     const data = await response.json();
-    const assistantResponse = data.choices?.[0]?.message?.content || "I apologize, but I couldn't generate a response.";
+    const assistantResponse =
+      data.candidates?.[0]?.content?.parts
+        ?.map((p: any) => p.text || "")
+        .join("") || "I apologize, but I couldn't generate a response.";
 
     console.log("Successfully generated response");
 

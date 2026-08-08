@@ -1,10 +1,13 @@
-// ResetPassword.tsx - FIXED VERSION
-import { useEffect, useState } from "react";
+// ResetPassword.tsx - OTP-based password reset flow
+// Step 1: enter email -> receive 6-digit OTP code by email
+// Step 2: enter code -> verified, session established
+// Step 3: choose new password -> flag cleared, redirected to login
+// Also supports the Supabase recovery-link emails (type=recovery) for backwards compatibility.
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Lock, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
+import { Lock, Mail, ShieldCheck, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -12,74 +15,141 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import investoursLogo from "@/assets/investours-logo.png";
 
+type Step = "email" | "code" | "password";
+
 const ResetPassword = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const { isLoading: authLoading } = useAuth();
 
+  const urlEmail = searchParams.get("email") || "";
+  const forced = searchParams.get("forced") === "1";
+  const recoveryCode = searchParams.get("code");
+  const recoveryType = searchParams.get("type");
+
+  const [step, setStep] = useState<Step>("email");
+  const [email, setEmail] = useState(urlEmail);
+  const [otpCode, setOtpCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [ready, setReady] = useState(false);
-  const [hasValidSession, setHasValidSession] = useState(false);
-  const [resetSuccess, setResetSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const autoSentRef = useRef(false);
 
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        // Check for recovery token in URL (from reset email link)
-        const code = searchParams.get('code');
-        const type = searchParams.get('type');
-        
-        console.log('URL params:', { code, type });
-        
-        if (code && type === 'recovery') {
-          // Exchange recovery code for session
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          
-          if (error) {
-            console.error('Token exchange error:', error);
-            setErrorMessage('Invalid or expired reset link. Please request a new one.');
-            setHasValidSession(false);
-          } else if (data.session) {
-            console.log('Session established from recovery code');
-            setHasValidSession(true);
-            setErrorMessage(null);
-          }
-        } else {
-          // Try to get current session (for already authenticated users)
-          const { data: { session }, error } = await supabase.auth.getSession();
-          
-          if (error) {
-            console.error('Session error:', error);
-            setErrorMessage('Session error. Please try requesting a new reset link.');
-            setHasValidSession(false);
-          } else if (session) {
-            setHasValidSession(true);
-            setErrorMessage(null);
-          } else {
-            setErrorMessage('Invalid or expired reset link. Please request a new one.');
-            setHasValidSession(false);
-          }
-        }
-      } catch (error) {
-        console.error('Error checking session:', error);
-        setErrorMessage('An error occurred. Please try again.');
-        setHasValidSession(false);
-      } finally {
-        setReady(true);
+  const sendCode = async (targetEmail?: string) => {
+    const emailValue = (targetEmail || email).trim().toLowerCase();
+    if (!emailValue) {
+      toast({
+        title: "Email required",
+        description: "Enter the email for your account.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEmail(emailValue);
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: emailValue,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: `${window.location.origin}/reset-password?email=${encodeURIComponent(emailValue)}`,
+        },
+      });
+
+      if (error) {
+        console.error("OTP send error:", error.message);
+        toast({
+          title: "Code not sent",
+          description:
+            "If an account exists for this email, a reset code has been sent. Please check your inbox and try again.",
+          variant: "destructive",
+        });
+        return;
       }
-    };
 
-    checkSession();
-  }, [searchParams]);
+      setStep("code");
+      toast({
+        title: "Code sent!",
+        description: `We've emailed a 6-digit reset code to ${emailValue}.`,
+      });
+    } catch (err) {
+      console.error("OTP send error:", err);
+      toast({
+        title: "Error",
+        description: "Failed to send the reset code. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const verifyCode = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const token = otpCode.trim();
+    if (!token) {
+      toast({
+        title: "Code required",
+        description: "Enter the 6-digit code from your email.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: "email",
+      });
+
+      if (error) {
+        console.error("OTP verify error:", error.message);
+        toast({
+          title: "Invalid code",
+          description: error.message || "The code is incorrect or has expired. Try again or request a new code.",
+          variant: "destructive",
+        });
+        setOtpCode("");
+        return;
+      }
+
+      if (data.session) {
+        setStep("password");
+        setOtpCode("");
+        toast({
+          title: "Code verified",
+          description: "Now choose your new password.",
+        });
+      } else {
+        toast({
+          title: "Code verified",
+          description: "Now choose your new password.",
+        });
+        setStep("password");
+      }
+    } catch (err) {
+      console.error("OTP verify error:", err);
+      toast({
+        title: "Error",
+        description: "Could not verify the code. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const submitNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
     if (!password || !confirmPassword) {
       toast({
         title: "Missing Fields",
@@ -107,45 +177,98 @@ const ResetPassword = () => {
       return;
     }
 
-    setSubmitting(true);
+    setIsLoading(true);
 
     try {
       const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
-        console.error('Password update error:', error);
+        console.error("Password update error:", error);
         toast({
           title: "Reset Failed",
           description: error.message || "Failed to update password. Please try again.",
           variant: "destructive",
         });
-        setSubmitting(false);
+        setIsLoading(false);
         return;
       }
 
-      // Success!
+      // Clear the forced-reset flag (if set) for this account.
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await (supabase.from("profiles") as any)
+            .update({ must_reset_password: false })
+            .eq("id", user.id);
+        }
+      } catch (flagError) {
+        console.error("Could not clear must_reset_password:", flagError);
+      }
+
+      // Sign out so the user logs in fresh with the new password.
+      await supabase.auth.signOut();
+
       setResetSuccess(true);
       toast({
         title: "Success!",
         description: "Your password has been reset successfully.",
       });
 
-      // Redirect to login or dashboard after 2 seconds
       setTimeout(() => {
         navigate("/auth");
       }, 2000);
-    } catch (error: any) {
-      console.error('Error updating password:', error);
+    } catch (err: any) {
+      console.error("Password update error:", err);
       toast({
         title: "Error",
-        description: error.message || "An unexpected error occurred.",
+        description: err?.message || "An unexpected error occurred.",
         variant: "destructive",
       });
-      setSubmitting(false);
+      setIsLoading(false);
     }
   };
 
-  if (authLoading || !ready) {
+  useEffect(() => {
+    const init = async () => {
+      try {
+        if (recoveryCode && recoveryType === "recovery") {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(recoveryCode);
+          if (error) {
+            console.error("Recovery exchange error:", error);
+            setErrorMessage("Invalid or expired reset link. Please request a new one.");
+          } else if (data.session) {
+            setStep("password");
+          }
+        } else {
+          // If a session already exists (e.g. OTP verified previously), go to password step.
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (error) {
+            console.error("Session error:", error);
+          } else if (session) {
+            setStep("password");
+          }
+        }
+      } catch (err) {
+        console.error("Init error:", err);
+        setErrorMessage("An error occurred. Please try again.");
+      } finally {
+        setReady(true);
+      }
+    };
+
+    init();
+  }, [recoveryCode, recoveryType]);
+
+  // Forced reset (from login): automatically send the OTP code.
+  useEffect(() => {
+    if (forced && urlEmail && step === "email" && !autoSentRef.current) {
+      autoSentRef.current = true;
+      sendCode(urlEmail);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forced, urlEmail, step]);
+
+  if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary">
         <motion.div
@@ -157,8 +280,8 @@ const ResetPassword = () => {
     );
   }
 
-  // Error state - invalid or expired link
-  if (!hasValidSession && errorMessage) {
+  // Invalid recovery link / unrecoverable state
+  if (errorMessage) {
     return (
       <div className="min-h-screen gradient-hero flex items-center justify-center p-4 relative overflow-hidden">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -172,11 +295,7 @@ const ResetPassword = () => {
           transition={{ duration: 0.5 }}
           className="w-full max-w-md z-10"
         >
-          <Button
-            variant="ghost"
-            onClick={() => navigate("/auth")}
-            className="mb-6"
-          >
+          <Button variant="ghost" onClick={() => navigate("/auth")} className="mb-6">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Login
           </Button>
@@ -193,15 +312,11 @@ const ResetPassword = () => {
               </motion.div>
               <img src={investoursLogo} alt="INVESTOURS" className="w-12 h-12 mx-auto mb-3" />
               <CardTitle className="text-2xl">Reset Link Expired</CardTitle>
-              <CardDescription>
-                Your password reset link is no longer valid
-              </CardDescription>
+              <CardDescription>Your password reset link is no longer valid</CardDescription>
             </CardHeader>
             <CardContent className="pt-4">
               <div className="text-center space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  {errorMessage}
-                </p>
+                <p className="text-sm text-muted-foreground">{errorMessage}</p>
                 <Button
                   onClick={() => navigate("/auth?mode=forgot")}
                   variant="hero"
@@ -244,9 +359,7 @@ const ResetPassword = () => {
               </motion.div>
               <img src={investoursLogo} alt="INVESTOURS" className="w-12 h-12 mx-auto mb-3" />
               <CardTitle className="text-2xl">Password Reset Successful!</CardTitle>
-              <CardDescription>
-                Your password has been updated
-              </CardDescription>
+              <CardDescription>Your password has been updated</CardDescription>
             </CardHeader>
             <CardContent className="pt-4">
               <p className="text-center text-sm text-muted-foreground">
@@ -259,7 +372,6 @@ const ResetPassword = () => {
     );
   }
 
-  // Reset password form
   return (
     <div className="min-h-screen gradient-hero flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -275,83 +387,192 @@ const ResetPassword = () => {
       >
         <Button
           variant="ghost"
-          onClick={() => navigate("/home")}
+          onClick={() => {
+            if (step === "email") navigate("/home");
+            else if (step === "code") setStep("email");
+            else navigate("/auth");
+          }}
           className="mb-6"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Home
+          {step === "code" ? "Change email" : "Back"}
         </Button>
 
         <Card variant="elevated" className="border-0 shadow-xl">
           <CardHeader className="text-center pb-2">
-            <img src={investoursLogo} alt="INVESTOURS" className="w-16 h-16 mx-auto mb-4" />
-            <CardTitle className="text-2xl">Reset Password</CardTitle>
+            <img src={investoursLogo} alt="INVESTOURS" className="w-12 h-12 mx-auto mb-4" />
+            <CardTitle className="text-2xl">
+              {step === "email" && "Reset Password"}
+              {step === "code" && "Enter Reset Code"}
+              {step === "password" && "Choose New Password"}
+            </CardTitle>
             <CardDescription>
-              Choose a new password for your account
+              {step === "email" && "Enter your email to receive a 6-digit reset code"}
+              {step === "code" && `We sent a 6-digit code to ${email}`}
+              {step === "password" && "Your identity is verified. Set a new password for your account"}
             </CardDescription>
           </CardHeader>
+
           <CardContent className="pt-4">
-            <form onSubmit={onSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="password">New Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter new password"
-                    className="pl-10"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    minLength={8}
-                    disabled={submitting}
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Must be at least 8 characters long
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirm">Confirm Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="confirm"
-                    type="password"
-                    placeholder="Confirm new password"
-                    className="pl-10"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    minLength={8}
-                    disabled={submitting}
-                    required
-                  />
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                variant="hero"
-                className="w-full"
-                size="lg"
-                disabled={submitting}
+            {step === "email" && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  sendCode();
+                }}
+                className="space-y-4"
               >
-                {submitting ? (
-                  <span className="flex items-center gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      className="pl-10"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={isLoading || forced}
+                    />
+                  </div>
+                </div>
+
+                {forced && (
+                  <p className="text-sm text-muted-foreground">
+                    For your security, you need to set a new password before continuing. We've emailed
+                    you a code.
+                  </p>
+                )}
+
+                <Button type="submit" variant="hero" className="w-full" size="lg" disabled={isLoading}>
+                  {isLoading ? (
                     <motion.span
                       animate={{ rotate: 360 }}
                       transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                      className="inline-block w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
+                      className="inline-block w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full mr-2"
                     />
-                    Updating Password...
-                  </span>
-                ) : (
-                  "Update Password"
+                  ) : null}
+                  {isLoading ? "Sending code..." : "Send Reset Code"}
+                </Button>
+
+                {!forced && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => navigate("/auth")}
+                  >
+                    Back to login
+                  </Button>
                 )}
-              </Button>
-            </form>
+              </form>
+            )}
+
+            {step === "code" && (
+              <form onSubmit={verifyCode} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="code">6-digit code</Label>
+                  <div className="relative">
+                    <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="code"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="000000"
+                      className="pl-10 text-center text-lg tracking-[0.5em] font-semibold"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Enter the code from the email we sent to {email}.
+                  </p>
+                </div>
+
+                <Button type="submit" variant="hero" className="w-full" size="lg" disabled={isLoading || otpCode.length < 6}>
+                  {isLoading ? (
+                    <motion.span
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                      className="inline-block w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full mr-2"
+                    />
+                  ) : null}
+                  {isLoading ? "Verifying..." : "Verify Code"}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  disabled={isLoading}
+                  onClick={() => sendCode()}
+                >
+                  Resend code
+                </Button>
+              </form>
+            )}
+
+            {step === "password" && (
+              <form onSubmit={submitNewPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="password">New Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Enter new password"
+                      className="pl-10"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      minLength={8}
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Must be at least 8 characters long
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirm">Confirm Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="confirm"
+                      type="password"
+                      placeholder="Confirm new password"
+                      className="pl-10"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      minLength={8}
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <Button type="submit" variant="hero" className="w-full" size="lg" disabled={isLoading}>
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <motion.span
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                        className="inline-block w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full"
+                      />
+                      Updating Password...
+                    </span>
+                  ) : (
+                    "Update Password"
+                  )}
+                </Button>
+              </form>
+            )}
           </CardContent>
         </Card>
       </motion.div>
