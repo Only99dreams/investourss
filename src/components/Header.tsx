@@ -75,6 +75,18 @@ const Header = () => {
               AI Auditor
             </Link>
             <Link
+              to="/dashboard/plans"
+              className="text-foreground/80 hover:text-primary transition-colors font-medium"
+            >
+              My Plans
+            </Link>
+            <Link
+              to="/community"
+              className="text-foreground/80 hover:text-primary transition-colors font-medium"
+            >
+              Opportunity Hub
+            </Link>
+            <Link
               to="/ambassador"
               className="text-foreground/80 hover:text-primary transition-colors font-medium"
             >
@@ -228,33 +240,20 @@ const Header = () => {
             >
               Home
             </Link>
+            <Link
+              to="/auditor"
+              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors flex items-center gap-2"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <ScanSearch className="w-4 h-4" />
+              AI Auditor
+            </Link>
             <Link 
               to="/dashboard/plans" 
               className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               My Plans
-            </Link>
-            <Link 
-              to="/learning" 
-              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Learning
-            </Link>
-            <Link 
-              to="/vetting" 
-              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Scam Detector
-            </Link>
-            <Link 
-              to="/investing" 
-              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Safe Offers
             </Link>
             <Link 
               to="/community" 
@@ -279,20 +278,34 @@ const Header = () => {
               <MessageSquare className="w-4 h-4" />
               FHA Chatroom
             </Link>
-            <Link
-              to="/auditor"
-              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors flex items-center gap-2"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              <ScanSearch className="w-4 h-4" />
-              AI Auditor
-            </Link>
             <Link 
               to="/pricing" 
               className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
               Pricing
+            </Link>
+            <div className="border-t border-border my-2" />
+            <Link 
+              to="/learning" 
+              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Learning
+            </Link>
+            <Link 
+              to="/vetting" 
+              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Scam Detector
+            </Link>
+            <Link 
+              to="/investing" 
+              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Safe Offers
             </Link>
             {user && isAdmin && (
               <Link 
