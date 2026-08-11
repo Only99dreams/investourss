@@ -40,15 +40,15 @@ export function DashboardSidebar() {
   };
 
   return (
-    <aside className="w-64 bg-card border-r border-border min-h-screen flex flex-col">
-      <div className="p-4 border-b border-border">
+    <aside className="w-64 bg-card border-r border-border h-svh flex flex-col">
+      <div className="p-4 border-b border-border shrink-0">
         <Link to="/home" className="flex items-center gap-2">
           <img src={investoursLogo} alt="Investours" className="w-8 h-8" />
           <span className="font-bold text-lg">Investours</span>
         </Link>
       </div>
 
-      <div className="p-4 border-b border-border">
+      <div className="p-4 border-b border-border shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
             <User className="w-5 h-5 text-primary" />
@@ -67,7 +67,7 @@ export function DashboardSidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+      <nav className="flex-1 min-h-0 p-2 space-y-1 overflow-y-auto">
         {sidebarItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
@@ -109,7 +109,7 @@ export function DashboardSidebar() {
         )}
       </nav>
 
-      <div className="p-2 border-t border-border">
+      <div className="p-2 border-t border-border shrink-0">
         <button
           onClick={handleSignOut}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive w-full transition-colors"
