@@ -42,16 +42,35 @@ const PayoutsTab = () => {
     try {
       const { data, error } = await supabase
         .from("withdrawal_requests")
-        .select(`
-          *,
-          user:profiles(full_name, email, bank_name, bank_account_number)
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setWithdrawalRequests(data || []);
+
+      const userIds = (data || []).map((r) => r.user_id).filter(Boolean);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let profilesMap: Record<string, any> = {};
+      if (userIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, full_name, email, bank_name, bank_account_number")
+          .in("id", userIds);
+        if (profilesError) throw profilesError;
+        profilesMap = Object.fromEntries(
+          (profilesData || []).map((p) => [p.id, p])
+        );
+      }
+
+      setWithdrawalRequests(
+        (data || []).map((r) => ({ ...r, user: profilesMap[r.user_id] }))
+      );
     } catch (error) {
       console.error("Error fetching payout requests:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load withdrawal requests",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }

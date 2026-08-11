@@ -146,8 +146,8 @@ const AdminOverview = () => {
         supabase.from('deposit_requests').select('status, amount, created_at'),
         // Total transactions
         supabase.from('wallet_transactions').select('*', { count: 'exact', head: true }),
-        // Active users (logged in within last 30 days)
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('last_login', thirtyDaysAgo.toISOString()),
+        // Active users (used AI Auditor within last 30 days)
+        supabase.from('ai_search_logs').select('user_id').gte('created_at', thirtyDaysAgo.toISOString()),
         // AI queries today
         supabase.from('ai_search_logs').select('*', { count: 'exact', head: true }).gte('created_at', startOfToday.toISOString()),
         // Total referrals
@@ -182,7 +182,9 @@ const AdminOverview = () => {
         totalDepositsValue,
         totalTransactions: transactionsResult.count || 0,
         monthlyRevenue,
-        activeUsers: activeUsersResult.count || 0,
+        activeUsers: new Set(
+          (activeUsersResult.data || []).map((l) => l.user_id).filter(Boolean)
+        ).size,
         aiQueriesToday: aiQueriesResult.count || 0,
         totalReferrals: referralsResult.count || 0
       });
