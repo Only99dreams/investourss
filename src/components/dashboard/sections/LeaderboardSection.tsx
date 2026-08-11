@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Medal, Crown, Sparkles, Loader2, User, Users, TrendingUp } from "lucide-react";
+import { Trophy, Medal, Crown, Sparkles, Loader2, User, Users, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TutorLeaderboardEntry {
@@ -13,9 +13,21 @@ interface TutorLeaderboardEntry {
   xp_total: number;
   level: string;
   streak_days: number;
-  badges: any;
+  badges: unknown[];
   full_name: string | null;
   email: string | null;
+  funding_readiness_score: number;
+  composite_score: number;
+}
+
+interface ChallengeHistoryEntry {
+  season_id: string;
+  season_name: string;
+  ended_at: string;
+  rank: number;
+  funding_readiness_score: number;
+  xp_total: number;
+  composite_score: number;
 }
 
 interface ReferralLeaderboardEntry {
@@ -32,39 +44,8 @@ const levelColors: Record<string, string> = {
   advanced: "bg-amber-500/20 text-amber-400 border-amber-500/30",
 };
 
-function TutorLeaderboard() {
-  const { user, profile } = useAuth();
-  const [entries, setEntries] = useState<TutorLeaderboardEntry[]>([]);
-  const [myRank, setMyRank] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const fetchLeaderboard = async () => {
-    try {
-      const { data, error } = await supabase.rpc("get_tutor_leaderboard");
-      if (error) {
-        console.error("Error fetching leaderboard:", error);
-        return;
-      }
-      const typedData = (data || []) as TutorLeaderboardEntry[];
-      setEntries(typedData);
-      const currentIndex = typedData.findIndex((e) => e.user_id === user?.id);
-      setMyRank(currentIndex >= 0 ? currentIndex + 1 : null);
-    } catch (err) {
-      console.error("Leaderboard fetch failed:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLeaderboard();
-    const channel = supabase
-      .channel("tutor-leaderboard-changes")
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tutor_user_levels" }, () => fetchLeaderboard())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "tutor_user_levels" }, () => fetchLeaderboard())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user?.id]);
+function TutorLeaderboard({ entries }: { entries: TutorLeaderboardEntry[] }) {
+  const { user } = useAuth();
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -91,19 +72,17 @@ function TutorLeaderboard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Trophy className="w-5 h-5 text-primary" />
-          Top Learners
+          Top Performers
         </CardTitle>
-        <CardDescription>Ranked by XP earned across all lessons</CardDescription>
+        <CardDescription>
+          Ranked by funding readiness score (heavier) + AI Tutor XP (lighter)
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        ) : entries.length === 0 ? (
+        {entries.length === 0 ? (
           <div className="text-center py-12">
             <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No learners yet. Be the first to complete a lesson!</p>
+            <p className="text-muted-foreground">No performers yet. Save a business plan or complete a lesson to join the challenge!</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -136,17 +115,20 @@ function TutorLeaderboard() {
                     <p className={cn("font-medium truncate", isCurrentUser && "text-primary")}>
                       {displayName}{isCurrentUser && " (You)"}
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Badge variant="outline" className={cn("text-xs border-0", levelColors[entry.level] || "bg-muted text-muted-foreground")}>
                         {entry.level}
                       </Badge>
+                      <span className="text-xs text-muted-foreground">Funding {entry.funding_readiness_score}/100</span>
+                      <span className="text-xs text-muted-foreground">•</span>
+                      <span className="text-xs text-muted-foreground">{entry.xp_total.toLocaleString()} XP</span>
                       {entry.streak_days > 0 && (
                         <span className="text-xs text-muted-foreground">🔥 {entry.streak_days}d</span>
                       )}
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-foreground">{entry.xp_total.toLocaleString()} XP</p>
+                    <p className="font-bold text-foreground">{entry.composite_score.toLocaleString()} pts</p>
                     {Array.isArray(entry.badges) && entry.badges.length > 0 && (
                       <p className="text-xs text-muted-foreground">{entry.badges.length} badge{entry.badges.length !== 1 ? "s" : ""}</p>
                     )}
@@ -154,6 +136,46 @@ function TutorLeaderboard() {
                 </motion.div>
               );
             })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PastChallenges({ history }: { history: ChallengeHistoryEntry[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <History className="w-5 h-5 text-primary" />
+          Your Past Challenge Results
+        </CardTitle>
+        <CardDescription>Scores from challenges that have already ended</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {history.length === 0 ? (
+          <div className="text-center py-8">
+            <History className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+            <p className="text-muted-foreground">No past challenge results yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {history.map((entry) => (
+              <div key={entry.season_id} className="flex items-center justify-between p-3 rounded-xl border bg-card">
+                <div>
+                  <p className="font-medium">{entry.season_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {entry.ended_at ? new Date(entry.ended_at).toLocaleDateString() : "Ended"}
+                    {" · "}Rank #{entry.rank}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold">{entry.composite_score.toLocaleString()} pts</p>
+                  <p className="text-xs text-muted-foreground">Funding {entry.funding_readiness_score}/100 · {entry.xp_total} XP</p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </CardContent>
@@ -262,27 +284,73 @@ function ReferralLeaderboard() {
 }
 
 export function LeaderboardSection() {
-  const { profile } = useAuth();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("tutor");
+  const [entries, setEntries] = useState<TutorLeaderboardEntry[]>([]);
+  const [history, setHistory] = useState<ChallengeHistoryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchLeaderboard = async () => {
+    try {
+      const { data, error } = await supabase.rpc("get_tutor_leaderboard");
+      if (!error) {
+        setEntries((data || []) as TutorLeaderboardEntry[]);
+      }
+    } catch (err) {
+      console.error("Leaderboard fetch failed:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchHistory = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase.rpc("get_challenge_history", { p_user_id: user.id });
+      if (!error) {
+        setHistory((data || []) as ChallengeHistoryEntry[]);
+      }
+    } catch (err) {
+      console.error("Challenge history fetch failed:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeaderboard();
+    fetchHistory();
+    const channel = supabase
+      .channel("ai-challenger-leaderboard-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "challenge_leaderboard" }, () => fetchLeaderboard())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
+
+  const myEntry = user ? entries.find((e) => e.user_id === user.id) : undefined;
+  const myRank = myEntry ? entries.findIndex((e) => e.user_id === user.id) + 1 : null;
 
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Investours AI Challenge Leaderboard</h2>
+          <h2 className="text-2xl font-bold text-foreground">AI Challenger Leaderboard</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Top learners and followers compete for rewards
+            Top performers and followers compete for rewards
           </p>
         </div>
-        {profile && (
+        {user && (
           <Card className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
                 <Sparkles className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Your XP</p>
-                <p className="text-lg font-bold text-foreground">{profile.ai_tutor_used || 0} XP</p>
+                <p className="text-xs text-muted-foreground">Your Score</p>
+                <p className="text-lg font-bold text-foreground">
+                  {myEntry ? `${myEntry.composite_score.toLocaleString()} pts` : "0 pts"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {myRank ? `Current rank #${myRank}` : "Not ranked yet"}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -293,15 +361,22 @@ export function LeaderboardSection() {
         <TabsList className="w-full">
           <TabsTrigger value="tutor" className="flex-1">
             <Trophy className="w-4 h-4 mr-2" />
-            AI Tutor
+            AI Challengers
           </TabsTrigger>
           <TabsTrigger value="referral" className="flex-1">
             <Users className="w-4 h-4 mr-2" />
             Referral
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="tutor" className="mt-4">
-          <TutorLeaderboard />
+        <TabsContent value="tutor" className="mt-4 space-y-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <TutorLeaderboard entries={entries} />
+          )}
+          <PastChallenges history={history} />
         </TabsContent>
         <TabsContent value="referral" className="mt-4">
           <ReferralLeaderboard />

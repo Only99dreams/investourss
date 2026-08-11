@@ -1439,6 +1439,7 @@ export type Database = {
           form_data: Json | null
           plan_content: string
           version: string
+          funding_readiness_score: number | null
           created_at: string
           updated_at: string
         }
@@ -1449,6 +1450,7 @@ export type Database = {
           form_data?: Json | null
           plan_content: string
           version?: string
+          funding_readiness_score?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1459,6 +1461,7 @@ export type Database = {
           form_data?: Json | null
           plan_content?: string
           version?: string
+          funding_readiness_score?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1484,6 +1487,93 @@ export type Database = {
           event_type?: string
           metadata?: Json
           created_at?: string
+        }
+      }
+      challenge_seasons: {
+        Row: {
+          id: string
+          name: string
+          started_at: string
+          ended_at: string | null
+          is_active: boolean
+        }
+        Insert: {
+          id?: string
+          name: string
+          started_at?: string
+          ended_at?: string | null
+          is_active?: boolean
+        }
+        Update: {
+          id?: string
+          name?: string
+          started_at?: string
+          ended_at?: string | null
+          is_active?: boolean
+        }
+      }
+      challenge_leaderboard: {
+        Row: {
+          id: string
+          season_id: string
+          user_id: string
+          funding_readiness_score: number
+          xp_total: number
+          composite_score: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          season_id: string
+          user_id: string
+          funding_readiness_score?: number
+          xp_total?: number
+          composite_score?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          season_id?: string
+          user_id?: string
+          funding_readiness_score?: number
+          xp_total?: number
+          composite_score?: number
+          updated_at?: string
+        }
+      }
+      challenge_leaderboard_archive: {
+        Row: {
+          id: string
+          season_id: string
+          user_id: string
+          full_name: string | null
+          funding_readiness_score: number
+          xp_total: number
+          composite_score: number
+          rank: number | null
+          archived_at: string
+        }
+        Insert: {
+          id?: string
+          season_id: string
+          user_id: string
+          full_name?: string | null
+          funding_readiness_score?: number
+          xp_total?: number
+          composite_score?: number
+          rank?: number | null
+          archived_at?: string
+        }
+        Update: {
+          id?: string
+          season_id?: string
+          user_id?: string
+          full_name?: string | null
+          funding_readiness_score?: number
+          xp_total?: number
+          composite_score?: number
+          rank?: number | null
+          archived_at?: string
         }
       }
     }
@@ -1519,7 +1609,29 @@ export type Database = {
           xp_total: number
           level: string
           streak_days: number
-          badges: any
+          badges: unknown[]
+          funding_readiness_score: number
+          composite_score: number
+        }>
+      }
+      clear_leaderboard: {
+        Args: {
+          p_admin_id: string
+        }
+        Returns: Json
+      }
+      get_challenge_history: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: Array<{
+          season_id: string
+          season_name: string
+          ended_at: string
+          rank: number
+          funding_readiness_score: number
+          xp_total: number
+          composite_score: number
         }>
       }
       get_referral_leaderboard: {
