@@ -1,0 +1,27 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
+
+// https://vitejs.dev/config/
+export default defineConfig(({ mode }) => ({
+  server: {
+    host: "::",
+    port: 8080,
+    middlewareMode: false,
+    // Fallback to index.html for SPA routing
+    middlewares: [
+      (req, res, next) => {
+        if (req.url.match(/^[^.]*$/) && !req.url.startsWith("/api")) {
+          req.url = "/";
+        }
+        next();
+      },
+    ],
+  },
+  plugins: [react()].filter(Boolean),
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+}));

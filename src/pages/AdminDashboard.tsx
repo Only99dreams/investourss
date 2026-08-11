@@ -1,0 +1,104 @@
+import { useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { useIsMobile } from "@/hooks/use-mobile";
+import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminHeader from "@/components/admin/AdminHeader";
+import UsersTab from "@/components/admin/tabs/UsersTab";
+import GroupsTab from "@/components/admin/tabs/GroupsTab";
+import GFEsTab from "@/components/admin/tabs/GFEsTab";
+import FirmsTab from "@/components/admin/tabs/FirmsTab";
+import InvestmentsTab from "@/components/admin/tabs/InvestmentsTab";
+import AIToolsTab from "@/components/admin/tabs/AIToolsTab";
+import EducationTab from "@/components/admin/tabs/EducationTab";
+import CommunityTab from "@/components/admin/tabs/CommunityTab";
+import WalletsTab from "@/components/admin/tabs/WalletsTab";
+import PayoutsTab from "@/components/admin/tabs/PayoutsTab";
+import ReferralsTab from "@/components/admin/tabs/ReferralsTab";
+import CampaignsTab from "@/components/admin/tabs/CampaignsTab";
+import ResourcesTab from "@/components/admin/tabs/ResourcesTab";
+import MessagesTab from "@/components/admin/tabs/MessagesTab";
+import SupportTab from "@/components/admin/tabs/SupportTab";
+import AdvertisingTab from "@/components/admin/tabs/AdvertisingTab";
+import PromoCodesTab from "@/components/admin/tabs/PromoCodesTab";
+import BusinessPlanStatsTab from "@/components/admin/tabs/BusinessPlanStatsTab";
+import AuditPacksTab from "@/components/admin/tabs/AuditPacksTab";
+import FeaturedSolutionsTab from "@/components/admin/tabs/FeaturedSolutionsTab";
+import AuditOrdersTab from "@/components/admin/tabs/AuditOrdersTab";
+import AuditAnalyticsTab from "@/components/admin/tabs/AuditAnalyticsTab";
+import SettingsTab from "@/components/admin/tabs/SettingsTab";
+import AdminOverview from "@/components/admin/AdminOverview";
+import { Loader2 } from "lucide-react";
+import { DepositRequestsManager } from "@/components/admin/DepositRequestsManager";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+
+const AdminDashboard = () => {
+  const { user, roles, isLoading } = useAuth();
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const isAdmin = roles?.includes('admin');
+
+  if (!user || !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Desktop Animated Sidebar */}
+      <div className="hidden md:block">
+        <AdminSidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+      </div>
+
+      {/* Mobile Sheet Sidebar */}
+      <Sheet open={isMobile && sidebarOpen} onOpenChange={setSidebarOpen}>
+        <SheetContent side="left" className="p-0 w-64">
+          <AdminSidebar isOpen={true} onToggle={() => setSidebarOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
+      <div className={`transition-all duration-300 ${!isMobile && sidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}>
+        <AdminHeader onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
+        <main className="p-4 md:p-6">
+          <Routes>
+            <Route index element={<AdminOverview />} />
+            <Route path="users" element={<UsersTab />} />
+            <Route path="groups" element={<GroupsTab />} />
+            <Route path="gfes" element={<GFEsTab />} />
+            <Route path="firms" element={<FirmsTab />} />
+            <Route path="investments" element={<InvestmentsTab />} />
+            <Route path="ai-tools" element={<AIToolsTab />} />
+            <Route path="education" element={<EducationTab />} />
+            <Route path="community" element={<CommunityTab />} />
+            <Route path="wallets" element={<WalletsTab />} />
+            <Route path="deposit-requests" element={<DepositRequestsManager />} />
+            <Route path="payouts" element={<PayoutsTab />} />
+            <Route path="referrals" element={<ReferralsTab />} />
+            <Route path="campaigns" element={<CampaignsTab />} />
+            <Route path="business-plan-stats" element={<BusinessPlanStatsTab />} />
+            <Route path="audit-packs" element={<AuditPacksTab />} />
+            <Route path="featured-solutions" element={<FeaturedSolutionsTab />} />
+            <Route path="audit-orders" element={<AuditOrdersTab />} />
+            <Route path="audit-analytics" element={<AuditAnalyticsTab />} />
+            <Route path="promo-codes" element={<PromoCodesTab />} />
+            <Route path="resources" element={<ResourcesTab />} />
+            <Route path="messages" element={<MessagesTab />} />
+            <Route path="support" element={<SupportTab />} />
+            <Route path="advertising" element={<AdvertisingTab />} />
+            <Route path="settings" element={<SettingsTab />} />
+          </Routes>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default AdminDashboard;

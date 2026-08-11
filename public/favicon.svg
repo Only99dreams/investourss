@@ -1,0 +1,7 @@
+<svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- Purple oval background -->
+  <ellipse cx="100" cy="120" rx="85" ry="110" fill="#2D1B69"/>
+  
+  <!-- White wavy line -->
+  <path d="M 100 40 Q 105 55 100 70 Q 95 85 100 100 Q 105 115 100 130 Q 95 145 100 160 Q 105 175 100 190" stroke="white" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

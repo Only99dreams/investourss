@@ -1,0 +1,71 @@
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "@/hooks/useAuth";
+import Welcome from "./pages/Welcome";
+import Home from "./pages/Home";
+import Auth from "./pages/Auth";
+import SignupTypeSelection from "./pages/SignupTypeSelection";
+import AmbassadorApply from "./pages/Ambassador";
+import AmbassadorDashboard from "./pages/AmbassadorDashboard";
+import FHAChatroom from "./pages/FHAChatroom";
+import AuditorLanding from "./pages/AuditorLanding";
+import AuditorConnect from "./pages/AuditorConnect";
+import AuditorDashboard from "./pages/AuditorDashboard";
+import AuditorPacks from "./pages/AuditorPacks";
+import AuditorMonitoring from "./pages/AuditorMonitoring";
+import CompleteProfile from "./pages/CompleteProfile";
+import Dashboard from "./pages/Dashboard";
+import AdminDashboard from "./pages/AdminDashboard";
+import Vetting from "./pages/Vetting";
+import Community from "./pages/Community";
+import FinancialTutor from "./pages/FinancialTutor";
+import BusinessPlanGenerator from "./pages/BusinessPlanGenerator";
+import Pricing from "./pages/Pricing";
+import SubscriptionPage from "./pages/SubscriptionPage";
+import NotFound from "./pages/NotFound";
+import ResetPassword from "./pages/ResetPassword";
+
+const queryClient = new QueryClient();
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Welcome />} />
+            <Route path="/home" element={<Home />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/signup" element={<SignupTypeSelection />} />
+            <Route path="/ambassador" element={<AmbassadorApply />} />
+            <Route path="/ambassador-dashboard" element={<AmbassadorDashboard />} />
+            <Route path="/fha-chatroom" element={<FHAChatroom />} />
+            <Route path="/auditor" element={<AuditorLanding />} />
+            <Route path="/auditor/connect" element={<AuditorConnect />} />
+            <Route path="/auditor/audit" element={<AuditorDashboard />} />
+            <Route path="/auditor/packs" element={<AuditorPacks />} />
+            <Route path="/auditor/monitoring" element={<AuditorMonitoring />} />
+            <Route path="/complete-profile" element={<CompleteProfile />} />
+            <Route path="/dashboard/*" element={<Dashboard />} />
+            <Route path="/admin/*" element={<AdminDashboard />} />
+            <Route path="/vetting" element={<Vetting />} />
+            <Route path="/community" element={<Community />} />
+            <Route path="/tutor" element={<FinancialTutor />} />
+            <Route path="/business-plan" element={<BusinessPlanGenerator />} />
+            <Route path="/pricing" element={<Pricing />} />
+            <Route path="/subscribe" element={<SubscriptionPage />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
+
+export default App;
