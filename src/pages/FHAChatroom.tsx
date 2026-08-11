@@ -36,6 +36,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail } from "@/lib/utils";
 import { LinkifiedText } from "@/lib/LinkifiedText";
+import { DEFAULT_ACCESS, type AuditAccess } from "@/lib/auditor";
 
 const sendNotification = (payload: Record<string, unknown>) => {
   supabase.functions.invoke('send-notification', { body: payload }).catch(() => {});
@@ -93,7 +94,39 @@ const FHAChatroom = () => {
   const { toast } = useToast();
   const { user, profile, refreshProfile } = useAuth();
 
-  const isEligible = (profile?.has_active_subscription === true) || (profile?.audit_credits ?? 0) > 0;
+  const [access, setAccess] = useState<AuditAccess>(DEFAULT_ACCESS);
+  const [accessLoading, setAccessLoading] = useState(true);
+
+  const isEligible =
+    access?.subscription_active === true ||
+    profile?.has_active_subscription === true ||
+    (profile?.audit_credits ?? 0) > 0;
+
+  useEffect(() => {
+    let mounted = true;
+    const loadAccess = async () => {
+      if (!user) {
+        setAccessLoading(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase.rpc("get_audit_access");
+        if (error) throw error;
+        if (mounted) {
+          const a = Array.isArray(data) ? data[0] : data;
+          setAccess(a as AuditAccess);
+        }
+      } catch (err) {
+        console.error("Failed to load audit access:", err);
+      } finally {
+        if (mounted) setAccessLoading(false);
+      }
+    };
+    loadAccess();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   const fetchPosts = async () => {
     try {
@@ -169,7 +202,15 @@ const FHAChatroom = () => {
   };
 
   useEffect(() => {
-    if (!isEligible) {
+  if (accessLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isEligible) {
       setIsLoading(false);
       return;
     }

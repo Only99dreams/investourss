@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   BookOpen, 
@@ -10,14 +9,12 @@ import {
   Search,
   Lock,
   Globe,
-  Sparkles,
   Trophy,
   BrainCircuit,
   Wallet
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Header from "@/components/Header";
 import { Footer } from "@/components/ui/Footer";
@@ -39,18 +36,6 @@ const staggerContainer = {
 };
 
 const Home = () => {
-  const [tutorQuery, setTutorQuery] = useState("");
-  const navigate = useNavigate();
-
-  const handleTutorSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (tutorQuery.trim()) {
-      navigate(`/tutor?q=${encodeURIComponent(tutorQuery.trim())}`);
-    } else {
-      navigate("/tutor");
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -88,51 +73,6 @@ const Home = () => {
             >
               <LivelihoodKit />
             </motion.div>
-
-            {/* AI Financial Tutor Search Bar */}
-            <motion.form 
-              onSubmit={handleTutorSearch}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.5 }}
-              className="max-w-xl mx-auto mb-8"
-            >
-              <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-accent/20 rounded-full blur-xl group-hover:blur-2xl transition-all opacity-50" />
-                <div className="relative flex gap-2 bg-card/80 backdrop-blur-sm rounded-full p-2 border border-border shadow-lg">
-                  <div className="flex items-center gap-2 pl-4 text-primary">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <Input
-                    value={tutorQuery}
-                    onChange={(e) => setTutorQuery(e.target.value)}
-                    placeholder="Ask our AI Financial Tutor anything..."
-                    className="flex-1 min-w-0 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/70"
-                  />
-                  <Button type="submit" variant="hero" className="rounded-full px-6">
-                    <Search className="w-4 h-4 mr-2" />
-                    Ask
-                  </Button>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Try: "What is budgeting?"
-              </p>
-            </motion.form>
-
-            <div className="flex flex-wrap justify-center gap-4">
-              <Link to="/dashboard">
-                <Button variant="hero" size="lg">
-                  Start Learning Free
-                  <ArrowRight className="ml-2 w-5 h-5" />
-                </Button>
-              </Link>
-              <Link to="/vetting">
-                <Button variant="outline" size="lg">
-                Use Scam Detector
-                </Button>
-              </Link>
-            </div>
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}

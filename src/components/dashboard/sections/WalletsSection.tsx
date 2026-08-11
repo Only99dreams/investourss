@@ -154,29 +154,37 @@ export function WalletsSection() {
         return;
       }
 
-      // Get withdrawal fee rate based on user tier
-      const feeRate = profile.user_tier === "premium" ? 0.10 : 0.15;
-      const fee = amount * feeRate;
-      const netAmount = amount - fee;
-
-      const { error } = await supabase
-        .from("withdrawal_requests")
-        .insert({
-          user_id: user.id,
-          amount: netAmount, // Store net amount after fee
-          wallet_type: withdrawalForm.wallet_type,
-          status: "pending",
-        });
+      const { data, error } = await supabase.rpc("request_withdrawal", {
+        p_amount: amount,
+        p_wallet_type: withdrawalForm.wallet_type,
+      });
 
       if (error) throw error;
 
+      const result = (data ?? {}) as {
+        success?: boolean;
+        message?: string;
+        fee_rate?: number;
+        fee_amount?: number;
+        net_amount?: number;
+      };
+
+      if (!result.success) {
+        toast({
+          title: "Withdrawal Failed",
+          description: result.message || "Unable to request withdrawal",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Success",
-        description: `Withdrawal request submitted. Fee: ₦${fee.toLocaleString()}, Net amount: ₦${netAmount.toLocaleString()}`,
+        description: `Withdrawal request submitted. Fee: ₦${(result.fee_amount ?? 0).toLocaleString()}, Net amount: ₦${(result.net_amount ?? 0).toLocaleString()}`,
       });
       setIsWithdrawalDialogOpen(false);
       setWithdrawalForm({ amount: "", wallet_type: "user_wallet" });
-      // Optionally create a transaction record here or let a backend trigger handle it
+      fetchWallet();
     } catch (error) {
       console.error("Error requesting withdrawal:", error);
       toast({
@@ -193,7 +201,7 @@ export function WalletsSection() {
       balance: wallet?.user_wallet_balance || 0,
       icon: Wallet,
       color: "from-emerald to-emerald/70",
-      description: "Non-referral income"
+      description: "All user income"
     },
     {
       title: "Gem Points",
@@ -216,54 +224,6 @@ export function WalletsSection() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Engagement Credit */}
-      {!profile?.engagement_credit_earned && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <Card className="border-accent/20 bg-accent/5">
-            <CardContent className="p-6">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold mb-2">Unlock ₦2,000 1st Engagement Credit</h3>
-                <p className="text-muted-foreground mb-4">
-                  Complete these activities to earn your welcome bonus:
-                </p>
-                <div className="flex justify-center items-center gap-6 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                      (profile?.ai_tutor_used || 0) >= 3 ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"
-                    )}>
-                      {(profile?.ai_tutor_used || 0) >= 3 ? "✓" : profile?.ai_tutor_used || 0}
-                    </div>
-                    <span>Use AI Tutor ×3</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                      (profile?.videos_watched || 0) >= 1 ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"
-                    )}>
-                      {(profile?.videos_watched || 0) >= 1 ? "✓" : profile?.videos_watched || 0}
-                    </div>
-                    <span>Watch 1 video</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-                      (profile?.posts_created || 0) >= 1 ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"
-                    )}>
-                      {(profile?.posts_created || 0) >= 1 ? "✓" : profile?.posts_created || 0}
-                    </div>
-                    <span>Post once</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-
       {/* Wallet Cards */}
       <div className="grid md:grid-cols-3 gap-4">
         {walletCards.map((card, index) => (
@@ -450,6 +410,7 @@ export function WalletsSection() {
                         onChange={(e) => setWithdrawalForm({ ...withdrawalForm, amount: e.target.value })}
                       />
                       <p className="text-xs text-muted-foreground">Minimum withdrawal: ₦5,000</p>
+                      <p className="text-xs text-muted-foreground">Processing fee: 10% (Paying Users) - 15% (Free Users)</p>
                     </div>
                   </div>
                   <DialogFooter>
@@ -499,9 +460,7 @@ export function WalletsSection() {
           <div className="grid md:grid-cols-3 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Processing Fee</p>
-              <p className="font-medium">
-                {profile?.user_tier === "exclusive" ? "5%" : profile?.user_tier === "premium" ? "10%" : "15%"}
-              </p>
+              <p className="font-medium">10% (Paying Users) - 15% (Free Users)</p>
             </div>
             <div>
               <p className="text-muted-foreground">Minimum Withdrawal</p>

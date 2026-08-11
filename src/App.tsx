@@ -27,6 +27,7 @@ import Pricing from "./pages/Pricing";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -45,15 +46,15 @@ const App = () => (
             <Route path="/ambassador" element={<AmbassadorApply />} />
             <Route path="/ambassador-dashboard" element={<AmbassadorDashboard />} />
             <Route path="/fha-chatroom" element={<FHAChatroom />} />
-            <Route path="/auditor" element={<AuditorLanding />} />
-            <Route path="/auditor/connect" element={<AuditorConnect />} />
-            <Route path="/auditor/audit" element={<AuditorDashboard />} />
-            <Route path="/auditor/packs" element={<AuditorPacks />} />
-            <Route path="/auditor/monitoring" element={<AuditorMonitoring />} />
+            <Route path="/auditor" element={<ProtectedRoute><AuditorLanding /></ProtectedRoute>} />
+            <Route path="/auditor/connect" element={<ProtectedRoute><AuditorConnect /></ProtectedRoute>} />
+            <Route path="/auditor/audit" element={<ProtectedRoute><AuditorDashboard /></ProtectedRoute>} />
+            <Route path="/auditor/packs" element={<ProtectedRoute><AuditorPacks /></ProtectedRoute>} />
+            <Route path="/auditor/monitoring" element={<ProtectedRoute><AuditorMonitoring /></ProtectedRoute>} />
             <Route path="/complete-profile" element={<CompleteProfile />} />
             <Route path="/dashboard/*" element={<Dashboard />} />
             <Route path="/admin/*" element={<AdminDashboard />} />
-            <Route path="/vetting" element={<Vetting />} />
+            <Route path="/vetting" element={<ProtectedRoute><Vetting /></ProtectedRoute>} />
             <Route path="/community" element={<Community />} />
             <Route path="/tutor" element={<FinancialTutor />} />
             <Route path="/business-plan" element={<BusinessPlanGenerator />} />

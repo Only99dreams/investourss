@@ -302,6 +302,10 @@ export type Database = {
           processed_by: string | null
           processed_at: string | null
           notes: string | null
+          gross_amount: number
+          fee_amount: number
+          fee_rate: number
+          wallet_transaction_id: string | null
           created_at: string | null
         }
         Insert: {
@@ -313,6 +317,10 @@ export type Database = {
           processed_by?: string | null
           processed_at?: string | null
           notes?: string | null
+          gross_amount?: number
+          fee_amount?: number
+          fee_rate?: number
+          wallet_transaction_id?: string | null
           created_at?: string | null
         }
         Update: {
@@ -324,6 +332,10 @@ export type Database = {
           processed_by?: string | null
           processed_at?: string | null
           notes?: string | null
+          gross_amount?: number
+          fee_amount?: number
+          fee_rate?: number
+          wallet_transaction_id?: string | null
           created_at?: string | null
         }
       }
@@ -1555,6 +1567,25 @@ export type Database = {
           p_user_id: string
         }
         Returns: boolean
+      }
+      request_withdrawal: {
+        Args: {
+          p_amount: number
+          p_wallet_type?: string
+        }
+        Returns: Json
+      }
+      process_withdrawal_request: {
+        Args: {
+          p_request_id: string
+          p_admin_id: string
+          p_action: string
+        }
+        Returns: boolean
+      }
+      get_fha_portfolio: {
+        Args: Record<string, never>
+        Returns: Json
       }
     }
     Enums: {

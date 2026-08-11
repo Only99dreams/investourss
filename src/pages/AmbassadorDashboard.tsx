@@ -284,7 +284,8 @@ const AmbassadorDashboard = () => {
                   Your Referral Link
                 </CardTitle>
                 <CardDescription>
-                  Share this link to earn 30% first-time and 15% recurring commissions.
+                  Share this link to earn 30% first-time and 15% recurring commissions on referred
+                  subscriptions and audit packs (VAT excluded), plus 2% on indirect referrals.
                 </CardDescription>
               </CardHeader>
               <CardContent>

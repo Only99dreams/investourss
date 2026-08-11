@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   Wallet, TrendingUp, TrendingDown, PiggyBank, RefreshCcw, FileSearch,
-  History, Loader2, ArrowRight, CalendarClock, CheckCircle2,
+  History, Loader2, ArrowRight, CalendarClock, CheckCircle2, Download,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,6 +22,7 @@ import {
   DEFAULT_ACCESS, type AuditAccess,
 } from "@/lib/auditor";
 import { cn } from "@/lib/utils";
+import { downloadAuditReport } from "@/lib/auditReport";
 
 interface FinancialAudit {
   id: string;
@@ -102,6 +103,16 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
     loadData();
   }, [loadData]);
 
+  const handleDownloadPdf = useCallback(
+    (audit: FinancialAudit) => {
+      const name = profile?.full_name || user?.email || "Investours User";
+      downloadAuditReport(name, audit).catch((err) =>
+        console.error("Failed to download audit report:", err)
+      );
+    },
+    [profile, user]
+  );
+
   const stats = useMemo(() => {
     if (!latestAudit) return null;
     return [
@@ -173,6 +184,10 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
                       <FileSearch className="w-4 h-4 mr-2" />
                       Run New Audit
                     </Link>
+                  </Button>
+                  <Button variant="outline" onClick={() => handleDownloadPdf(latestAudit)}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download PDF Report
                   </Button>
                   <Button asChild variant="outline">
                     <Link to="/auditor/packs">Get Credits / Upgrade</Link>
@@ -318,9 +333,14 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
                         </p>
                       </div>
                     </div>
-                    <Badge variant={a.is_locked ? "outline" : "default"} className="text-xs">
-                      {a.is_locked ? "Locked" : "Full report"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={a.is_locked ? "outline" : "default"} className="text-xs">
+                        {a.is_locked ? "Locked" : "Full report"}
+                      </Badge>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Download PDF report" onClick={() => handleDownloadPdf(a)}>
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 );
               })}

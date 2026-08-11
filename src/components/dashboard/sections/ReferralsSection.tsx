@@ -160,16 +160,25 @@ export function ReferralsSection() {
                   Lifetime referral earnings
                 </p>
               </div>
-                  <div className="grid grid-cols-2 gap-4 mt-6 text-sm">
+                  <div className="grid grid-cols-3 gap-4 mt-6 text-sm">
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
                       <p className="font-semibold">30%</p>
-                      <p className="text-muted-foreground">Direct Earnings</p>
+                      <p className="text-muted-foreground">First-time</p>
                     </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="font-semibold">5%</p>
-                  <p className="text-muted-foreground">Indirect Earnings</p>
-                </div>
-              </div>
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="font-semibold">15%</p>
+                      <p className="text-muted-foreground">Recurring</p>
+                    </div>
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="font-semibold">2%</p>
+                      <p className="text-muted-foreground">Indirect</p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-3 text-center">
+                    Direct commissions on first-time purchases (30%) and repurchases/renewals (15%).
+                    2% indirect bonus on purchases by your followers&apos; own referrals. Rates apply to
+                    the actual price (VAT excluded).
+                  </p>
             </CardContent>
           </Card>
         </motion.div>

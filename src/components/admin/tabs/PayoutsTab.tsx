@@ -12,15 +12,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Loader2, DollarSign, CheckCircle, XCircle, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { DepositRequestsManager } from "@/components/admin/DepositRequestsManager";
 
 const PayoutsTab = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ id: string; status: string } | null>(null);
   const { toast } = useToast();
+  const { user: adminUser } = useAuth();
 
   useEffect(() => {
     fetchWithdrawalRequests();
@@ -47,28 +59,40 @@ const PayoutsTab = () => {
 
   const handleStatusUpdate = async (id: string, status: string) => {
     try {
-      const { error } = await supabase
-        .from("withdrawal_requests")
-        .update({
-          status,
-          processed_at: new Date().toISOString()
-        })
-        .eq("id", id);
+      if (!adminUser) {
+        toast({
+          title: "Error",
+          description: "Admin session not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setProcessingId(id);
+      const { data, error } = await supabase.rpc("process_withdrawal_request", {
+        p_request_id: id,
+        p_admin_id: adminUser.id,
+        p_action: status,
+      });
 
       if (error) throw error;
+      if (!data) throw new Error("Request could not be processed");
 
       toast({
         title: "Success",
         description: `Request marked as ${status}`,
       });
+      setConfirmAction(null);
       fetchWithdrawalRequests();
     } catch (error) {
       console.error("Error updating request:", error);
       toast({
         title: "Error",
-        description: "Failed to update request",
+        description: error instanceof Error ? error.message : "Failed to update request",
         variant: "destructive",
       });
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -105,6 +129,7 @@ const PayoutsTab = () => {
                       <TableRow>
                         <TableHead>User</TableHead>
                         <TableHead>Amount</TableHead>
+                        <TableHead>Fee</TableHead>
                         <TableHead>Wallet Type</TableHead>
                         <TableHead>Bank Details</TableHead>
                         <TableHead>Status</TableHead>
@@ -115,7 +140,7 @@ const PayoutsTab = () => {
                     <TableBody>
                       {withdrawalRequests.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center h-24">
+                          <TableCell colSpan={8} className="text-center h-24">
                             No withdrawal requests found.
                           </TableCell>
                         </TableRow>
@@ -131,6 +156,14 @@ const PayoutsTab = () => {
                             </TableCell>
                             <TableCell className="font-bold">
                               ₦{req.amount.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <p className="font-medium text-muted-foreground">
+                                ₦{(req.fee_amount ?? 0).toLocaleString()}
+                              </p>
+                              <p className="text-muted-foreground">
+                                {((req.fee_rate ?? 0) * 100).toFixed(0)}%
+                              </p>
                             </TableCell>
                             <TableCell className="capitalize">
                               {req.wallet_type?.replace(/_/g, " ")}
@@ -166,19 +199,21 @@ const PayoutsTab = () => {
                                       size="sm"
                                       variant="outline"
                                       className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                      onClick={() => handleStatusUpdate(req.id, "approved")}
+                                      onClick={() => setConfirmAction({ id: req.id, status: "approve" })}
                                       title="Approve"
+                                      disabled={processingId === req.id}
                                     >
-                                      <CheckCircle className="h-4 w-4" />
+                                      {processingId === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                                     </Button>
                                     <Button
                                       size="sm"
                                       variant="outline"
                                       className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                      onClick={() => handleStatusUpdate(req.id, "rejected")}
+                                      onClick={() => setConfirmAction({ id: req.id, status: "reject" })}
                                       title="Reject"
+                                      disabled={processingId === req.id}
                                     >
-                                      <XCircle className="h-4 w-4" />
+                                      {processingId === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                                     </Button>
                                   </>
                                 )}
@@ -199,6 +234,34 @@ const PayoutsTab = () => {
           <DepositRequestsManager />
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction?.status === "approve" ? "Approve Withdrawal" : "Reject Withdrawal"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction?.status === "approve"
+                ? "The net amount will be paid to the user's bank account and the held funds finalised."
+                : "The full requested amount will be returned to the user's wallet."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={confirmAction?.status === "approve" ? "default" : "destructive"}
+              onClick={() => confirmAction && handleStatusUpdate(confirmAction.id, confirmAction.status)}
+              disabled={processingId !== null}
+            >
+              {processingId ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Confirm {confirmAction?.status === "approve" ? "Approval" : "Rejection"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, User, ArrowLeft, Loader2, LogIn, Sparkles, ArrowUp, RotateCcw, Award, Crown, Lock, CheckCircle } from "lucide-react";
+import { Send, Bot, User, ArrowLeft, Loader2, LogIn, Sparkles, ArrowUp, RotateCcw, Award, Crown, Lock, CheckCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -69,6 +69,7 @@ const FinancialTutor = () => {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [topQuery, setTopQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showVettingPrompt, setShowVettingPrompt] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -624,6 +625,38 @@ const FinancialTutor = () => {
           </div>
         </div>
       </header>
+
+      {/* Top Search Bar */}
+      <div className="px-4 pt-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!topQuery.trim()) return;
+            handleSend(topQuery.trim());
+            setTopQuery("");
+          }}
+          className="max-w-3xl mx-auto w-full"
+        >
+          <div className="relative group">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-accent/20 rounded-full blur-xl group-hover:blur-2xl transition-all opacity-50" />
+            <div className="relative flex gap-2 bg-card/80 backdrop-blur-sm rounded-full p-2 border border-border shadow-lg">
+              <div className="flex items-center gap-2 pl-4 text-primary">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <Input
+                value={topQuery}
+                onChange={(e) => setTopQuery(e.target.value)}
+                placeholder="Ask our AI Financial Tutor anything..."
+                className="flex-1 min-w-0 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/70"
+              />
+              <Button type="submit" variant="hero" className="rounded-full px-6" disabled={!topQuery.trim() || isLoading}>
+                <Search className="w-4 h-4 mr-2" />
+                Ask
+              </Button>
+            </div>
+          </div>
+        </form>
+      </div>
 
       {/* Chat Area */}
       <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">

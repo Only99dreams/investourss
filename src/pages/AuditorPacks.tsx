@@ -17,6 +17,7 @@ import { DEFAULT_ACCESS, type AuditAccess } from "@/lib/auditor";
 import { cn } from "@/lib/utils";
 
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
+const VAT_RATE = 0.075;
 
 interface CreditPack {
   id: string;
@@ -34,6 +35,7 @@ interface PackOrder {
   pack_name: string;
   credits: number;
   amount: number;
+  vat_amount?: number;
   reference: string;
   status: string;
   created_at: string;
@@ -162,14 +164,17 @@ const AuditorPacks = () => {
 
       const reference = result.reference ?? "";
       const amount = result.amount ?? pack.price;
-      const amountKobo = Math.round(amount * 100); // Paystack uses kobo
+      const vatAmount = Math.round(amount * VAT_RATE);
+      const totalWithVat = amount + vatAmount;
+      const amountKobo = Math.round(totalWithVat * 100); // Paystack uses kobo
 
       setPendingOrder({
         id: result.order_id ?? "",
         pack_id: pack.id,
         pack_name: result.pack_name ?? pack.name,
         credits: result.credits ?? pack.credits,
-        amount,
+        amount: totalWithVat,
+        vat_amount: vatAmount,
         reference,
         status: "pending",
         created_at: new Date().toISOString(),
@@ -246,6 +251,7 @@ const AuditorPacks = () => {
                       <span className="text-3xl font-bold">₦{pack.price.toLocaleString()}</span>
                       <span className="text-muted-foreground text-sm"> one-time</span>
                     </div>
+                    <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                   </CardHeader>
                   <CardContent className="flex flex-col flex-1">
                     <ul className="space-y-2 text-sm flex-1 mb-4">
@@ -288,11 +294,25 @@ const AuditorPacks = () => {
                 Complete Your Payment
               </CardTitle>
               <CardDescription>
-                Pay <strong>₦{pendingOrder.amount.toLocaleString()}</strong> for {pendingOrder.pack_name} securely via
+                Pay <strong>₦{pendingOrder.amount.toLocaleString()}</strong> (incl. 7.5% VAT) for {pendingOrder.pack_name} securely via
                 Paystack — your credits activate instantly.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="rounded-lg border bg-card p-4 text-sm space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{pendingOrder.pack_name}:</span>
+                  <span>₦{Math.round(pendingOrder.amount - (pendingOrder.vat_amount ?? 0)).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">VAT (7.5%):</span>
+                  <span>₦{(pendingOrder.vat_amount ?? 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-bold border-t border-primary/10 pt-1.5 mt-1.5">
+                  <span>Total Payable:</span>
+                  <span className="text-primary">₦{pendingOrder.amount.toLocaleString()}</span>
+                </div>
+              </div>
               <div className="rounded-lg border bg-card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground mb-1">Your order reference</p>
