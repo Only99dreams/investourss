@@ -187,9 +187,10 @@ export function WalletsSection() {
       fetchWallet();
     } catch (error) {
       console.error("Error requesting withdrawal:", error);
+      const message = (error as { message?: string })?.message;
       toast({
         title: "Error",
-        description: "Failed to submit withdrawal request",
+        description: message || "Failed to submit withdrawal request",
         variant: "destructive",
       });
     }
