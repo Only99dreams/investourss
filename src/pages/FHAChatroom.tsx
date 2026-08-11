@@ -203,16 +203,7 @@ const FHAChatroom = () => {
   };
 
   useEffect(() => {
-  if (accessLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!isEligible) {
-      setIsLoading(false);
+    if (accessLoading || !isEligible) {
       return;
     }
     fetchPosts();
@@ -456,6 +447,14 @@ const FHAChatroom = () => {
     const days = Math.floor(hours / 24);
     return `${days}d ago`;
   };
+
+  if (accessLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!isEligible) {
     return (
