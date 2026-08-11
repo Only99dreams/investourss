@@ -201,6 +201,9 @@ ON CONFLICT (season_id, user_id) DO NOTHING;
 -- ============================================================
 -- 8. Leaderboard RPC (reads the active challenge's standings)
 -- ============================================================
+-- The old function returns a different row shape; DROP is required before
+-- changing the OUT-parameter return type.
+DROP FUNCTION IF EXISTS public.get_tutor_leaderboard();
 CREATE OR REPLACE FUNCTION public.get_tutor_leaderboard()
 RETURNS TABLE (
   user_id uuid,
@@ -328,23 +331,29 @@ ALTER TABLE public.challenge_seasons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.challenge_leaderboard ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.challenge_leaderboard_archive ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can read challenge seasons" ON public.challenge_seasons;
 CREATE POLICY "Anyone can read challenge seasons"
   ON public.challenge_seasons FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admins manage challenge seasons" ON public.challenge_seasons;
 CREATE POLICY "Admins manage challenge seasons"
   ON public.challenge_seasons FOR ALL
   USING (public.has_role(auth.uid(), 'admin'));
 
+DROP POLICY IF EXISTS "Anyone can read challenge leaderboard" ON public.challenge_leaderboard;
 CREATE POLICY "Anyone can read challenge leaderboard"
   ON public.challenge_leaderboard FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admins manage challenge leaderboard" ON public.challenge_leaderboard;
 CREATE POLICY "Admins manage challenge leaderboard"
   ON public.challenge_leaderboard FOR ALL
   USING (public.has_role(auth.uid(), 'admin'));
 
+DROP POLICY IF EXISTS "Anyone can read challenge archive" ON public.challenge_leaderboard_archive;
 CREATE POLICY "Anyone can read challenge archive"
   ON public.challenge_leaderboard_archive FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admins manage challenge archive" ON public.challenge_leaderboard_archive;
 CREATE POLICY "Admins manage challenge archive"
   ON public.challenge_leaderboard_archive FOR ALL
   USING (public.has_role(auth.uid(), 'admin'));
