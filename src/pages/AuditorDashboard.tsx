@@ -145,7 +145,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
   }
 
   const content = (
-    <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
+    <main className="flex-1 container mx-auto px-4 pt-24 md:pt-28 pb-8 max-w-6xl">
       {/* Hero / summary card */}
       {!loading && latestAudit && statusMeta && (
         <motion.div

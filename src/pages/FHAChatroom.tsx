@@ -424,7 +424,7 @@ const FHAChatroom = () => {
         </div>
 
         <Header />
-        <main className="container mx-auto px-4 py-16 relative z-10 flex-1">
+        <main className="container mx-auto px-4 pt-24 md:pt-28 pb-16 relative z-10 flex-1">
           <div className="max-w-2xl mx-auto text-center">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <Shield className="w-8 h-8 text-primary" />
@@ -465,7 +465,7 @@ const FHAChatroom = () => {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8 relative z-10 flex-1">
+      <main className="container mx-auto px-4 pt-24 md:pt-28 pb-8 relative z-10 flex-1">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

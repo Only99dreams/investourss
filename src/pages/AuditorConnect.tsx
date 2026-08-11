@@ -433,7 +433,7 @@ const AuditorConnect = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <main className="flex-1 container mx-auto px-4 py-10 max-w-4xl">
+      <main className="flex-1 container mx-auto px-4 pt-24 md:pt-28 pb-10 max-w-4xl">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <Button variant="ghost" size="sm" onClick={() => navigate("/auditor")} className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to AI Financial Auditor

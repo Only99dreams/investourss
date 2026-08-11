@@ -77,7 +77,7 @@ const SubscriptionPage = () => {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-4xl">
+        <main className="container mx-auto px-4 sm:px-6 pt-24 md:pt-28 pb-6 sm:pb-8 max-w-4xl">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -199,7 +199,7 @@ const SubscriptionPage = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto px-4 sm:px-6 py-8 sm:py-12 md:py-16 max-w-5xl">
+      <main className="container mx-auto px-4 sm:px-6 pt-24 md:pt-28 pb-8 sm:pb-12 md:pb-16 max-w-5xl">
         {/* Upgrade Banner for existing subscribers */}
         {isUpgrading && (
           <motion.div

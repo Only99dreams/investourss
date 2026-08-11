@@ -547,7 +547,7 @@ const BusinessPlanGenerator = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto px-4 py-8 md:py-12 max-w-5xl">
+      <main className="container mx-auto px-4 pt-24 md:pt-28 pb-8 md:pb-12 max-w-5xl">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <Button variant="ghost" onClick={() => navigate('/home')} className="mb-4">
