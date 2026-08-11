@@ -108,7 +108,7 @@ const AmbassadorApplyPage = () => {
     ? "Sign In to Apply"
     : isApplying
       ? "Applying..."
-      : profile?.user_tier === "premium" || isActiveSubscriber(profile)
+      : isActiveSubscriber(profile) || (profile?.audit_credits ?? 0) > 0
         ? "Activate Ambassador Status"
         : "Apply Now";
 
@@ -322,7 +322,7 @@ const AmbassadorApplyPage = () => {
               </Button>
               {user && (
                 <p className="text-sm text-primary-foreground/70 mt-3">
-                  {isActiveSubscriber(profile) || profile?.user_tier === "premium"
+                  {isActiveSubscriber(profile) || (profile?.audit_credits ?? 0) > 0
                     ? "You're eligible to activate your ambassador status."
                     : "Maintain an active subscription or audit credits to qualify."}
                 </p>
