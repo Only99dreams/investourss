@@ -157,9 +157,9 @@ const LeaderboardTab = () => {
                           <p className="font-medium">{entry.full_name || "Anonymous"}</p>
                           <p className="text-xs text-muted-foreground">{entry.email}</p>
                         </TableCell>
-                        <TableCell>{entry.funding_readiness_score}/100</TableCell>
-                        <TableCell>{entry.xp_total.toLocaleString()}</TableCell>
-                        <TableCell className="font-bold">{entry.composite_score.toLocaleString()} pts</TableCell>
+                        <TableCell>{entry.funding_readiness_score ?? 0}/100</TableCell>
+                        <TableCell>{(entry.xp_total ?? 0).toLocaleString()}</TableCell>
+                        <TableCell className="font-bold">{(entry.composite_score ?? 0).toLocaleString()} pts</TableCell>
                       </TableRow>
                     ))
                   )}

@@ -119,7 +119,7 @@ function TutorLeaderboard({ entries }: { entries: TutorLeaderboardEntry[] }) {
                       <Badge variant="outline" className={cn("text-xs border-0", levelColors[entry.level] || "bg-muted text-muted-foreground")}>
                         {entry.level}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">Funding {entry.funding_readiness_score}/100</span>
+                      <span className="text-xs text-muted-foreground">Funding {(entry.funding_readiness_score ?? 0)}/100</span>
                       <span className="text-xs text-muted-foreground">•</span>
                       <span className="text-xs text-muted-foreground">{entry.xp_total.toLocaleString()} XP</span>
                       {entry.streak_days > 0 && (
@@ -128,7 +128,7 @@ function TutorLeaderboard({ entries }: { entries: TutorLeaderboardEntry[] }) {
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-foreground">{entry.composite_score.toLocaleString()} pts</p>
+                    <p className="font-bold text-foreground">{(entry.composite_score ?? 0).toLocaleString()} pts</p>
                     {Array.isArray(entry.badges) && entry.badges.length > 0 && (
                       <p className="text-xs text-muted-foreground">{entry.badges.length} badge{entry.badges.length !== 1 ? "s" : ""}</p>
                     )}
@@ -171,8 +171,8 @@ function PastChallenges({ history }: { history: ChallengeHistoryEntry[] }) {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold">{entry.composite_score.toLocaleString()} pts</p>
-                  <p className="text-xs text-muted-foreground">Funding {entry.funding_readiness_score}/100 · {entry.xp_total} XP</p>
+                  <p className="font-bold">{(entry.composite_score ?? 0).toLocaleString()} pts</p>
+                  <p className="text-xs text-muted-foreground">Funding {entry.funding_readiness_score ?? 0}/100 · {entry.xp_total ?? 0} XP</p>
                 </div>
               </div>
             ))}
@@ -346,7 +346,7 @@ export function LeaderboardSection() {
               <div>
                 <p className="text-xs text-muted-foreground">Your Score</p>
                 <p className="text-lg font-bold text-foreground">
-                  {myEntry ? `${myEntry.composite_score.toLocaleString()} pts` : "0 pts"}
+                  {myEntry ? `${(myEntry.composite_score ?? 0).toLocaleString()} pts` : "0 pts"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {myRank ? `Current rank #${myRank}` : "Not ranked yet"}
