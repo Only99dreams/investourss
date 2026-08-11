@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Footer } from "@/components/ui/Footer";
 import { AMBASSADOR_TIERS, formatNaira } from "@/lib/ambassadorTiers";
+import { isActiveSubscriber } from "@/lib/subscription";
 import Header from "@/components/Header";
 
 const WhoCanJoinSection = ({ items }: { items: string[] }) => (
@@ -107,7 +108,7 @@ const AmbassadorApplyPage = () => {
     ? "Sign In to Apply"
     : isApplying
       ? "Applying..."
-      : profile?.user_tier === "premium" || profile?.has_active_subscription
+      : profile?.user_tier === "premium" || isActiveSubscriber(profile)
         ? "Activate Ambassador Status"
         : "Apply Now";
 
@@ -321,7 +322,7 @@ const AmbassadorApplyPage = () => {
               </Button>
               {user && (
                 <p className="text-sm text-primary-foreground/70 mt-3">
-                  {profile?.has_active_subscription || profile?.user_tier === "premium"
+                  {isActiveSubscriber(profile) || profile?.user_tier === "premium"
                     ? "You're eligible to activate your ambassador status."
                     : "Maintain an active subscription or audit credits to qualify."}
                 </p>
