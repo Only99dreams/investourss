@@ -49,20 +49,31 @@ const PayoutsTab = () => {
 
       const userIds = (data || []).map((r) => r.user_id).filter(Boolean);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let profilesMap: Record<string, any> = {};
+      let usersMap: Record<string, any> = {};
       if (userIds.length > 0) {
-        const { data: profilesData, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, full_name, email, bank_name, bank_account_number")
-          .in("id", userIds);
-        if (profilesError) throw profilesError;
-        profilesMap = Object.fromEntries(
-          (profilesData || []).map((p) => [p.id, p])
+        const [profilesRes, walletsRes] = await Promise.all([
+          supabase.from("profiles").select("id, full_name, email").in("id", userIds),
+          supabase.from("wallets").select("user_id, bank_name, bank_account_number").in("user_id", userIds),
+        ]);
+        if (profilesRes.error) throw profilesRes.error;
+        if (walletsRes.error) throw walletsRes.error;
+
+        const profileById = Object.fromEntries(
+          (profilesRes.data || []).map((p) => [p.id, p])
+        );
+        const walletByUser = Object.fromEntries(
+          (walletsRes.data || []).map((w) => [w.user_id, w])
+        );
+        usersMap = Object.fromEntries(
+          userIds.map((uid) => [
+            uid,
+            { ...(profileById[uid] || {}), ...(walletByUser[uid] || {}) },
+          ])
         );
       }
 
       setWithdrawalRequests(
-        (data || []).map((r) => ({ ...r, user: profilesMap[r.user_id] }))
+        (data || []).map((r) => ({ ...r, user: usersMap[r.user_id] }))
       );
     } catch (error) {
       console.error("Error fetching payout requests:", error);
