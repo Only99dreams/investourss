@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -105,9 +105,6 @@ const LeaderboardTab = () => {
               <Trophy className="w-5 h-5 text-primary" />
               AI Challenger Leaderboard
             </CardTitle>
-            <CardDescription>
-              Ranked by funding readiness score (heavier) + AI Tutor XP (lighter)
-            </CardDescription>
             {season && (
               <p className="text-sm text-muted-foreground mt-2">
                 Current challenge: <Badge variant="secondary">{season.name}</Badge>{" "}

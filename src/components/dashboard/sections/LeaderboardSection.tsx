@@ -74,9 +74,6 @@ function TutorLeaderboard({ entries }: { entries: TutorLeaderboardEntry[] }) {
           <Trophy className="w-5 h-5 text-primary" />
           Top Performers
         </CardTitle>
-        <CardDescription>
-          Ranked by funding readiness score (heavier) + AI Tutor XP (lighter)
-        </CardDescription>
       </CardHeader>
       <CardContent>
         {entries.length === 0 ? (
