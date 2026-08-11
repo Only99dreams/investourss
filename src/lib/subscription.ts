@@ -3,6 +3,10 @@ export interface SubscriberLike {
   subscription_expires_at?: string | null;
 }
 
+export const isPremiumTier = (
+  profile: { user_tier?: string | null } | null | undefined,
+): boolean => profile?.user_tier === "premium" || profile?.user_tier === "exclusive";
+
 export const isActiveSubscriber = (profile: SubscriberLike | null | undefined): boolean => {
   if (!profile) return false;
 

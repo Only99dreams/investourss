@@ -1,7 +1,8 @@
 -- Unified subscriber access
 --
 -- Every ACTIVE subscriber gets access to everything: AI Auditor, FHA Chatroom
--- and the Ambassadors programme.
+-- and the Ambassadors programme. Users on the premium/exclusive tier are given
+-- the same access as active subscribers.
 --
 -- A subscription counts as ACTIVE when EITHER:
 --   * has_active_subscription = TRUE AND (subscription_expires_at IS NULL OR
@@ -31,7 +32,8 @@ BEGIN
   SELECT
     ((COALESCE(p.has_active_subscription, FALSE)
        AND (p.subscription_expires_at IS NULL OR p.subscription_expires_at > now()))
-     OR (p.subscription_expires_at IS NOT NULL AND p.subscription_expires_at > now())),
+     OR (p.subscription_expires_at IS NOT NULL AND p.subscription_expires_at > now())
+     OR COALESCE(p.user_tier, 'free') IN ('premium', 'exclusive')),
     p.audit_credits,
     p.audit_credits_expires_at
   INTO v_sub, v_credits, v_credit_expires
@@ -91,6 +93,8 @@ BEGIN
     (COALESCE(p.has_active_subscription, FALSE) AND (p.subscription_expires_at IS NULL OR p.subscription_expires_at > now()))
     OR
     (p.subscription_expires_at IS NOT NULL AND p.subscription_expires_at > now())
+    OR
+    COALESCE(p.user_tier, 'free') IN ('premium', 'exclusive')
   ) INTO v_sub
   FROM profiles p
   WHERE p.id = v_user_id;

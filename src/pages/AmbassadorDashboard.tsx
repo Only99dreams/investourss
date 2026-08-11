@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import {
   AMBASSADOR_TIERS, tierProgress, formatNaira,
 } from "@/lib/ambassadorTiers";
-import { isActiveSubscriber } from "@/lib/subscription";
+import { isActiveSubscriber, isPremiumTier } from "@/lib/subscription";
 import investoursLogo from "@/assets/investours-logo.png";
 
 interface AmbassadorStats {
@@ -138,7 +138,7 @@ const AmbassadorDashboard = () => {
   };
 
   const isEligible =
-    isActiveSubscriber(profile) || (profile?.audit_credits ?? 0) > 0;
+    isActiveSubscriber(profile) || isPremiumTier(profile) || (profile?.audit_credits ?? 0) > 0;
 
   if (authLoading) {
     return (

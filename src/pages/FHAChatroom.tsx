@@ -37,7 +37,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail } from "@/lib/utils";
 import { LinkifiedText } from "@/lib/LinkifiedText";
 import { DEFAULT_ACCESS, type AuditAccess } from "@/lib/auditor";
-import { isActiveSubscriber } from "@/lib/subscription";
+import { isActiveSubscriber, isPremiumTier } from "@/lib/subscription";
 
 const sendNotification = (payload: Record<string, unknown>) => {
   supabase.functions.invoke('send-notification', { body: payload }).catch(() => {});
@@ -100,6 +100,7 @@ const FHAChatroom = () => {
 
   const isEligible =
     isActiveSubscriber(profile) ||
+    isPremiumTier(profile) ||
     access?.subscription_active === true ||
     (profile?.audit_credits ?? 0) > 0;
 
