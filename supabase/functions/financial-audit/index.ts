@@ -87,7 +87,7 @@ function parseFromText(text: string): {
   const dateRegex = /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/g;
   const amountRegex = /(?:₦|NGN|\u20a6)\s*([\d,]+(?:\.\d{1,2})?)/gi;
   const creditWords = /\b(credit|transfer from|payment received|salary|funding|interest)\b/i;
-  const debitWords = /\b(withdraw|debit|transfer to|pos|atm|bill|airtime|charge|fee|payment to)\b/i;
+  const debitWords = /\b(withdraw|debit|transfer to|transfer of|payment to|outgoing|sent to|charged|deducted|pos|atm|bill|airtime|charge|fee)\b/i;
 
   let lastDate = new Date().toISOString().slice(0, 10);
 
@@ -118,7 +118,7 @@ function parseFromText(text: string): {
     else if (isDebit) type = 'debit';
     else {
       // Default: "Alert: Withdrawal" / "Alert: Transfer" lines are debits unless "Credit"
-      type = /\b(debit|withdrawal|transfer out|payment)\b/i.test(line) ? 'debit' : 'credit';
+      type = /\b(debit|withdrawal|transfer out|transfer of|outgoing|sent|charged|deducted|payment)\b/i.test(line) ? 'debit' : 'credit';
     }
 
     const description = line
@@ -133,6 +133,7 @@ function parseFromText(text: string): {
       description: description || (type === 'credit' ? 'Credit received' : 'Debit'),
       amount: Math.round(amount * 100) / 100,
       type,
+      category: guessCategory(description),
     });
   }
 
@@ -179,17 +180,17 @@ function buildFallbackReport(text: string, accountType: string) {
         sourceAmount: Math.round(t.amount * 100) / 100,
         sourceType: 'debit',
       })),
-    ...(leakages.length === 0
-      ? [{
-          description: 'Bank charges & maintenance fees',
-          amount: Math.round(totalExpenses * 0.015 * 100) / 100,
-          category: 'charges',
-          transactionDate: periodEnd,
-          sourceAmount: Math.round(totalExpenses * 0.015 * 100) / 100,
-          sourceType: 'debit',
-        }]
-      : []),
   ];
+  if (recoverable.length === 0) {
+    recoverable.push({
+      description: 'Bank charges & maintenance fees',
+      amount: Math.round(totalExpenses * 0.015 * 100) / 100,
+      category: 'charges',
+      transactionDate: periodEnd,
+      sourceAmount: Math.round(totalExpenses * 0.015 * 100) / 100,
+      sourceType: 'debit',
+    });
+  }
 
   const recoverableAmount = recoverable.reduce((s, r) => s + r.amount, 0);
 
@@ -300,25 +301,31 @@ function buildFallbackRecommendations(
   return recs;
 }
 
-function clampReport(r: any, accountType: string) {
+type AiRecord = { [key: string]: unknown };
+
+function clampReport(r: AiRecord, accountType: string) {
   const fallback = buildFallbackReport('', accountType);
+  const totalIncome = Math.max(0, Number(r.totalIncome) || 0);
+  const totalExpenses = Math.max(0, Number(r.totalExpenses) || 0);
+  const cashFlow = totalIncome - totalExpenses;
+  const savingsRate = totalIncome > 0 ? Math.max(0, Math.min(100, (cashFlow / totalIncome) * 100)) : 0;
   return {
-    periodStart: r.periodStart || fallback.periodStart,
-    periodEnd: r.periodEnd || fallback.periodEnd,
+    periodStart: typeof r.periodStart === 'string' ? r.periodStart : fallback.periodStart,
+    periodEnd: typeof r.periodEnd === 'string' ? r.periodEnd : fallback.periodEnd,
     score: Math.max(0, Math.min(100, Math.round(Number(r.score) || 0))),
-    healthStatus: ['excellent', 'good', 'needs_attention', 'critical'].includes(r.healthStatus)
+    healthStatus: ['excellent', 'good', 'needs_attention', 'critical'].includes(r.healthStatus as string)
       ? r.healthStatus
       : 'critical',
-    totalIncome: Math.max(0, Number(r.totalIncome) || 0),
-    totalExpenses: Math.max(0, Number(r.totalExpenses) || 0),
-    cashFlow: Number(r.cashFlow) || 0,
-    savingsRate: Math.max(0, Math.min(100, Number(r.savingsRate) || 0)),
+    totalIncome,
+    totalExpenses,
+    cashFlow,
+    savingsRate,
     recoverableAmount: Math.max(0, Number(r.recoverableAmount) || 0),
     summary: r.summary || {},
     transactions: Array.isArray(r.transactions) ? r.transactions.slice(0, 300) : [],
     leakages: Array.isArray(r.leakages) ? r.leakages.slice(0, 20) : [],
     recoverable: Array.isArray(r.recoverable)
-      ? r.recoverable.slice(0, 20).map((x: any) => ({
+      ? r.recoverable.slice(0, 20).map((x: { [key: string]: unknown }) => ({
           description: String(x?.description || 'Fees / charges'),
           amount: Math.max(0, Number(x?.amount) || 0),
           category: String(x?.category || 'charges'),
@@ -362,7 +369,7 @@ async function callAI(text: string, sourceType: string, accountType: string) {
 
   const data = await response.json();
   const content = data.candidates?.[0]?.content?.parts
-    ?.map((p: any) => p.text || "")
+    ?.map((p: { text?: string }) => p.text || "")
     .join("") || '';
   const start = content.indexOf('{');
   const end = content.lastIndexOf('}');
@@ -390,24 +397,26 @@ serve(async (req) => {
     try {
       const raw = await callAI(text, sourceType, accountType);
       report = clampReport(raw, accountType);
-    } catch (err: any) {
+    } catch (err) {
       // AI gateway failure -> deterministic fallback so the audit still completes.
-      if (err?.status === 429 || err?.status === 402) {
-        return new Response(JSON.stringify({ success: false, error: err.message }), {
-          status: err.status,
+      const e = err as { status?: number; message?: string };
+      if (e?.status === 429 || e?.status === 402) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), {
+          status: e.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      console.warn('AI analysis failed, using fallback parser:', err?.message || err);
+      console.warn('AI analysis failed, using fallback parser:', e?.message || e);
       report = buildFallbackReport(text, accountType);
     }
 
     return new Response(JSON.stringify({ success: true, report }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: any) {
-    const status = error?.status || 500;
-    const message = error?.message || error?.toString() || "Unknown error occurred";
+  } catch (error) {
+    const e = error as { status?: number; message?: string };
+    const status = e?.status || 500;
+    const message = e?.message || (typeof error === 'string' ? error : "Unknown error occurred");
     return new Response(JSON.stringify({ error: message }), {
       status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
