@@ -22,7 +22,7 @@ Rules:
    - totalExpenses: sum of debits
    - cashFlow = totalIncome - totalExpenses
    - savingsRate = (cashFlow / totalIncome * 100) clamped 0-100
-   - recoverableAmount: your estimate of money recoverable through refunds, bank overcharges, duplicated charges, failed POS double-debits, subscription over-billing, forgotten/missed reversals, and hidden charges (ATM fees, data fees, account maintenance, excess charges). Be conservative and evidence-based.
+   - recoverableAmount: your estimate of money recoverable through refunds, bank overcharges, duplicated charges, failed POS double-debits, subscription over-billing, forgotten/missed reversals, and hidden charges (ATM fees, data fees, account maintenance, excess charges). Be conservative and evidence-based. recoverableAmount MUST be the exact sum of the "amount" values in the "recoverable" array.
 4. Detect LEAKAGES: recurring unnecessary costs, duplicate charges, bank charges/fees, dormant subscriptions, ATM/withdrawal fees, high transfer fees, POS double-charges.
 5. For every item in "recoverable", include "sourceAmount" (the full original transaction amount that caused the leakage) and "sourceType" ("debit" for money out) so the user can trace each recoverable back to the exact transaction in their statement.
 6. Score (0-100) the financial health using this rubric:
@@ -309,6 +309,23 @@ function clampReport(r: AiRecord, accountType: string) {
   const totalExpenses = Math.max(0, Number(r.totalExpenses) || 0);
   const cashFlow = totalIncome - totalExpenses;
   const savingsRate = totalIncome > 0 ? Math.max(0, Math.min(100, (cashFlow / totalIncome) * 100)) : 0;
+  const recoverable = Array.isArray(r.recoverable)
+    ? r.recoverable.slice(0, 20).map((x: { [key: string]: unknown }) => {
+        const sourceAmount = x?.sourceAmount != null ? Math.max(0, Number(x.sourceAmount) || 0) : undefined;
+        const amount = sourceAmount != null
+          ? Math.max(0, Math.min(Number(x?.amount) || 0, sourceAmount))
+          : Math.max(0, Number(x?.amount) || 0);
+        return {
+          description: String(x?.description || 'Fees / charges'),
+          amount: Math.round(amount * 100) / 100,
+          category: String(x?.category || 'charges'),
+          transactionDate: x?.transactionDate || undefined,
+          sourceAmount,
+          sourceType: x?.sourceType === 'credit' ? 'credit' : 'debit',
+        };
+      })
+    : [];
+  const recoverableAmount = Math.round(recoverable.reduce((s, x) => s + x.amount, 0) * 100) / 100;
   return {
     periodStart: typeof r.periodStart === 'string' ? r.periodStart : fallback.periodStart,
     periodEnd: typeof r.periodEnd === 'string' ? r.periodEnd : fallback.periodEnd,
@@ -320,20 +337,11 @@ function clampReport(r: AiRecord, accountType: string) {
     totalExpenses,
     cashFlow,
     savingsRate,
-    recoverableAmount: Math.max(0, Number(r.recoverableAmount) || 0),
+    recoverableAmount,
     summary: r.summary || {},
     transactions: Array.isArray(r.transactions) ? r.transactions.slice(0, 300) : [],
     leakages: Array.isArray(r.leakages) ? r.leakages.slice(0, 20) : [],
-    recoverable: Array.isArray(r.recoverable)
-      ? r.recoverable.slice(0, 20).map((x: { [key: string]: unknown }) => ({
-          description: String(x?.description || 'Fees / charges'),
-          amount: Math.max(0, Number(x?.amount) || 0),
-          category: String(x?.category || 'charges'),
-          transactionDate: x?.transactionDate || undefined,
-          sourceAmount: x?.sourceAmount != null ? Math.max(0, Number(x.sourceAmount) || 0) : undefined,
-          sourceType: x?.sourceType === 'credit' ? 'credit' : 'debit',
-        }))
-      : [],
+    recoverable,
     recommendations: Array.isArray(r.recommendations) ? r.recommendations.slice(0, 8) : [],
     monthlyScores: Array.isArray(r.monthlyScores) ? r.monthlyScores : fallback.monthlyScores,
   };
@@ -355,7 +363,7 @@ async function callAI(text: string, sourceType: string, accountType: string) {
         contents: [
           { role: "user", parts: [{ text: buildUserPrompt({ text, sourceType, accountType }) }] },
         ],
-        generationConfig: { responseMimeType: "application/json" },
+        generationConfig: { responseMimeType: "application/json", temperature: 0 },
       }),
     },
   );
