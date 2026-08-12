@@ -317,9 +317,6 @@ const AmbassadorApplyPage = () => {
           </div>
         </motion.section>
 
-        {/* FHA Chatroom Hub */}
-        <FHAChatroomHub />
-
         {/* CTA */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
@@ -352,7 +349,7 @@ const AmbassadorApplyPage = () => {
               {user && (
                 <p className="text-sm text-primary-foreground/70 mt-3">
                   {isActivated
-                    ? "You're now an FHA member. Post in the FHA Chatroom above!"
+                    ? "You're now an FHA member. Post in the FHA Chatroom below!"
                     : eligible
                       ? "You're eligible to activate your ambassador status."
                       : "Maintain an active subscription or audit credits to qualify."}
@@ -361,6 +358,9 @@ const AmbassadorApplyPage = () => {
             </CardContent>
           </Card>
         </motion.section>
+
+        {/* FHA Chatroom Hub */}
+        <FHAChatroomHub />
       </div>
 
       <Footer />
