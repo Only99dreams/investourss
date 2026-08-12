@@ -82,6 +82,7 @@ const AmbassadorApplyPage = () => {
           title: "Welcome, Ambassador!",
           description: `${message} Referral code: ${code ?? "N/A"}`,
         });
+        navigate("/fha-chatroom");
       } else {
         toast({
           title: "Not Yet Eligible",
