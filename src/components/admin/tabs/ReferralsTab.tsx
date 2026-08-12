@@ -22,17 +22,32 @@ const ReferralsTab = () => {
 
   const fetchReferrals = async () => {
     try {
-      // Assuming referral_stats is a view or table that aggregates referral data
-      const { data, error } = await supabase
+      // referral_stats has no FK to profiles, so PostgREST can't embed it.
+      // Fetch stats and profiles separately, then join client-side.
+      const { data: statsData, error } = await supabase
         .from("referral_stats")
-        .select(`
-          *,
-          profile:profiles(full_name, email, referral_code)
-        `)
+        .select("*")
         .order("total_signups", { ascending: false });
 
       if (error) throw error;
-      setReferrals(data || []);
+
+      const rows = statsData || [];
+      const userIds = rows.map((r) => r.user_id).filter(Boolean);
+
+      const { data: profilesData } = userIds.length > 0
+        ? await supabase
+            .from("profiles")
+            .select("id, full_name, email, referral_code")
+            .in("id", userIds)
+        : { data: [] };
+
+      const profilesById = new Map(
+        (profilesData || []).map((p) => [p.id, p])
+      );
+
+      setReferrals(
+        rows.map((r) => ({ ...r, profile: profilesById.get(r.user_id) || null }))
+      );
     } catch (error) {
       console.error("Error fetching referrals:", error);
     } finally {
