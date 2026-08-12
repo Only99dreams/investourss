@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Shield, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -12,6 +12,7 @@ import { Footer } from "@/components/ui/Footer";
 import { AMBASSADOR_TIERS, formatNaira } from "@/lib/ambassadorTiers";
 import { isActiveSubscriber, isPremiumTier } from "@/lib/subscription";
 import Header from "@/components/Header";
+import FHAChatroomHub from "@/components/home/FHAChatroomHub";
 
 const WhoCanJoinSection = ({ items }: { items: string[] }) => (
   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -59,6 +60,20 @@ const AmbassadorApplyPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isApplying, setIsApplying] = useState(false);
+  const [isActivated, setIsActivated] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("ambassadors")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setIsActivated(true);
+      })
+      .catch(() => {});
+  }, [user]);
 
   const handleApply = async () => {
     if (!user) {
@@ -76,13 +91,21 @@ const AmbassadorApplyPage = () => {
       const success = result?.success;
       const code = result?.referral_code ?? undefined;
       const message = result?.message ?? "Unable to activate ambassador status.";
+      const alreadyMember = message.toLowerCase().includes("already registered");
 
       if (success) {
-        toast({
-          title: "Welcome, Ambassador!",
-          description: `${message} Referral code: ${code ?? "N/A"}`,
-        });
-        navigate("/fha-chatroom");
+        setIsActivated(true);
+        if (alreadyMember) {
+          toast({
+            title: "Already a Member",
+            description: "You're already an FHA member. Welcome to the FHA Chatroom!",
+          });
+        } else {
+          toast({
+            title: "Ambassador Activated!",
+            description: `${message} Referral code: ${code ?? "N/A"}`,
+          });
+        }
       } else {
         toast({
           title: "Not Yet Eligible",
@@ -104,13 +127,16 @@ const AmbassadorApplyPage = () => {
   };
 
   const ctaDisabled = !user;
+  const eligible = isActiveSubscriber(profile) || isPremiumTier(profile) || (profile?.audit_credits ?? 0) > 0;
   const ctaLabel = !user
     ? "Sign In to Apply"
     : isApplying
       ? "Applying..."
-      : isActiveSubscriber(profile) || isPremiumTier(profile) || (profile?.audit_credits ?? 0) > 0
-        ? "Activate Ambassador Status"
-        : "Apply Now";
+      : isActivated
+        ? "Ambassador Activated ✓"
+        : eligible
+          ? "Activate Ambassador Status"
+          : "Apply Now";
 
   return (
     <div className="min-h-screen gradient-hero flex flex-col relative overflow-hidden">
@@ -291,6 +317,9 @@ const AmbassadorApplyPage = () => {
           </div>
         </motion.section>
 
+        {/* FHA Chatroom Hub */}
+        <FHAChatroomHub />
+
         {/* CTA */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
@@ -322,9 +351,11 @@ const AmbassadorApplyPage = () => {
               </Button>
               {user && (
                 <p className="text-sm text-primary-foreground/70 mt-3">
-                  {isActiveSubscriber(profile) || isPremiumTier(profile) || (profile?.audit_credits ?? 0) > 0
-                    ? "You're eligible to activate your ambassador status."
-                    : "Maintain an active subscription or audit credits to qualify."}
+                  {isActivated
+                    ? "You're now an FHA member. Post in the FHA Chatroom above!"
+                    : eligible
+                      ? "You're eligible to activate your ambassador status."
+                      : "Maintain an active subscription or audit credits to qualify."}
                 </p>
               )}
             </CardContent>
