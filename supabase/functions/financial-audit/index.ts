@@ -103,14 +103,11 @@ function parseFromText(text: string): {
       if (!isNaN(candidate.getTime())) lastDate = candidate.toISOString().slice(0, 10);
     }
 
-    const amtMatch = line.match(amountRegex);
+    const amtMatch = line.replace(/\bAvail Bal[^.]*\./gi, '').match(amountRegex);
     if (!amtMatch) continue;
 
-    let amount = 0;
-    for (const m of amtMatch) {
-      const parsed = parseFloat(m.replace(/[^\d.]/g, ''));
-      if (!isNaN(parsed) && parsed > amount) amount = parsed;
-    }
+    const parsedAmount = parseFloat(amtMatch[0].replace(/[^\d.]/g, ''));
+    const amount = !isNaN(parsedAmount) ? parsedAmount : 0;
     if (amount <= 0) continue;
 
     const isCredit = creditWords.test(line) && !debitWords.test(line);
