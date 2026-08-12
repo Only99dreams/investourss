@@ -55,6 +55,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
   const { user, profile, isLoading: authLoading } = useAuth();
 
   const [latestAudit, setLatestAudit] = useState<FinancialAudit | null>(null);
+  const [selectedAudit, setSelectedAudit] = useState<FinancialAudit | null>(null);
   const [history, setHistory] = useState<FinancialAudit[]>([]);
   const [timeline, setTimeline] = useState<TimelinePoint[]>([]);
   const [access, setAccess] = useState<AuditAccess>(DEFAULT_ACCESS);
@@ -84,6 +85,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
       const audits = (auditsRes.data ?? []) as FinancialAudit[];
       setLatestAudit(audits[0] ?? null);
       setHistory(audits);
+      setSelectedAudit(null);
 
       const raw = (snapshotsRes.data ?? []) as { snapshot_date: string; score: number }[];
       setTimeline(
@@ -113,38 +115,40 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
     [profile, user]
   );
 
+  const viewingAudit = selectedAudit ?? latestAudit;
+
   const stats = useMemo(() => {
-    if (!latestAudit) return null;
+    if (!viewingAudit) return null;
     return [
       {
         label: "Total Income",
-        value: formatNaira(latestAudit.total_income),
+        value: formatNaira(viewingAudit.total_income),
         icon: TrendingUp,
         accent: "text-green-600 bg-green-50",
       },
       {
         label: "Total Expenses",
-        value: formatNaira(latestAudit.total_expenses),
+        value: formatNaira(viewingAudit.total_expenses),
         icon: TrendingDown,
         accent: "text-red-600 bg-red-50",
       },
       {
         label: "Cash Flow",
-        value: formatNaira(latestAudit.cash_flow),
+        value: formatNaira(viewingAudit.cash_flow),
         icon: Wallet,
-        accent: latestAudit.cash_flow >= 0 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50",
+        accent: viewingAudit.cash_flow >= 0 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50",
       },
       {
         label: "Savings Rate",
-        value: `${Math.round(latestAudit.savings_rate)}%`,
+        value: `${Math.round(viewingAudit.savings_rate)}%`,
         icon: PiggyBank,
         accent: "text-primary bg-primary/10",
       },
     ];
-  }, [latestAudit]);
+  }, [viewingAudit]);
 
-  const statusMeta = latestAudit
-    ? HEALTH_STATUS_META[latestAudit.health_status as keyof typeof HEALTH_STATUS_META] ?? HEALTH_STATUS_META.critical
+  const statusMeta = viewingAudit
+    ? HEALTH_STATUS_META[viewingAudit.health_status as keyof typeof HEALTH_STATUS_META] ?? HEALTH_STATUS_META.critical
     : null;
 
   if (authLoading) {
@@ -158,20 +162,32 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
   const content = (
     <main className="flex-1 container mx-auto px-4 pt-24 md:pt-28 pb-8 max-w-6xl">
       {/* Hero / summary card */}
-      {!loading && latestAudit && statusMeta && (
+      {!loading && viewingAudit && statusMeta && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
+          {selectedAudit && (
+            <div className="flex items-center justify-between mb-3">
+              <Badge variant="secondary" className="gap-1">
+                <History className="w-3 h-3" />
+                Viewing past audit
+              </Badge>
+              <Button variant="outline" size="sm" onClick={() => setSelectedAudit(null)}>
+                <ArrowRight className="w-4 h-4 mr-1 rotate-180" />
+                Back to Latest Audit
+              </Button>
+            </div>
+          )}
           <Card className="border-l-4" style={{ borderLeftColor: statusMeta.hex }}>
             <CardContent className="p-6 flex flex-col md:flex-row items-center gap-6">
-              <HealthScoreGauge score={latestAudit.health_score} status={latestAudit.health_status as never} />
+              <HealthScoreGauge score={viewingAudit.health_score} status={viewingAudit.health_status as never} />
               <div className="flex-1 text-center md:text-left">
                 <Badge variant="outline" className="mb-2">
                   <CalendarClock className="w-3 h-3 mr-1" />
-                  {auditPeriodLabel(latestAudit) || "Last 6 months"} · Last audit{" "}
-                  {new Date(latestAudit.created_at).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}
+                  {auditPeriodLabel(viewingAudit) || "Last 6 months"} · Last audit{" "}
+                  {new Date(viewingAudit.created_at).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}
                 </Badge>
                 <h1 className="text-2xl md:text-3xl font-bold mb-1">Financial Health Dashboard</h1>
                 <p className={cn("font-medium mb-2", statusMeta.color)}>
@@ -185,7 +201,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
                       Run New Audit
                     </Link>
                   </Button>
-                  <Button variant="outline" onClick={() => handleDownloadPdf(latestAudit)}>
+                  <Button variant="outline" onClick={() => handleDownloadPdf(viewingAudit)}>
                     <Download className="w-4 h-4 mr-2" />
                     Download PDF Report
                   </Button>
@@ -196,7 +212,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
               </div>
               <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 p-5 text-center min-w-[200px] w-full md:w-auto">
                 <p className="text-sm text-muted-foreground mb-1">Estimated Recoverable</p>
-                <p className="text-2xl font-bold text-primary">{formatNaira(latestAudit.recoverable_amount)}</p>
+                <p className="text-2xl font-bold text-primary">{formatNaira(viewingAudit.recoverable_amount)}</p>
                 <p className="text-xs text-muted-foreground mt-1">Potential leakage & overcharges</p>
               </div>
             </CardContent>
@@ -205,7 +221,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
       )}
 
       {/* Empty state */}
-      {!loading && !latestAudit && (
+      {!loading && !viewingAudit && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -234,7 +250,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
       )}
 
       {/* Stats */}
-      {!loading && latestAudit && stats && (
+      {!loading && viewingAudit && stats && (
         <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {stats.map((s, i) => (
             <motion.div
@@ -261,7 +277,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
 
       <div className="grid lg:grid-cols-2 gap-6 mb-8">
         {/* Timeline */}
-        {!loading && (timeline.length > 0 || latestAudit) && (
+        {!loading && (timeline.length > 0 || viewingAudit) && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -315,10 +331,16 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
             <CardContent className="space-y-2">
               {history.slice(0, 6).map((a) => {
                 const meta = HEALTH_STATUS_META[a.health_status as keyof typeof HEALTH_STATUS_META] ?? HEALTH_STATUS_META.critical;
+                const isSelected = selectedAudit?.id === a.id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={a.id}
-                    className="flex items-center justify-between p-3 rounded-lg border bg-card/40"
+                    onClick={() => setSelectedAudit(a)}
+                    className={cn(
+                      "w-full flex items-center justify-between p-3 rounded-lg border bg-card/40 text-left transition-colors",
+                      isSelected ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-muted/50",
+                    )}
                   >
                     <div className="flex items-center gap-3">
                       <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm", meta.bg, meta.color)}>
@@ -337,11 +359,20 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
                       <Badge variant={a.is_locked ? "outline" : "default"} className="text-xs">
                         {a.is_locked ? "Locked" : "Full report"}
                       </Badge>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" title="Download PDF report" onClick={() => handleDownloadPdf(a)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="Download PDF report"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadPdf(a);
+                        }}
+                      >
                         <Download className="w-4 h-4" />
                       </Button>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </CardContent>
@@ -350,20 +381,20 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
       </div>
 
       {/* Blurred / full report */}
-      {!loading && latestAudit && (
+      {!loading && viewingAudit && (
         <BlurredReport
-          recoverableAmount={latestAudit.recoverable_amount}
-          isLocked={latestAudit.is_locked}
+          recoverableAmount={viewingAudit.recoverable_amount}
+          isLocked={viewingAudit.is_locked}
         />
       )}
 
       {/* Full report for unlocked audits */}
-      {!loading && latestAudit && !latestAudit.is_locked && (
-        <AuditDetail audit={latestAudit} />
+      {!loading && viewingAudit && !viewingAudit.is_locked && (
+        <AuditDetail audit={viewingAudit} />
       )}
 
       {/* Upgrade prompt when no credits/subscription left */}
-      {!loading && latestAudit && !access.subscription_active && access.credits_remaining <= 0 && (
+      {!loading && viewingAudit && !access.subscription_active && access.credits_remaining <= 0 && (
         <div className="mt-6">
           <Card className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
             <CardContent className="p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
