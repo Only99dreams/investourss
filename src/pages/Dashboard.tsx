@@ -153,7 +153,7 @@ const Dashboard = () => {
           } />
           <Route path="/leaderboard" element={
             <>
-              <DashboardHeader title="AI Challenger Leaderboard" onMenuClick={() => setSidebarOpen(true)} />
+              <DashboardHeader title="AI Challenge Leaderboard" onMenuClick={() => setSidebarOpen(true)} />
               <LeaderboardSection />
             </>
           } />

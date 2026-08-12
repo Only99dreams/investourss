@@ -329,7 +329,7 @@ export function LeaderboardSection() {
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">AI Challenger Leaderboard</h2>
+          <h2 className="text-2xl font-bold text-foreground">AI Challenge Leaderboard</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Top performers and followers compete for rewards
           </p>
@@ -358,7 +358,7 @@ export function LeaderboardSection() {
         <TabsList className="w-full">
           <TabsTrigger value="tutor" className="flex-1">
             <Trophy className="w-4 h-4 mr-2" />
-            AI Challengers
+            AI Challenge
           </TabsTrigger>
           <TabsTrigger value="referral" className="flex-1">
             <Users className="w-4 h-4 mr-2" />

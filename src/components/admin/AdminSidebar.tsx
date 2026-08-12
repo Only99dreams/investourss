@@ -51,7 +51,7 @@ const menuItems = [
   { icon: Star, label: "Featured Products", path: "/admin/featured-solutions" },
   { icon: Clock, label: "Audit Orders", path: "/admin/audit-orders" },
   { icon: GraduationCap, label: "Education", path: "/admin/education" },
-  { icon: Trophy, label: "AI Challengers", path: "/admin/leaderboard" },
+  { icon: Trophy, label: "AI Challenge", path: "/admin/leaderboard" },
   { icon: MessageSquare, label: "Opportunity Hub", path: "/admin/community" },
   { icon: Wallet, label: "Wallets", path: "/admin/wallets" },
   { icon: Banknote, label: "Deposit Requests", path: "/admin/deposit-requests" },
