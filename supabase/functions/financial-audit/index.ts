@@ -24,7 +24,8 @@ Rules:
    - savingsRate = (cashFlow / totalIncome * 100) clamped 0-100
    - recoverableAmount: your estimate of money recoverable through refunds, bank overcharges, duplicated charges, failed POS double-debits, subscription over-billing, forgotten/missed reversals, and hidden charges (ATM fees, data fees, account maintenance, excess charges). Be conservative and evidence-based.
 4. Detect LEAKAGES: recurring unnecessary costs, duplicate charges, bank charges/fees, dormant subscriptions, ATM/withdrawal fees, high transfer fees, POS double-charges.
-5. Score (0-100) the financial health using this rubric:
+5. For every item in "recoverable", include "sourceAmount" (the full original transaction amount that caused the leakage) and "sourceType" ("debit" for money out) so the user can trace each recoverable back to the exact transaction in their statement.
+6. Score (0-100) the financial health using this rubric:
    - 80-100: Excellent (positive cash flow, savings rate > 20%, no worrying leakages)
    - 65-79: Good (positive cash flow, savings rate 10-20%, some minor leakages)
    - 50-64: Needs Attention (thin or negative cash flow, leakages > 5% of expenses)
@@ -46,8 +47,8 @@ Respond with STRICT JSON only, no markdown, no commentary. Shape:
     "topSpendingCategories": [{"name": "...", "amount": <number>}]
   },
   "transactions": [{"date": "yyyy-mm-dd", "description": "...", "amount": <number>, "type": "credit|debit", "category": "..."}],
-  "leakages": [{"description": "...", "amount": <number>, "category": "..."}],
-  "recoverable": [{"description": "...", "amount": <number>, "category": "...", "transactionDate": "yyyy-mm-dd"}],
+   "leakages": [{"description": "...", "amount": <number>, "category": "..."}],
+   "recoverable": [{"description": "...", "amount": <number>, "category": "...", "transactionDate": "yyyy-mm-dd", "sourceAmount": <number>, "sourceType": "debit|credit"}],
   "recommendations": [{"title": "...", "description": "...", "category": "leakage|recovery|monitoring|spending"}],
   "monthlyScores": [{"month": "yyyy-mm", "score": <int>}]
 }`;
@@ -178,6 +179,8 @@ function buildFallbackReport(text: string, accountType: string) {
         amount: Math.round(t.amount * 0.5 * 100) / 100,
         category: 'charges',
         transactionDate: t.date,
+        sourceAmount: Math.round(t.amount * 100) / 100,
+        sourceType: 'debit',
       })),
     ...(leakages.length === 0
       ? [{
@@ -185,6 +188,8 @@ function buildFallbackReport(text: string, accountType: string) {
           amount: Math.round(totalExpenses * 0.015 * 100) / 100,
           category: 'charges',
           transactionDate: periodEnd,
+          sourceAmount: Math.round(totalExpenses * 0.015 * 100) / 100,
+          sourceType: 'debit',
         }]
       : []),
   ];
@@ -315,7 +320,16 @@ function clampReport(r: any, accountType: string) {
     summary: r.summary || {},
     transactions: Array.isArray(r.transactions) ? r.transactions.slice(0, 300) : [],
     leakages: Array.isArray(r.leakages) ? r.leakages.slice(0, 20) : [],
-    recoverable: Array.isArray(r.recoverable) ? r.recoverable.slice(0, 20) : [],
+    recoverable: Array.isArray(r.recoverable)
+      ? r.recoverable.slice(0, 20).map((x: any) => ({
+          description: String(x?.description || 'Fees / charges'),
+          amount: Math.max(0, Number(x?.amount) || 0),
+          category: String(x?.category || 'charges'),
+          transactionDate: x?.transactionDate || undefined,
+          sourceAmount: x?.sourceAmount != null ? Math.max(0, Number(x.sourceAmount) || 0) : undefined,
+          sourceType: x?.sourceType === 'credit' ? 'credit' : 'debit',
+        }))
+      : [],
     recommendations: Array.isArray(r.recommendations) ? r.recommendations.slice(0, 8) : [],
     monthlyScores: Array.isArray(r.monthlyScores) ? r.monthlyScores : fallback.monthlyScores,
   };

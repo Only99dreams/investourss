@@ -356,7 +356,7 @@ const AuditorConnect = () => {
       // 5. Save recoverable transactions
       if (Array.isArray(report.recoverable) && report.recoverable.length > 0) {
         await supabase.from("recoverable_transactions").insert(
-          report.recoverable.map((r: { description: string; amount: number; category: string; transactionDate?: string }) => ({
+          report.recoverable.map((r: { description: string; amount: number; category: string; transactionDate?: string; sourceAmount?: number; sourceType?: string }) => ({
             user_id: user.id,
             audit_id: auditRow.id,
             description: r.description,

@@ -436,7 +436,7 @@ const AuditDetail = ({ audit }: { audit: FinancialAudit }) => {
   const report = (audit.report_json ?? {}) as {
     leakages?: { description: string; amount: number; category: string }[];
     recommendations?: { title: string; description: string; category: string }[];
-    recoverable?: { description: string; amount: number; category: string }[];
+    recoverable?: { description: string; amount: number; category: string; transactionDate?: string; sourceAmount?: number; sourceType?: "credit" | "debit" }[];
     summary?: { incomeSources?: { name: string; amount: number }[]; topSpendingCategories?: { name: string; amount: number }[] };
   };
 
@@ -526,20 +526,49 @@ const AuditDetail = ({ audit }: { audit: FinancialAudit }) => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base text-green-700">Recovery Opportunities</CardTitle>
+            <CardTitle className="text-base text-green-700 flex items-center gap-2">
+              <Wallet className="w-4 h-4" />
+              Recovery Opportunities
+            </CardTitle>
+            <CardDescription>
+              Each recoverable is traced back to the exact transaction it came from.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {(report.recoverable ?? []).map((r, i) => (
-              <div key={i} className="flex items-center justify-between rounded-lg border bg-green-50/40 p-3">
-                <div>
-                  <p className="text-sm font-medium">{r.description}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{r.category}</p>
-                </div>
-                <span className="text-sm font-semibold text-green-700">{formatNaira(r.amount)}</span>
-              </div>
-            ))}
-            {(report.recoverable ?? []).length === 0 && (
+          <CardContent>
+            {(report.recoverable ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground">No recovery opportunities identified.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm min-w-[520px]">
+                  <thead className="bg-secondary/40 sticky top-0">
+                    <tr>
+                      <th className="text-left py-2 px-3 font-medium">Date</th>
+                      <th className="text-left py-2 px-3 font-medium">Transaction</th>
+                      <th className="text-right py-2 px-3 font-medium">Source Amount</th>
+                      <th className="text-right py-2 px-3 font-medium">Recoverable</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(report.recoverable ?? []).map((r, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="py-2 px-3 whitespace-nowrap text-muted-foreground">
+                          {r.transactionDate ? new Date(`${r.transactionDate}T00:00:00`).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                        </td>
+                        <td className="py-2 px-3">
+                          <p className="font-medium">{r.description}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{r.category}</p>
+                        </td>
+                        <td className="py-2 px-3 text-right text-muted-foreground">
+                          {r.sourceAmount != null ? formatNaira(r.sourceAmount) : "—"}
+                        </td>
+                        <td className="py-2 px-3 text-right font-semibold text-green-700">
+                          {formatNaira(r.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </CardContent>
         </Card>

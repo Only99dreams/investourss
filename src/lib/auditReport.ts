@@ -19,7 +19,7 @@ interface AuditForReport {
 interface ReportJson {
   leakages?: { description: string; amount: number }[];
   recommendations?: { title: string; description: string }[];
-  recoverable?: { description: string; amount: number }[];
+  recoverable?: { description: string; amount: number; category?: string; transactionDate?: string; sourceAmount?: number; sourceType?: string }[];
   summary?: {
     incomeSources?: { name: string; amount: number }[];
     topSpendingCategories?: { name: string; amount: number }[];
@@ -57,6 +57,22 @@ function buildReportHTML(userName: string, audit: AuditForReport, dataSource: st
   const leakageRows = leakages.length
     ? leakages.map((l) => `<li>${esc(l.description)} — ${formatNaira(l.amount)}</li>`).join("\n")
     : "<li>No major recurring leakages identified beyond routine bank charges.</li>";
+
+  // Traceable recoverables
+  const recoverables = (report.recoverable ?? []).slice(0, 20);
+  const recoverableRows = recoverables.length
+    ? recoverables
+        .map(
+          (r) => `<tr>
+      <td>${esc(formatDate(r.transactionDate))}</td>
+      <td>${esc(r.description)}</td>
+      <td class="capitalize">${esc(r.category ?? "—")}</td>
+      <td class="num">${r.sourceAmount != null ? formatNaira(r.sourceAmount) : "—"}</td>
+      <td class="num">${formatNaira(r.amount)}</td>
+    </tr>`,
+        )
+        .join("\n")
+    : "";
 
   // Recommendations
   const recommendations = (report.recommendations ?? []).slice(0, 8);
@@ -100,6 +116,11 @@ function buildReportHTML(userName: string, audit: AuditForReport, dataSource: st
     .statement-block .row { display: flex; justify-content: space-between; padding: 4px 0; }
     .statement-block .row.total { border-top: 2px solid #cbd5e1; margin-top: 6px; padding-top: 8px; font-weight: 700; }
     .note { font-size: 9pt; color: #94a3b8; font-style: italic; margin-top: 6px; }
+    .recoverable-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9.5pt; }
+    .recoverable-table th, .recoverable-table td { border: 1px solid #e2e8f0; padding: 6px 8px; text-align: left; }
+    .recoverable-table th { background: #f1f5f9; font-size: 9pt; }
+    .recoverable-table .num { text-align: right; white-space: nowrap; }
+    .recoverable-table .capitalize { text-transform: capitalize; }
     .disclaimer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 9pt; color: #64748b; }
     .powered { text-align: center; margin-top: 28px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 10pt; color: #1a1a2e; }
     .powered p { margin: 2px 0; }
@@ -153,6 +174,25 @@ function buildReportHTML(userName: string, audit: AuditForReport, dataSource: st
     ${leakageRows}
   </ul>
   <p><strong>Estimated Potential Leakage: ${formatNaira(audit.recoverable_amount)}</strong></p>
+
+  ${recoverableRows ? `
+  <h3>5A. TRACEABLE RECOVERABLE TRANSACTIONS</h3>
+  <p>Each recoverable amount below is traced back to the exact transaction that caused it, so you can verify it in your statement and claim it from your bank.</p>
+  <table class="recoverable-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Transaction</th>
+        <th>Category</th>
+        <th>Source Amount</th>
+        <th>Recoverable</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${recoverableRows}
+    </tbody>
+  </table>
+  ` : ""}
 
   <h3>6. AI FINANCIAL HEALTH INSIGHTS</h3>
   <p>${esc(insights)}</p>

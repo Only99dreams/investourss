@@ -29,6 +29,8 @@ export interface AuditorReport {
     amount: number;
     category: string;
     transactionDate?: string;
+    sourceAmount?: number;
+    sourceType?: "credit" | "debit";
   }[];
   recommendations: { title: string; description: string; category: string }[];
   monthlyScores: { month: string; score: number }[];
