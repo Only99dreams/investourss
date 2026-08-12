@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Check, Users, MousePointer, UserCheck, Crown, TrendingUp, Eye, EyeOff, Link2, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
+import { Copy, Check, Users, MousePointer, UserCheck, Crown, TrendingUp, Eye, EyeOff, Link2, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isActiveSubscriber, isPremiumTier } from "@/lib/subscription";
 
@@ -22,7 +22,6 @@ export function ReferralsSection() {
     recurring: 0,
     indirect: 0,
   });
-  const [showEarningsBreakdown, setShowEarningsBreakdown] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showReferralCode, setShowReferralCode] = useState(false);
 
@@ -198,33 +197,34 @@ export function ReferralsSection() {
                   Lifetime referral earnings
                 </p>
               </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowEarningsBreakdown(!showEarningsBreakdown)}
-                    className="w-full flex items-center justify-between px-4 py-2 mt-6 bg-muted/50 rounded-lg text-sm font-medium hover:bg-muted/70 transition-colors"
-                  >
-                    <span>Earnings Breakdown</span>
-                    {showEarningsBreakdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </button>
-                  {showEarningsBreakdown && (
-                    <div className="grid grid-cols-3 gap-4 mt-3 text-sm">
-                      <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="font-semibold">₦{earningsBreakdown.first_time.toLocaleString()}</p>
-                        <p className="text-muted-foreground">First-time</p>
-                        <p className="text-[11px] text-muted-foreground opacity-80">30%</p>
-                      </div>
-                      <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="font-semibold">₦{earningsBreakdown.recurring.toLocaleString()}</p>
-                        <p className="text-muted-foreground">Recurring</p>
-                        <p className="text-[11px] text-muted-foreground opacity-80">15%</p>
-                      </div>
-                      <div className="text-center p-3 bg-muted/50 rounded-lg">
-                        <p className="font-semibold">₦{earningsBreakdown.indirect.toLocaleString()}</p>
-                        <p className="text-muted-foreground">Indirect</p>
-                        <p className="text-[11px] text-muted-foreground opacity-80">2%</p>
-                      </div>
+                  <div className="grid grid-cols-3 gap-4 mt-6 text-sm">
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="font-semibold">30%</p>
+                      <p className="text-muted-foreground">First-time</p>
                     </div>
-                  )}
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="font-semibold">15%</p>
+                      <p className="text-muted-foreground">Recurring</p>
+                    </div>
+                    <div className="text-center p-3 bg-muted/50 rounded-lg">
+                      <p className="font-semibold">2%</p>
+                      <p className="text-muted-foreground">Indirect</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 mt-3 text-sm">
+                    <div className="text-center p-3 bg-primary/5 rounded-lg border border-primary/10">
+                      <p className="font-semibold">₦{earningsBreakdown.first_time.toLocaleString()}</p>
+                      <p className="text-muted-foreground">First-time earned</p>
+                    </div>
+                    <div className="text-center p-3 bg-primary/5 rounded-lg border border-primary/10">
+                      <p className="font-semibold">₦{earningsBreakdown.recurring.toLocaleString()}</p>
+                      <p className="text-muted-foreground">Recurring earned</p>
+                    </div>
+                    <div className="text-center p-3 bg-primary/5 rounded-lg border border-primary/10">
+                      <p className="font-semibold">₦{earningsBreakdown.indirect.toLocaleString()}</p>
+                      <p className="text-muted-foreground">Indirect earned</p>
+                    </div>
+                  </div>
                   <p className="text-[11px] text-muted-foreground mt-3 text-center">
                     Direct commissions on first-time purchases (30%) and repurchases/renewals (15%).
                     2% indirect bonus on purchases by your followers&apos; own referrals. Rates apply to
