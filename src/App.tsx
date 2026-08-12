@@ -9,7 +9,6 @@ import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import SignupTypeSelection from "./pages/SignupTypeSelection";
 import AmbassadorApply from "./pages/Ambassador";
-import AmbassadorDashboard from "./pages/AmbassadorDashboard";
 import FHAChatroom from "./pages/FHAChatroom";
 import AuditorLanding from "./pages/AuditorLanding";
 import AuditorConnect from "./pages/AuditorConnect";
@@ -44,7 +43,6 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignupTypeSelection />} />
             <Route path="/ambassador" element={<AmbassadorApply />} />
-            <Route path="/ambassador-dashboard" element={<AmbassadorDashboard />} />
             <Route path="/fha-chatroom" element={<FHAChatroom />} />
             <Route path="/auditor" element={<ProtectedRoute><AuditorLanding /></ProtectedRoute>} />
             <Route path="/auditor/connect" element={<ProtectedRoute><AuditorConnect /></ProtectedRoute>} />

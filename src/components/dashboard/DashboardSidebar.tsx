@@ -22,7 +22,6 @@ const sidebarItems = [
   { icon: Umbrella, label: "Microinsurance", path: "/dashboard/microinsurance" },
    { icon: Share2, label: "Followers", path: "/dashboard/followers" },
    { icon: Trophy, label: "AI Challengers", path: "/dashboard/leaderboard" },
-   { icon: Award, label: "Ambassador Dashboard", path: "/ambassador-dashboard" },
   { icon: Target, label: "SDG Impact", path: "/dashboard/sdg" },
   { icon: MessageSquare, label: "Messages", path: "/dashboard/messages" },
   { icon: AlertCircle, label: "Complaints", path: "/dashboard/complaints" },
