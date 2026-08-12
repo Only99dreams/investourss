@@ -6,8 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Check, Users, MousePointer, UserCheck, Crown, TrendingUp, Eye, EyeOff, Link2, UserPlus } from "lucide-react";
+import { Copy, Check, Users, MousePointer, UserCheck, Crown, TrendingUp, Eye, EyeOff, Link2, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isActiveSubscriber, isPremiumTier } from "@/lib/subscription";
 
 export function ReferralsSection() {
   const { user, profile } = useAuth();
@@ -16,6 +17,12 @@ export function ReferralsSection() {
   const [stats, setStats] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [followers, setFollowers] = useState<any[]>([]);
+  const [earningsBreakdown, setEarningsBreakdown] = useState({
+    first_time: 0,
+    recurring: 0,
+    indirect: 0,
+  });
+  const [showEarningsBreakdown, setShowEarningsBreakdown] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showReferralCode, setShowReferralCode] = useState(false);
 
@@ -34,15 +41,37 @@ export function ReferralsSection() {
 
       setStats(statsData);
 
-      // Fetch referred users (now called followers)
+      // Fetch referred users (now called followers) with subscription/credit fields
       const { data: followersData } = await supabase
         .from("profiles")
-        .select("id, full_name, user_tier, created_at")
+        .select("id, full_name, user_tier, created_at, has_active_subscription, subscription_expires_at, audit_credits, audit_credits_expires_at")
         .eq("referred_by", user.id)
         .order("created_at", { ascending: false })
         .limit(10);
 
       setFollowers(followersData || []);
+
+      // Fetch earnings breakdown from commissions (first_time / recurring / indirect)
+      const { data: ambassador } = await supabase
+        .from("ambassadors")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (ambassador) {
+        const { data: commissions } = await supabase
+          .from("commissions")
+          .select("commission_type, amount")
+          .eq("ambassador_id", ambassador.id);
+
+        const breakdown = { first_time: 0, recurring: 0, indirect: 0 };
+        (commissions || []).forEach((c: { commission_type: string; amount: number }) => {
+          if (c.commission_type === "first_time") breakdown.first_time += Number(c.amount) || 0;
+          else if (c.commission_type === "recurring") breakdown.recurring += Number(c.amount) || 0;
+          else if (c.commission_type === "indirect") breakdown.indirect += Number(c.amount) || 0;
+        });
+        setEarningsBreakdown(breakdown);
+      }
     };
 
     fetchData();
@@ -64,12 +93,21 @@ export function ReferralsSection() {
 
   const referredCount = followers.length;
 
+  const now = Date.now();
+  const activeSubscribers = followers.filter((f) =>
+    isActiveSubscriber(f) || isPremiumTier(f),
+  ).length;
+
+  const activeAuditUsers = followers.filter((f) =>
+    (f.audit_credits ?? 0) > 0 &&
+    (!f.audit_credits_expires_at || new Date(f.audit_credits_expires_at).getTime() > now),
+  ).length;
+
   const statCards = [
     { label: "People Referred", value: referredCount, icon: UserPlus },
     { label: "Total Clicks", value: stats?.total_clicks || 0, icon: MousePointer },
-    { label: "Sign-ups", value: stats?.total_signups || 0, icon: Users },
-    { label: "Verified Users", value: stats?.total_verified || 0, icon: UserCheck },
-    { label: "Subscribed", value: stats?.total_subscribed || 0, icon: Crown },
+    { label: "Active Subscribers", value: activeSubscribers, icon: Crown },
+    { label: "Audit Credit Users", value: activeAuditUsers, icon: UserCheck },
   ];
 
   return (
@@ -120,7 +158,7 @@ export function ReferralsSection() {
       </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {statCards.map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -160,20 +198,33 @@ export function ReferralsSection() {
                   Lifetime referral earnings
                 </p>
               </div>
-                  <div className="grid grid-cols-3 gap-4 mt-6 text-sm">
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <p className="font-semibold">30%</p>
-                      <p className="text-muted-foreground">First-time</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowEarningsBreakdown(!showEarningsBreakdown)}
+                    className="w-full flex items-center justify-between px-4 py-2 mt-6 bg-muted/50 rounded-lg text-sm font-medium hover:bg-muted/70 transition-colors"
+                  >
+                    <span>Earnings Breakdown</span>
+                    {showEarningsBreakdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  {showEarningsBreakdown && (
+                    <div className="grid grid-cols-3 gap-4 mt-3 text-sm">
+                      <div className="text-center p-3 bg-muted/50 rounded-lg">
+                        <p className="font-semibold">₦{earningsBreakdown.first_time.toLocaleString()}</p>
+                        <p className="text-muted-foreground">First-time</p>
+                        <p className="text-[11px] text-muted-foreground opacity-80">30%</p>
+                      </div>
+                      <div className="text-center p-3 bg-muted/50 rounded-lg">
+                        <p className="font-semibold">₦{earningsBreakdown.recurring.toLocaleString()}</p>
+                        <p className="text-muted-foreground">Recurring</p>
+                        <p className="text-[11px] text-muted-foreground opacity-80">15%</p>
+                      </div>
+                      <div className="text-center p-3 bg-muted/50 rounded-lg">
+                        <p className="font-semibold">₦{earningsBreakdown.indirect.toLocaleString()}</p>
+                        <p className="text-muted-foreground">Indirect</p>
+                        <p className="text-[11px] text-muted-foreground opacity-80">2%</p>
+                      </div>
                     </div>
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <p className="font-semibold">15%</p>
-                      <p className="text-muted-foreground">Recurring</p>
-                    </div>
-                    <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <p className="font-semibold">2%</p>
-                      <p className="text-muted-foreground">Indirect</p>
-                    </div>
-                  </div>
+                  )}
                   <p className="text-[11px] text-muted-foreground mt-3 text-center">
                     Direct commissions on first-time purchases (30%) and repurchases/renewals (15%).
                     2% indirect bonus on purchases by your followers&apos; own referrals. Rates apply to

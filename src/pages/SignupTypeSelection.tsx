@@ -75,6 +75,15 @@ const SignupTypeSelection = () => {
     setSelectedType(typeParam);
   }, [typeParam]);
 
+  // Record a referral click once when the page loads with a ?ref= code
+  useEffect(() => {
+    const urlRef = searchParams.get("ref");
+    if (urlRef) {
+      supabase.rpc("record_referral_click", { p_code: urlRef }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Form states
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
