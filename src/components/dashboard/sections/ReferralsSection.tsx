@@ -22,6 +22,8 @@ export function ReferralsSection() {
     recurring: 0,
     indirect: 0,
   });
+  const [hasAmbassador, setHasAmbassador] = useState(false);
+  const [followerEarnings, setFollowerEarnings] = useState<Record<string, number>>({});
   const [copied, setCopied] = useState(false);
   const [showReferralCode, setShowReferralCode] = useState(false);
 
@@ -58,6 +60,7 @@ export function ReferralsSection() {
         .maybeSingle();
 
       if (ambassador) {
+        setHasAmbassador(true);
         const { data: commissions } = await supabase
           .from("commissions")
           .select("commission_type, amount")
@@ -70,6 +73,21 @@ export function ReferralsSection() {
           else if (c.commission_type === "indirect") breakdown.indirect += Number(c.amount) || 0;
         });
         setEarningsBreakdown(breakdown);
+
+        // Per-follower earnings: total commission earned from each referred user
+        const { data: perFollowerRows } = await supabase
+          .from("commissions")
+          .select("amount, referrals(referred_user_id)")
+          .eq("ambassador_id", ambassador.id);
+
+        const perFollower: Record<string, number> = {};
+        (perFollowerRows as Array<{ amount: number; referrals: { referred_user_id: string } | null }> | null)?.forEach((c) => {
+          const uid = c.referrals?.referred_user_id;
+          if (uid) perFollower[uid] = (perFollower[uid] || 0) + (Number(c.amount) || 0);
+        });
+        setFollowerEarnings(perFollower);
+      } else {
+        setHasAmbassador(false);
       }
     };
 
@@ -91,6 +109,10 @@ export function ReferralsSection() {
   };
 
   const referredCount = followers.length;
+
+  const totalEarnings = hasAmbassador
+    ? earningsBreakdown.first_time + earningsBreakdown.recurring + earningsBreakdown.indirect
+    : (stats?.total_earnings || 0);
 
   const now = Date.now();
   const activeSubscribers = followers.filter((f) =>
@@ -191,7 +213,7 @@ export function ReferralsSection() {
             <CardContent>
               <div className="text-center py-4">
                 <p className="text-4xl font-bold text-primary">
-                  ₦{(stats?.total_earnings || 0).toLocaleString()}
+                  ₦{totalEarnings.toLocaleString()}
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
                   Lifetime referral earnings
@@ -258,6 +280,11 @@ export function ReferralsSection() {
                           <p className="text-xs text-muted-foreground">
                             {new Date(follower.created_at).toLocaleDateString()}
                           </p>
+                          {(followerEarnings[follower.id] ?? 0) > 0 && (
+                            <p className="text-xs font-semibold text-primary mt-0.5">
+                              ₦{(followerEarnings[follower.id] ?? 0).toLocaleString()} earned
+                            </p>
+                          )}
                         </div>
                       </div>
                       <Badge variant={

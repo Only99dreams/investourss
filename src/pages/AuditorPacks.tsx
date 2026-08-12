@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { usePaystackPayment } from "react-paystack";
 import {
-  CreditCard, Check, ArrowRight, Loader2, Coins, Clock, Info, Sparkles, Banknote, Copy, CheckCircle2,
+  CreditCard, Check, ArrowRight, Loader2, Coins, Clock, Info, Sparkles, Banknote, Copy, CheckCircle2, RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,6 +56,7 @@ const AuditorPacks = () => {
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [activating, setActivating] = useState(false);
+  const [activationFailed, setActivationFailed] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<PackOrder | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -129,6 +130,29 @@ const AuditorPacks = () => {
     });
   };
 
+  const errorMessage = (err: unknown): string => {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "object" && err !== null && "message" in err) {
+      const m = (err as { message?: unknown }).message;
+      if (typeof m === "string" && m.trim()) return m;
+    }
+    return "Payment received but activation failed. Please contact support.";
+  };
+
+  const waitForActivation = async (reference: string): Promise<boolean> => {
+    const deadline = Date.now() + 20000;
+    while (Date.now() < deadline) {
+      const { data } = await supabase
+        .from("user_credit_packs")
+        .select("status")
+        .eq("reference", reference)
+        .maybeSingle();
+      if (data && data.status === "active") return true;
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+    return false;
+  };
+
   const activatePack = async (reference: string, amountKobo: number) => {
     if (!user) return;
     setActivating(true);
@@ -138,17 +162,40 @@ const AuditorPacks = () => {
         p_reference: reference,
         p_amount_kobo: amountKobo,
       });
-      if (error) throw error;
+      if (error) throw new Error(error.message);
 
+      setActivationFailed(false);
       toast({ title: "Audit Credits Activated!", description: "Your audit credits have been added to your account." });
       setPendingOrder(null);
       await loadData();
     } catch (err) {
-      toast({
-        title: "Activation Failed",
-        description: err instanceof Error ? err.message : "Payment received but activation failed. Please contact support.",
-        variant: "destructive",
-      });
+      const msg = errorMessage(err);
+      const alreadyProcessed = /not found|could not find|already/i.test(msg);
+      setActivationFailed(true);
+      if (alreadyProcessed) {
+        setPendingOrder(null);
+        await loadData();
+        toast({
+          title: "Already Processed",
+          description: "Your payment reference was already processed. Credits refreshed.",
+        });
+      } else {
+        toast({
+          title: "Activation Pending",
+          description: `${msg} We're confirming your payment automatically…`,
+          variant: "destructive",
+        });
+        const ok = await waitForActivation(reference);
+        if (ok) {
+          setActivationFailed(false);
+          toast({
+            title: "Audit Credits Activated!",
+            description: "Payment confirmed — your credits were activated automatically.",
+          });
+          setPendingOrder(null);
+          await loadData();
+        }
+      }
     } finally {
       setActivating(false);
     }
@@ -168,6 +215,7 @@ const AuditorPacks = () => {
       const totalWithVat = amount + vatAmount;
       const amountKobo = Math.round(totalWithVat * 100); // Paystack uses kobo
 
+      setActivationFailed(false);
       setPendingOrder({
         id: result.order_id ?? "",
         pack_id: pack.id,
@@ -326,6 +374,11 @@ const AuditorPacks = () => {
 
               <Button
                 onClick={() => {
+                  if (activationFailed && pendingOrder.reference) {
+                    const amountKobo = Math.round(pendingOrder.amount * 100);
+                    activatePack(pendingOrder.reference, amountKobo);
+                    return;
+                  }
                   const retryPack = packs.find((p) => p.id === pendingOrder.pack_id);
                   if (retryPack) {
                     handlePurchase(retryPack);
@@ -346,6 +399,11 @@ const AuditorPacks = () => {
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Preparing payment…
                   </>
+                ) : activationFailed ? (
+                  <>
+                    <RefreshCw className="h-5 w-5 mr-2" />
+                    Retry Activation
+                  </>
                 ) : (
                   <>
                     <CreditCard className="h-5 w-5 mr-2" />
@@ -355,10 +413,19 @@ const AuditorPacks = () => {
               </Button>
 
               <p className="text-xs text-muted-foreground">
-                Supports debit/credit cards, bank transfer, USSD, and mobile money.
-                <br />
-                Your credits activate instantly after payment. Prefer manual transfer? Use your reference as the deposit
-                narration in the <Link to="/dashboard/wallets" className="text-primary underline">Wallets</Link> page.
+                {activationFailed ? (
+                  <>
+                    Your payment went through but the credits weren't confirmed. Tap <strong>Retry Activation</strong> to finish
+                    activating — you won't be charged again.
+                  </>
+                ) : (
+                  <>
+                    Supports debit/credit cards, bank transfer, USSD, and mobile money.
+                    <br />
+                    Your credits activate instantly after payment. Prefer manual transfer? Use your reference as the deposit
+                    narration in the <Link to="/dashboard/wallets" className="text-primary underline">Wallets</Link> page.
+                  </>
+                )}
               </p>
             </CardContent>
           </Card>

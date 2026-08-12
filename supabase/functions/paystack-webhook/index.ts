@@ -22,6 +22,7 @@ async function verifySignature(body: string, signature: string, secret: string):
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
   const secret = Deno.env.get("PAYSTACK_SECRET_KEY");
   if (!secret) return new Response("Missing secret", { status: 500 });
@@ -32,7 +33,13 @@ serve(async (req) => {
   const valid = await verifySignature(body, signature, secret);
   if (!valid) return new Response("Invalid signature", { status: 401 });
 
-  const event = JSON.parse(body);
+  let event;
+  try {
+    event = JSON.parse(body);
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+
   if (event.event !== "charge.success") return new Response("OK", { status: 200 });
 
   const { reference, metadata, amount, status } = event.data;
@@ -65,6 +72,11 @@ serve(async (req) => {
     }
 
     return new Response("OK", { status: 200 });
+  }
+
+  if (paymentType !== "subscription") {
+    console.error("Unknown payment type", paymentType);
+    return new Response("Unknown payment type", { status: 400 });
   }
 
   const planType: string = metadata?.plan_type;

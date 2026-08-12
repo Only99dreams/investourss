@@ -58,6 +58,25 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
 
   const currentPlan = planDetails[planType];
 
+  // ── Automatic confirmation ──────────────────────────────────────────────
+  // If the client-side activation call fails, the Paystack webhook
+  // (charge.success) still activates the subscription server-side. Poll the
+  // profile until it reflects the activation (or time out) so the user is
+  // updated automatically — no manual retry needed.
+  const waitForActivation = useCallback(async (): Promise<boolean> => {
+    const deadline = Date.now() + 20000;
+    while (Date.now() < deadline) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('has_active_subscription')
+        .eq('id', user?.id)
+        .maybeSingle();
+      if (data?.has_active_subscription) return true;
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+    return false;
+  }, [user?.id]);
+
   // ── Pricing calculation ──────────────────────────────────────────────────
   const calculatePricing = () => {
     const basePrice = currentPlan.price;
@@ -161,16 +180,37 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
         });
         onSuccess?.();
       } catch (err) {
+        const msg = err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'message' in err
+            ? String((err as { message?: unknown }).message ?? '').trim()
+            : '';
         toast({
-          title: 'Activation Failed',
-          description: err instanceof Error ? err.message : 'Payment received but activation failed. Please contact support.',
+          title: 'Activation Pending',
+          description: `${msg || 'Payment received but activation failed.'} We're confirming your payment automatically…`,
           variant: 'destructive',
         });
+        const ok = await waitForActivation();
+        if (ok) {
+          toast({
+            title: '🎉 Subscription Activated!',
+            description: `Your ${currentPlan.name} is now active. Enjoy premium access!`,
+          });
+          await refreshProfile();
+          supabase.functions.invoke('send-notification', {
+            body: {
+              type: 'subscription_activated',
+              recipient_id: user.id,
+              plan_type: currentPlan.name,
+            }
+          }).catch(() => {});
+          onSuccess?.();
+        }
       } finally {
         setActivating(false);
       }
     },
-    [user, planType, pricing.finalTotalKobo, appliedPromo, currentPlan.name, onSuccess, refreshProfile, toast]
+    [user, planType, pricing.finalTotalKobo, appliedPromo, currentPlan.name, onSuccess, refreshProfile, toast, waitForActivation]
   );
 
   // ── Free subscription (100% promo) ───────────────────────────────────────
@@ -213,6 +253,7 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
     currency: 'NGN',
     metadata: {
       user_id: user?.id ?? '',
+      payment_type: 'subscription',
       plan_type: planType,
       promo_code_id: appliedPromo?.promo_code_id ?? null,
       custom_fields: [
