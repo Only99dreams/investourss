@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   Wallet, TrendingUp, TrendingDown, PiggyBank, RefreshCcw, FileSearch,
-  History, Loader2, ArrowRight, CalendarClock, CheckCircle2, Download,
+  History, Loader2, ArrowRight, CalendarClock, CheckCircle2, Download, Coins,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -151,6 +151,35 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
     ? HEALTH_STATUS_META[viewingAudit.health_status as keyof typeof HEALTH_STATUS_META] ?? HEALTH_STATUS_META.critical
     : null;
 
+  const creditsInfo = useMemo(() => {
+    if (access.subscription_active) {
+      return {
+        label: "Unlimited",
+        sub: "Active subscriber — run audits freely.",
+        button: "Manage Plan",
+      };
+    }
+    if (access.credits_remaining > 0) {
+      return {
+        label: `${access.credits_remaining}`,
+        sub: `${access.credits_remaining} audit credit${access.credits_remaining === 1 ? "" : "s"} remaining.`,
+        button: "Get More Credits",
+      };
+    }
+    if (!access.free_audit_used) {
+      return {
+        label: "1",
+        sub: "Your FREE 6-month audit is still available.",
+        button: "Get More Credits",
+      };
+    }
+    return {
+      label: "0",
+      sub: "No credits left — grab an Audit Credit Pack to keep auditing.",
+      button: "Get More Credits",
+    };
+  }, [access]);
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -247,6 +276,29 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
             </CardContent>
           </Card>
         </motion.div>
+      )}
+
+      {/* Audit Credits */}
+      {!loading && (
+        <div className="mb-8">
+          <Card className="bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
+            <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Coins className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Audit Credits</p>
+                  <p className="text-lg font-bold text-primary leading-tight">{creditsInfo.label}</p>
+                  <p className="text-xs text-muted-foreground">{creditsInfo.sub}</p>
+                </div>
+              </div>
+              <Button asChild variant="outline" size="sm" className="shrink-0">
+                <Link to="/auditor/packs">{creditsInfo.button}</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Stats */}
