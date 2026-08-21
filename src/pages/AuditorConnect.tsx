@@ -269,14 +269,16 @@ const AuditorConnect = () => {
     try {
       // 0. Reuse the previous audit for the exact same statement so results stay stable
       const sameText = activeText.slice(0, 50000);
-      const { data: prevSources, error: prevSourceError } = await supabase
+      const { data: recentSources, error: prevSourceError } = await supabase
         .from("financial_data_sources")
-        .select("id")
+        .select("id, content_text")
         .eq("user_id", user.id)
-        .eq("content_text", sameText)
         .order("created_at", { ascending: false })
-        .limit(1);
+        .limit(20);
       if (prevSourceError) throw prevSourceError;
+      const prevSources = ((recentSources ?? []) as Array<{ id: string; content_text: string | null }>).filter(
+        (s) => s.content_text === sameText
+      );
 
       if (prevSources && prevSources.length > 0) {
         const { data: prevAudit, error: prevAuditError } = await supabase
