@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { GraduationCap, Play, CheckCircle, Lock, Clock, Trophy, Share2, Copy, Twitter, Facebook, Linkedin, Link as LinkIcon, Shield, Sparkles, FileText, Instagram, MessageCircle } from "lucide-react";
+import { GraduationCap, Play, CheckCircle, Lock, Clock, Trophy, Share2, Copy, Twitter, Facebook, Linkedin, Link as LinkIcon, Shield, Sparkles, FileText, Instagram, MessageCircle, ScanSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useSearchParams, Link } from "react-router-dom";
@@ -567,7 +567,13 @@ export function EducationSection() {
                   <span>{completedCount}/{totalModules}</span>
                 </div>
                 <Progress value={progressPercent} className="h-3" />
-                <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-2">
+                  <Link to="/dashboard/auditor">
+                    <Button className="w-full" size="sm">
+                      <ScanSearch className="w-4 h-4 mr-2" />
+                      AI Auditor
+                    </Button>
+                  </Link>
                   <Link to="/business-plan">
                     <Button className="w-full" size="sm">
                       <FileText className="w-4 h-4 mr-2" />

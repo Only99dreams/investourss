@@ -1617,8 +1617,35 @@ export type Database = {
       clear_leaderboard: {
         Args: {
           p_admin_id: string
+          p_starts_at?: string
+          p_closes_at?: string
         }
         Returns: Json
+      }
+      set_challenge_window: {
+        Args: {
+          p_admin_id: string
+          p_starts_at?: string
+          p_closes_at?: string
+        }
+        Returns: Json
+      }
+      get_referral_challenge_leaderboard: {
+        Args: Record<string, never>
+        Returns: Array<{
+          user_id: string
+          full_name: string
+          email: string
+          referral_count: number
+          total_earnings: number
+          rank: number
+        }>
+      }
+      apply_referral_code: {
+        Args: {
+          p_referral_code: string
+        }
+        Returns: boolean
       }
       get_challenge_history: {
         Args: {
@@ -1696,7 +1723,9 @@ export type Database = {
         Returns: boolean
       }
       get_fha_portfolio: {
-        Args: Record<string, never>
+        Args: {
+          p_target_user?: string
+        }
         Returns: Json
       }
     }

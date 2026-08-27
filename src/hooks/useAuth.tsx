@@ -13,7 +13,7 @@ interface Profile {
   gender: string | null;
   user_type: 'individual' | 'group' | 'firm';
   user_tier: 'free' | 'premium' | 'exclusive';
-  subscription_type: 'monthly' | 'quarterly' | 'biennial' | 'annual' | 'b2b_annual' | null;
+  subscription_type: 'monthly' | 'quarterly' | 'biennial' | 'annual' | 'b2b_quarterly' | 'b2b_annual' | null;
   has_active_subscription: boolean;
   subscription_expires_at: string | null;
   audit_credits: number;

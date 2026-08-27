@@ -154,17 +154,12 @@ const SignupForm = () => {
           });
         }
 
-        // Handle referral code
+        // Handle referral code (SECURITY DEFINER RPC so the link can't silently fail)
         if (formData.referralCode) {
-          const { data: referrer } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('referral_code', formData.referralCode)
-            .maybeSingle();
-
-          if (referrer) {
-            await supabase.from('profiles').update({ referred_by: referrer.id }).eq('id', user.id);
-          }
+          const { error: refError } = await supabase.rpc('apply_referral_code', {
+            p_referral_code: formData.referralCode.trim(),
+          });
+          if (refError) console.error('Failed to apply referral code:', refError);
         }
       }
 

@@ -24,10 +24,30 @@ export function ReferralsSection() {
   });
   const [hasAmbassador, setHasAmbassador] = useState(false);
   const [followerEarnings, setFollowerEarnings] = useState<Record<string, number>>({});
+  const [followerCount, setFollowerCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [showReferralCode, setShowReferralCode] = useState(false);
 
   const referralLink = `${window.location.origin}/signup?ref=${profile?.referral_code}`;
+
+  const fetchFollowers = async (userId: string) => {
+    // Exact count is fetched separately: a limit() on the list query would cap
+    // "People Referred" at 10 and make the dashboard look out of date.
+    const { count } = await supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("referred_by", userId);
+    setFollowerCount(count ?? 0);
+
+    const { data: followersData } = await supabase
+      .from("profiles")
+      .select("id, full_name, user_tier, created_at, has_active_subscription, subscription_expires_at, audit_credits, audit_credits_expires_at")
+      .eq("referred_by", userId)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    setFollowers(followersData || []);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -43,14 +63,7 @@ export function ReferralsSection() {
       setStats(statsData);
 
       // Fetch referred users (now called followers) with subscription/credit fields
-      const { data: followersData } = await supabase
-        .from("profiles")
-        .select("id, full_name, user_tier, created_at, has_active_subscription, subscription_expires_at, audit_credits, audit_credits_expires_at")
-        .eq("referred_by", user.id)
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      setFollowers(followersData || []);
+      await fetchFollowers(user.id);
 
       // Fetch earnings breakdown from commissions (first_time / recurring / indirect)
       const { data: ambassador } = await supabase
@@ -94,6 +107,17 @@ export function ReferralsSection() {
     fetchData();
   }, [user]);
 
+  // Live refresh: when a new follower signs up (or a profile changes), refetch
+  // so the dashboard reflects new referrals without a manual reload.
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`followers-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => fetchFollowers(user.id))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   const copyLink = () => {
     navigator.clipboard.writeText(referralLink);
     setCopied(true);
@@ -108,7 +132,7 @@ export function ReferralsSection() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const referredCount = followers.length;
+  const referredCount = followerCount;
 
   const totalEarnings = hasAmbassador
     ? earningsBreakdown.first_time + earningsBreakdown.recurring + earningsBreakdown.indirect

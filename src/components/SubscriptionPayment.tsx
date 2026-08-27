@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
 interface SubscriptionPaymentProps {
-  planType: 'monthly' | 'quarterly' | 'biennial' | 'annual' | 'b2b_annual';
+  planType: 'monthly' | 'quarterly' | 'biennial' | 'annual' | 'b2b_quarterly';
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -35,7 +35,7 @@ const planDetails = {
   quarterly:  { name: 'Premium Quarterly',  price: 12000,  period: '3 months', savings: 'Save ₦1,500' },
   biennial:   { name: 'Premium Bi-annual',  price: 22500,  period: '6 months', savings: 'Save ₦4,500' },
   annual:     { name: 'Premium Annual',     price: 45000,  period: 'year',     savings: 'Save ₦9,000' },
-  b2b_annual: { name: 'B2B Annual',         price: 120000, period: 'year',     savings: null },
+  b2b_quarterly: { name: 'B2B Plan',         price: 360000, period: '3 months', savings: null },
 };
 
 // Generates a unique Paystack reference

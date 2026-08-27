@@ -17,6 +17,7 @@ import Header from "@/components/Header";
 import { Footer } from "@/components/ui/Footer";
 import { HealthScoreGauge } from "@/components/auditor/HealthScoreGauge";
 import { BlurredReport } from "@/components/auditor/BlurredReport";
+import { FinancialHealthGuidance, type FinancialHealthGuidanceProps } from "@/components/auditor/FinancialHealthGuidance";
 import {
   HEALTH_STATUS_META, auditPeriodLabel, formatNaira, monthLabel,
   DEFAULT_ACCESS, type AuditAccess,
@@ -325,6 +326,23 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
             </motion.div>
           ))}
         </div>
+      )}
+
+      {/* Financial Health Guidance — personalized advice section */}
+      {!loading && viewingAudit && (
+        <FinancialHealthGuidance
+          healthScore={viewingAudit.health_score}
+          healthStatus={viewingAudit.health_status}
+          totalIncome={viewingAudit.total_income}
+          totalExpenses={viewingAudit.total_expenses}
+          cashFlow={viewingAudit.cash_flow}
+          savingsRate={viewingAudit.savings_rate}
+          recoverableAmount={viewingAudit.recoverable_amount}
+          isLocked={viewingAudit.is_locked}
+          periodStart={viewingAudit.audit_period_start}
+          periodEnd={viewingAudit.audit_period_end}
+          report={(viewingAudit.report_json ?? null) as FinancialHealthGuidanceProps["report"]}
+        />
       )}
 
       <div className="grid lg:grid-cols-2 gap-6 mb-8">

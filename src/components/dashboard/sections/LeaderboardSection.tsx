@@ -33,9 +33,18 @@ interface ChallengeHistoryEntry {
 interface ReferralLeaderboardEntry {
   user_id: string;
   full_name: string | null;
+  email: string | null;
   referral_count: number;
   total_earnings: number;
   rank: number;
+}
+
+interface ChallengeSeason {
+  id: string;
+  name: string;
+  started_at: string;
+  starts_at: string | null;
+  closes_at: string | null;
 }
 
 const levelColors: Record<string, string> = {
@@ -180,14 +189,14 @@ function PastChallenges({ history }: { history: ChallengeHistoryEntry[] }) {
   );
 }
 
-function ReferralLeaderboard() {
+function ReferralLeaderboard({ season }: { season: ChallengeSeason | null }) {
   const { user } = useAuth();
   const [entries, setEntries] = useState<ReferralLeaderboardEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchLeaderboard = async () => {
     try {
-      const { data, error } = await supabase.rpc("get_referral_leaderboard");
+      const { data, error } = await supabase.rpc("get_referral_challenge_leaderboard");
       if (error) {
         console.error("Error fetching referral leaderboard:", error);
         return;
@@ -205,6 +214,7 @@ function ReferralLeaderboard() {
     const channel = supabase
       .channel("referral-leaderboard-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "referral_stats" }, () => fetchLeaderboard())
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => fetchLeaderboard())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -214,9 +224,12 @@ function ReferralLeaderboard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Users className="w-5 h-5 text-primary" />
-          Top Followers
+          Referral Challenge Leaders
         </CardTitle>
-        <CardDescription>Ranked by number of followers</CardDescription>
+        <CardDescription>
+          Ranked by followers gained this challenge — this leaderboard decides the AI Challenge winners
+          {season?.closes_at ? ` · closes ${new Date(season.closes_at).toLocaleDateString()}` : ""}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -226,7 +239,7 @@ function ReferralLeaderboard() {
         ) : entries.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground">No followers yet. Share your link to get started!</p>
+            <p className="text-muted-foreground">No challenge followers yet. Share your referral link to climb the board!</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -285,6 +298,7 @@ export function LeaderboardSection() {
   const [activeTab, setActiveTab] = useState("tutor");
   const [entries, setEntries] = useState<TutorLeaderboardEntry[]>([]);
   const [history, setHistory] = useState<ChallengeHistoryEntry[]>([]);
+  const [season, setSeason] = useState<ChallengeSeason | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchLeaderboard = async () => {
@@ -297,6 +311,19 @@ export function LeaderboardSection() {
       console.error("Leaderboard fetch failed:", err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchSeason = async () => {
+    try {
+      const { data } = await supabase
+        .from("challenge_seasons")
+        .select("id, name, started_at, starts_at, closes_at")
+        .eq("is_active", true)
+        .maybeSingle();
+      setSeason((data || null) as ChallengeSeason | null);
+    } catch (err) {
+      console.error("Season fetch failed:", err);
     }
   };
 
@@ -314,6 +341,7 @@ export function LeaderboardSection() {
 
   useEffect(() => {
     fetchLeaderboard();
+    fetchSeason();
     fetchHistory();
     const channel = supabase
       .channel("ai-challenger-leaderboard-changes")
@@ -324,6 +352,7 @@ export function LeaderboardSection() {
 
   const myEntry = user ? entries.find((e) => e.user_id === user.id) : undefined;
   const myRank = myEntry ? entries.findIndex((e) => e.user_id === user.id) + 1 : null;
+  const seasonStart = season?.starts_at || season?.started_at;
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -332,6 +361,9 @@ export function LeaderboardSection() {
           <h2 className="text-2xl font-bold text-foreground">AI Challenge Leaderboard</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Top performers and followers compete for rewards
+            {season ? ` · ${season.name}` : ""}
+            {seasonStart ? ` · started ${new Date(seasonStart).toLocaleDateString()}` : ""}
+            {season?.closes_at ? ` · closes ${new Date(season.closes_at).toLocaleDateString()}` : ""}
           </p>
         </div>
         {user && (
@@ -376,7 +408,7 @@ export function LeaderboardSection() {
           <PastChallenges history={history} />
         </TabsContent>
         <TabsContent value="referral" className="mt-4">
-          <ReferralLeaderboard />
+          <ReferralLeaderboard season={season} />
         </TabsContent>
       </Tabs>
     </div>

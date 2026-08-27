@@ -188,6 +188,7 @@ export function FHAPortfolioSection() {
         quarterly: "Quarterly",
         biennial: "Bi-annual",
         annual: "Annual",
+        b2b_quarterly: "B2B (Quarterly)",
       },
       data: subscribers.individuals,
     },
@@ -201,9 +202,10 @@ export function FHAPortfolioSection() {
         quarterly: "Quarterly",
         biennial: "Bi-annual",
         annual: "Annual",
+        b2b_quarterly: "B2B (Quarterly)",
       },
       data: subscribers.businesses,
-      note: "B2B Annual plans are counted under Annual.",
+      note: "B2B Annual plans are counted under Annual; B2B Quarterly shown separately.",
     },
   ];
 

@@ -130,7 +130,7 @@ const CompleteProfile = () => {
         description: "Welcome to Investours. You now have full access.",
       });
       
-      navigate("/dashboard");
+      navigate("/home");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       toast({

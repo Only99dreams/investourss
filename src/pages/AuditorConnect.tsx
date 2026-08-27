@@ -22,11 +22,11 @@ import { cn } from "@/lib/utils";
 
 type SourceType = "sms" | "email" | "pdf" | "open_banking";
 
-const SOURCES: { type: SourceType; label: string; icon: typeof MessageSquare; hint: string }[] = [
-  { type: "sms", label: "SMS Alerts", icon: MessageSquare, hint: "Paste your bank SMS alerts" },
-  { type: "email", label: "Email Statements", icon: Mail, hint: "Paste or upload email statement" },
+const SOURCES: { type: SourceType; label: string; icon: typeof MessageSquare; hint: string; soon?: boolean }[] = [
   { type: "pdf", label: "PDF Statement", icon: FileUp, hint: "Upload a PDF bank statement" },
-  { type: "open_banking", label: "Open Banking", icon: Landmark, hint: "Connect your bank securely" },
+  { type: "open_banking", label: "Open Banking", icon: Landmark, hint: "Connect your bank securely", soon: true },
+  { type: "email", label: "Email Notifications", icon: Mail, hint: "Paste or upload email statement", soon: true },
+  { type: "sms", label: "SMS Alert", icon: MessageSquare, hint: "Paste your bank SMS alerts", soon: true },
 ];
 
 const AUDIT_STEPS = [
@@ -55,13 +55,14 @@ const AuditorConnect = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [sourceType, setSourceType] = useState<SourceType>("sms");
+  const [sourceType, setSourceType] = useState<SourceType>("pdf");
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
   const [fileContent, setFileContent] = useState("");
   const [running, setRunning] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [emailMonths, setEmailMonths] = useState(6);
+  const [statementMonths, setStatementMonths] = useState(6);
   const [fetchingEmails, setFetchingEmails] = useState(false);
   const [fetchResult, setFetchResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [oauthConn, setOauthConn] = useState<{ provider: "gmail" | "outlook"; email: string; refreshToken: string } | null>(null);
@@ -335,7 +336,7 @@ const AuditorConnect = () => {
           text: activeText,
           sourceType,
           accountType: "individual",
-          auditMonths: 6,
+          auditMonths: sourceType === "email" ? emailMonths : statementMonths,
         },
       });
 
@@ -493,6 +494,11 @@ const AuditorConnect = () => {
                 >
                   <s.icon className={cn("w-6 h-6 mx-auto mb-2", sourceType === s.type ? "text-primary" : "text-muted-foreground")} />
                   <p className="text-sm font-medium">{s.label}</p>
+                  {s.soon && (
+                    <Badge variant="outline" className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Coming Soon
+                    </Badge>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1 hidden sm:block">{s.hint}</p>
                 </button>
               ))}
@@ -515,8 +521,24 @@ const AuditorConnect = () => {
               </div>
             ) : sourceType === "pdf" ? (
               <div className="space-y-4">
-                <Label htmlFor="pdf">Upload PDF statement</Label>
-                <Input id="pdf" type="file" accept=".pdf,.txt" onChange={handleFileUpload} disabled={parsingPdf} />
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pdf">Upload PDF statement</Label>
+                    <Input id="pdf" type="file" accept=".pdf,.txt" onChange={handleFileUpload} disabled={parsingPdf} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="statement-months">Statement period</Label>
+                    <select
+                      id="statement-months"
+                      value={statementMonths}
+                      onChange={(e) => setStatementMonths(Number(e.target.value))}
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value={6}>6 months</option>
+                      <option value={12}>12 months</option>
+                    </select>
+                  </div>
+                </div>
                 {parsingPdf && (
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <Loader2 className="w-3 h-3 animate-spin" /> Extracting text from your PDF...
@@ -697,7 +719,7 @@ const AuditorConnect = () => {
           <div className="flex flex-col sm:flex-row gap-3">
             <Button size="lg" className="flex-1" onClick={runAudit} disabled={!canRun}>
               <RefreshCw className="w-4 h-4 mr-2" />
-              Run FREE 6-Month Audit
+              Run FREE {sourceType === "email" ? emailMonths : statementMonths}-Month Audit
             </Button>
           </div>
         )}

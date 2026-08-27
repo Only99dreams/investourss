@@ -17,14 +17,14 @@ const planHierarchy: Record<string, number> = {
   quarterly: 2,
   biennial: 3,
   annual: 4,
-  b2b_annual: 5,
+  b2b_quarterly: 5,
 };
 
 const SubscriptionPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, profile } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'biennial' | 'annual' | 'b2b_annual' | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'biennial' | 'annual' | 'b2b_quarterly' | null>(null);
 
   const currentSubType = profile?.subscription_type || null;
   const currentPlanLevel = currentSubType ? planHierarchy[currentSubType] || 0 : 0;
@@ -55,7 +55,7 @@ const SubscriptionPage = () => {
       } else if (planParam.includes('annual')) {
         setSelectedPlan('annual');
       } else if (planParam.includes('b2b')) {
-        setSelectedPlan('b2b_annual');
+        setSelectedPlan('b2b_quarterly');
       }
     }
   }, [user, profile, searchParams, navigate, isPremium, currentSubType]);
@@ -177,11 +177,11 @@ const SubscriptionPage = () => {
       ],
     },
     {
-      key: 'b2b_annual' as const,
+      key: 'b2b_quarterly' as const,
       name: 'B2B Plan',
-      description: 'For organizations, institutions, and teams',
-      price: 120000,
-      period: 'year',
+      description: 'For big promoters, organizations, institutions, and teams',
+      price: 360000,
+      period: '3 months',
       savings: null,
       icon: Shield,
       featured: false,

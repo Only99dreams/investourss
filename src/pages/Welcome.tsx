@@ -4,16 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Twitter, Instagram, Youtube, MessageCircle } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
-const featureItems = [
-  { emoji: "🛡", label: "AI Financial Auditor", emojiLabel: "shield" },
-  { emoji: "📄", label: "AI Business Planner", emojiLabel: "document" },
-  { emoji: "🎓", label: "AI Financial Tutor", emojiLabel: "graduation cap" },
-  { emoji: "🚨", label: "Investment Scam Detector", emojiLabel: "rotating light" },
-];
-
-const moreFeatures = [
-  { emoji: "🌍", label: "Opportunity Hub & Mentorship", emojiLabel: "globe" },
-  { emoji: "💼", label: "Investment & Microinsurance Marketplace (Coming Soon)", emojiLabel: "briefcase" },
+const doctorSteps = [
+  { emoji: "🩺", label: "Examines your finances", emojiLabel: "stethoscope" },
+  { emoji: "🔍", label: "Detects problems", emojiLabel: "magnifying glass" },
+  { emoji: "📊", label: "Explains your financial health", emojiLabel: "bar chart" },
+  { emoji: "💡", label: "Guides your next step", emojiLabel: "lightbulb" },
 ];
 
 const Welcome = () => {
@@ -58,9 +53,18 @@ const Welcome = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.5 }}
-            className="text-base sm:text-lg md:text-xl text-primary font-medium mb-3 sm:mb-4"
+            className="text-lg sm:text-xl md:text-2xl text-primary font-medium mb-1 sm:mb-1.5"
           >
-            AI for Financial Intelligence &amp; Income Mobility
+            AI Financial Auditor
+          </motion.p>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.55 }}
+            className="text-sm sm:text-base md:text-lg text-foreground mb-3 sm:mb-4"
+          >
+            <em>Your Financial Doctor</em>
           </motion.p>
 
           <motion.p
@@ -69,8 +73,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="text-sm sm:text-base md:text-lg text-muted-foreground mb-8 sm:mb-10 leading-relaxed text-pretty"
           >
-            Access our AI-powered Livelihood Kit, discover income opportunities,
-            connect with mentors, and grow through the Financial Health Ambassadors program.
+            Understand your money. Detect financial leakages. Improve your financial health.
           </motion.p>
 
           {/* Primary CTA */}
@@ -80,7 +83,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.8 }}
             className="mb-5 sm:mb-6"
           >
-            <Link to="/home" className="block w-full sm:inline-block">
+            <Link to="/auth" className="block w-full sm:inline-block">
               <Button variant="hero" size="xl" className="group w-full sm:w-auto px-6 min-[380px]:px-8 sm:px-10">
                 Get Started Now
                 <motion.span
@@ -94,64 +97,21 @@ const Welcome = () => {
             </Link>
           </motion.div>
 
-          {/* Ambassadors CTA */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.9 }}
-            className="mb-12 sm:mb-16"
-          >
-            <Link to="/ambassador" className="block w-full sm:inline-block">
-              <Button
-                variant="outline"
-                size="lg"
-                className="group w-full sm:w-auto whitespace-normal sm:whitespace-nowrap h-auto min-h-12 sm:h-12 px-4 min-[380px]:px-6 sm:px-8 text-sm sm:text-base"
-              >
-                Join Financial Health Ambassadors
-              </Button>
-            </Link>
-            <p className="text-sm text-muted-foreground mt-3 leading-relaxed text-pretty max-w-md mx-auto">
-              Earn 30% first-time and 15% recurring commission while helping
-              businesses and individuals improve their financial health with AI.
-            </p>
-          </motion.div>
-
-          {/* Livelihood Kit */}
+          {/* What your Financial Doctor does */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 1.0 }}
             className="mb-10 sm:mb-12"
           >
-            <h2 className="text-base sm:text-lg font-bold text-foreground mb-4 sm:mb-5">Livelihood Kit</h2>
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-muted-foreground text-sm">
-              {featureItems.map((item) => (
+            <h2 className="text-base sm:text-lg font-bold text-foreground mb-4 sm:mb-5">
+              What your Financial Doctor does
+            </h2>
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2 sm:gap-3 text-muted-foreground text-left">
+              {doctorSteps.map((item) => (
                 <div
                   key={item.label}
-                  className="flex items-center gap-2 rounded-full bg-secondary/70 border border-border/50 px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm text-left"
-                >
-                  <span className="text-base sm:text-lg shrink-0" aria-label={item.emojiLabel}>
-                    {item.emoji}
-                  </span>
-                  <span className="leading-snug">{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* More Features */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 1.1 }}
-            className="mb-12 sm:mb-16"
-          >
-            <h2 className="text-base sm:text-lg font-bold text-foreground mb-4 sm:mb-5">More Features</h2>
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-muted-foreground text-sm">
-              {moreFeatures.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-2 rounded-full bg-secondary/70 border border-border/50 px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm text-left"
+                  className="flex items-center gap-2.5 sm:gap-3 rounded-xl bg-secondary/70 border border-border/50 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm"
                 >
                   <span className="text-base sm:text-lg shrink-0" aria-label={item.emojiLabel}>
                     {item.emoji}

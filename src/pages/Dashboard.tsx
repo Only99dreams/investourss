@@ -16,6 +16,7 @@ import { NotificationsSection } from "@/components/dashboard/sections/Notificati
 import { LeaderboardSection } from "@/components/dashboard/sections/LeaderboardSection";
 import { SavedPlansSection } from "@/components/dashboard/sections/SavedPlansSection";
 import { AuditorDashboard } from "@/pages/AuditorDashboard";
+import FinancialHealthGuidancePage from "@/pages/FinancialHealthGuidancePage";
 import { FHAPortfolioSection } from "@/components/dashboard/sections/FHAPortfolioSection";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Loader2 } from "lucide-react";
@@ -135,6 +136,12 @@ const Dashboard = () => {
             <>
               <DashboardHeader title="AI Financial Auditor" onMenuClick={() => setSidebarOpen(true)} />
               <AuditorDashboard embedded />
+            </>
+          } />
+          <Route path="/health-guidance" element={
+            <>
+              <DashboardHeader title="Financial Health Guidance" onMenuClick={() => setSidebarOpen(true)} />
+              <FinancialHealthGuidancePage />
             </>
           } />
           <Route path="/fha-portfolio" element={

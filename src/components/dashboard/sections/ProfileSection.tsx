@@ -54,7 +54,7 @@ export function ProfileSection() {
   }, [profile, isEditing]);
 
   const copyReferralLink = () => {
-    const link = `${window.location.origin}/signup/individual?ref=${profile?.referral_code}`;
+    const link = `${window.location.origin}/signup?ref=${profile?.referral_code}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     toast({ title: "Copied!", description: "Referral link copied to clipboard" });

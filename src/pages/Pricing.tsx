@@ -279,12 +279,12 @@ const Pricing = () => {
                       <div className="flex items-baseline justify-between mb-2">
                         <span className="text-sm font-medium">B2B Subscription</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold text-foreground">₦120,000</span>
-                          <span className="text-sm text-muted-foreground"> / year</span>
+                          <span className="text-2xl font-bold text-foreground">₦360,000</span>
+                          <span className="text-sm text-muted-foreground"> / 3 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
-                      <Link to="/subscribe?plan=b2b-annual">
+                      <Link to="/subscribe?plan=b2b-quarterly">
                         <Button variant="default" className="w-full" size="sm">
                           Upgrade Now
                         </Button>

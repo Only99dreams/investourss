@@ -32,7 +32,7 @@ const Auth = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (user && !authLoading) {
-      navigate("/dashboard");
+      navigate("/home");
     }
   }, [user, authLoading, navigate]);
 
@@ -55,7 +55,7 @@ const Auth = () => {
           title: "Welcome back!",
           description: "You have successfully logged in.",
         });
-        navigate("/dashboard");
+        navigate("/home");
       }
     } else if (mode === "forgot") {
       setIsLoading(false);

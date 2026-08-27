@@ -55,6 +55,9 @@ const AuditorLanding = () => {
             <Button asChild size="xl" variant="outline">
               <Link to="/auditor/packs">View Pricing</Link>
             </Button>
+            <Button asChild size="xl" variant="outline">
+              <Link to="/ambassador">Join Financial Health Ambassadors</Link>
+            </Button>
           </div>
         </motion.section>
 

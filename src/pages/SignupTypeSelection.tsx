@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, User, Users, Building2, ArrowRight, Check, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, User, Users, ArrowRight, Check, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,47 +17,35 @@ import { Footer } from "@/components/ui/Footer";
 const userTypes = [
   {
     id: "individual",
-    title: "Individual (Builders & Learners)",
+    title: "Individual & Business",
     icon: User,
-    description: "Perfect for individuals who want to learn, build, and grow their income through better financial decisions and business creation.",
+    description: "For individuals, entrepreneurs, and businesses that want to understand, protect and improve their financial health and build stronger financial futures.",
     features: [
-      "AI Financial Education & Guidance",
-      "AI Scam Detection & Protection",
-      "AI Business Plan Generator (Turn ideas into funding-ready businesses)",
-      "Personal Growth & Income Mobility Tools",
-      "Access to vetted opportunities (where available)"
+      "🩺 AI Financial Auditor & Financial Health Guidance",
+      "🎓 AI Financial Education & Guidance",
+      "🛡️ Investment Scam Detection & Protection",
+      "📊 AI Business Planning & Income-Building Tools",
+      "📈 Financial & Business Growth Tools",
+      "🎯 Access to Vetted Opportunities (where available)",
     ],
     color: "primary",
-    buttonLabel: "Start building your future"
+    buttonLabel: "Sign up Now"
   },
   {
     id: "b2b",
-    title: "B2B Partner (Training Centers, Cooperatives, NGOs & Communities)",
+    title: "B2B Partners",
     icon: Users,
-    description: "For Training centers, cooperatives, NGOs, and organized groups.",
+    description: "For training centers, cooperatives, NGOs, communities and other organizations that want to improve the financial health and economic capacity of the people they serve.",
     features: [
-      "Cooperative Financial Learning Modules",
-      "Collective Income & Investment Planning",
-      "Community Growth Dashboard",
-      "Admin & Member Management Tools"
+      "🩺 AI Financial Health & Auditing Tools",
+      "🎓 Financial Education & AI Learning Modules",
+      "📊 Collective Financial & Income Planning",
+      "📈 Community Growth & Financial Health Dashboard",
+      "👥 Admin & Member Management Tools",
+      "🛡️ Scam Awareness & Protection",
     ],
     color: "accent",
-    buttonLabel: "Grow together"
-  },
-  {
-    id: "firm",
-    title: "Licensed Firm (Financial Institutions & Firms)",
-    icon: Building2,
-    description: "For licensed investment, microinsurance, and financial service providers who want to reach and serve verified users with trusted opportunities.",
-    features: [
-      "Opportunity Submission & Distribution Tools",
-      "Verified User Access Channels",
-      "AI-assisted Matching & Screening",
-      "Analytics & Performance Dashboard",
-      "Secure Messaging & Engagement Tools"
-    ],
-    color: "investours-gold",
-    buttonLabel: "Connect with ready, verified users"
+    buttonLabel: "Sign up Now"
   }
 ];
 
@@ -67,12 +55,14 @@ const SignupTypeSelection = () => {
   const { toast } = useToast();
   const { signUp } = useAuth();
 
-  const typeParam = searchParams.get("type");
-  const [selectedType, setSelectedType] = useState<string | null>(typeParam);
+const typeParam = searchParams.get("type");
+  const [selectedType, setSelectedType] = useState<string | null>(
+    typeParam && userTypes.some((t) => t.id === typeParam) ? typeParam : null
+  );
   
   // Update local state if URL param changes
   useEffect(() => {
-    setSelectedType(typeParam);
+    setSelectedType(typeParam && userTypes.some((t) => t.id === typeParam) ? typeParam : null);
   }, [typeParam]);
 
   // Record a referral click once when the page loads with a ?ref= code
@@ -211,17 +201,12 @@ const SignupTypeSelection = () => {
           });
         }
 
-        // Handle referral code
+        // Handle referral code (SECURITY DEFINER RPC so the link can't silently fail)
         if (formData.referralCode) {
-          const { data: referrer } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('referral_code', formData.referralCode)
-            .maybeSingle();
-
-          if (referrer) {
-            await supabase.from('profiles').update({ referred_by: referrer.id }).eq('id', user.id);
-          }
+          const { error: refError } = await supabase.rpc('apply_referral_code', {
+            p_referral_code: formData.referralCode.trim(),
+          });
+          if (refError) console.error('Failed to apply referral code:', refError);
         }
       }
 
@@ -678,7 +663,7 @@ const SignupTypeSelection = () => {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="grid md:grid-cols-3 gap-4 md:gap-6"
+          className="grid sm:grid-cols-2 gap-4 md:gap-6 max-w-4xl mx-auto"
         >
           {userTypes.map((type, index) => {
             const IconComponent = type.icon;
