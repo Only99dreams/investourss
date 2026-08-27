@@ -220,16 +220,18 @@ const typeParam = searchParams.get("type");
         }).catch(() => {});
 
         toast({
-          title: "Account Created!",
-          description: "Welcome to Investours. Please complete your profile.",
+          title: "Verify Your Email",
+          description: `Account created! A verification email has been sent to ${formData.email}. Please check your inbox and click the confirm link to secure your account.`,
+          duration: 8000,
         });
         navigate("/complete-profile");
       } else {
         toast({
-          title: "Check your email!",
-          description: "We've sent you a confirmation link. Please verify your email to complete your signup.",
+          title: "Verify Your Email",
+          description: `We've sent a confirmation link to ${formData.email}. Please check your inbox (and spam folder) and click it to complete your verification before signing in.`,
+          duration: 8000,
         });
-        navigate("/auth");
+        navigate("/auth?mode=login");
       }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
