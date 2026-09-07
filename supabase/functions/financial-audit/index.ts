@@ -295,7 +295,7 @@ function buildFallbackRecommendations(
     title: accountType === 'business' ? 'Separate business & personal finances' : 'Use free tier monitoring',
     description: accountType === 'business'
       ? 'Open dedicated business accounts to keep expense analysis and tax readiness clean.'
-      : 'Enable weekly monitoring to track financial health changes and catch new leakages early.',
+      : 'Enable weekly monitoring to track financial health checks and catch new leakages early.',
     category: 'monitoring',
   });
   return recs;

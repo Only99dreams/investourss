@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Twitter, Instagram, Youtube, MessageCircle } from "lucide-react";
+import { Twitter, Instagram, Youtube, MessageCircle, ScanSearch } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
 const doctorSteps = [
@@ -97,11 +97,26 @@ const Welcome = () => {
             </Link>
           </motion.div>
 
+          {/* AI Financial Auditor CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.9 }}
+            className="mb-5 sm:mb-6"
+          >
+            <Link to="/auditor" className="block w-full sm:inline-block">
+              <Button variant="accent" size="lg" className="w-full sm:w-auto px-6 min-[380px]:px-8 sm:px-10">
+                <ScanSearch className="w-5 h-5 mr-2" />
+                AI Financial Auditor
+              </Button>
+            </Link>
+          </motion.div>
+
           {/* What your Financial Doctor does */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 1.0 }}
+            transition={{ duration: 0.6, delay: 1.1 }}
             className="mb-10 sm:mb-12"
           >
             <h2 className="text-base sm:text-lg font-bold text-foreground mb-4 sm:mb-5">

@@ -163,7 +163,7 @@ const AuditorMonitoring = () => {
           </h1>
           <p className="text-muted-foreground max-w-2xl">
             Monitoring never consumes audit credits. Subscribers get weekly reports; audit-pack
-            users get monthly summaries of health changes, new leakages, spending alerts and
+            users get monthly summaries of financial health checks, new leakages, spending alerts and
             recovery opportunities.
           </p>
         </motion.div>
@@ -176,7 +176,7 @@ const AuditorMonitoring = () => {
                 <p className="font-semibold text-sm">{hasSubscription ? "Weekly Monitoring" : "Monthly Monitoring"}</p>
                 <p className="text-xs text-muted-foreground">
                   {hasSubscription
-                    ? "Financial health changes, new leakages, spending alerts & recovery opportunities every week."
+                    ? "Financial health checks, new leakages, spending alerts & recovery opportunities every week."
                     : "A monthly summary while using audit credits. Upgrade for weekly reports."}
                 </p>
               </div>

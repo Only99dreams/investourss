@@ -102,7 +102,7 @@ export function EducationSection() {
         console.log("Alternative table 'educational_modules' error:", altError2);
 
         // If simple query works, try the complex one
-        let query = supabase
+        const query = supabase
           .from("education_modules")
           .select(`
             *,
@@ -567,28 +567,28 @@ export function EducationSection() {
                   <span>{completedCount}/{totalModules}</span>
                 </div>
                 <Progress value={progressPercent} className="h-3" />
-                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-2">
                   <Link to="/dashboard/auditor">
-                    <Button className="w-full" size="sm">
-                      <ScanSearch className="w-4 h-4 mr-2" />
+                    <Button className="w-full whitespace-normal h-auto min-h-9 py-1.5 leading-tight" size="sm">
+                      <ScanSearch className="w-4 h-4 mr-2 shrink-0" />
                       AI Auditor
                     </Button>
                   </Link>
                   <Link to="/business-plan">
-                    <Button className="w-full" size="sm">
-                      <FileText className="w-4 h-4 mr-2" />
+                    <Button className="w-full whitespace-normal h-auto min-h-9 py-1.5 leading-tight" size="sm">
+                      <FileText className="w-4 h-4 mr-2 shrink-0" />
                       Business Plan
                     </Button>
                   </Link>
                   <Link to="/tutor">
-                    <Button className="w-full" size="sm">
-                      <Sparkles className="w-4 h-4 mr-2" />
+                    <Button className="w-full whitespace-normal h-auto min-h-9 py-1.5 leading-tight" size="sm">
+                      <Sparkles className="w-4 h-4 mr-2 shrink-0" />
                       AI Tutor
                     </Button>
                   </Link>
                   <Link to="/vetting">
-                    <Button className="w-full" size="sm">
-                      <Shield className="w-4 h-4 mr-2" />
+                    <Button className="w-full whitespace-normal h-auto min-h-9 py-1.5 leading-tight" size="sm">
+                      <Shield className="w-4 h-4 mr-2 shrink-0" />
                       Scam Detector
                     </Button>
                   </Link>

@@ -155,7 +155,7 @@ export function ContinuousReportingSection() {
             <div>
               <h3 className="text-xl font-bold">Continuous Reporting</h3>
               <p className="text-sm text-muted-foreground">
-                Stay on top of your finances — get periodic health changes, new leakages and recovery opportunities.
+                Stay on top of your finances — get periodic financial health checks, new leakages and recovery opportunities.
               </p>
             </div>
           </div>
@@ -173,7 +173,7 @@ export function ContinuousReportingSection() {
               <p className="font-semibold text-sm">{hasSubscription ? "Weekly Reporting" : "Monthly Reporting"}</p>
               <p className="text-xs text-muted-foreground">
                 {hasSubscription
-                  ? "Health changes, new leakages, spending alerts & recovery opportunities every week."
+                  ? "Financial health checks, new leakages, spending alerts & recovery opportunities every week."
                   : "Monthly summaries while on audit credits. Upgrade for weekly."}
               </p>
             </div>

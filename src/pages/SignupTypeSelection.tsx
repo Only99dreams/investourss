@@ -101,6 +101,7 @@ const typeParam = searchParams.get("type");
     country: "",
     referralCode: getInitialReferralCode(),
     disability: "",
+    accountType: "individual",
     // B2B fields
     b2bName: "",
     b2bType: "",
@@ -142,10 +143,15 @@ const typeParam = searchParams.get("type");
 
     try {
       // Sign up the user
-      const { error } = await signUp(formData.email, formData.password, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const signUpMetadata: any = {
         full_name: selectedType === 'individual' ? formData.fullName : formData.contactName,
         user_type: selectedType
-      });
+      };
+      if (formData.referralCode) {
+        signUpMetadata.referral_code = formData.referralCode.trim();
+      }
+      const { error } = await signUp(formData.email, formData.password, signUpMetadata);
 
       if (error) {
         toast({
@@ -173,6 +179,7 @@ const typeParam = searchParams.get("type");
           gender: formData.gender || null,
           disability: formData.disability || null,
           user_type: selectedType as 'individual' | 'b2b' | 'firm',
+          account_type: selectedType === 'individual' ? formData.accountType : 'business',
           email_opt_in: emailOptIn
         };
 
@@ -298,6 +305,18 @@ const typeParam = searchParams.get("type");
                           onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                           required 
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="accountType">I am registering as *</Label>
+                        <Select value={formData.accountType} onValueChange={(v) => setFormData({ ...formData, accountType: v })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select account type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="individual">Individual</SelectItem>
+                            <SelectItem value="business">Business</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="grid xs:grid-cols-2 gap-3">
                         <div className="space-y-2">

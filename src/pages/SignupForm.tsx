@@ -96,10 +96,15 @@ const SignupForm = () => {
 
     try {
       // Sign up the user
-      const { error } = await signUp(formData.email, formData.password, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const signUpMetadata: any = {
         full_name: type === 'individual' ? formData.fullName : formData.contactName,
         user_type: type
-      });
+      };
+      if (formData.referralCode) {
+        signUpMetadata.referral_code = formData.referralCode.trim();
+      }
+      const { error } = await signUp(formData.email, formData.password, signUpMetadata);
 
       if (error) {
         toast({

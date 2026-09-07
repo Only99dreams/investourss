@@ -107,9 +107,9 @@ export const LivelihoodKit = () => {
                     <h4 className="font-semibold text-sm">{tool.title}</h4>
                     <p className="text-xs text-muted-foreground mt-1 flex-1">{tool.description}</p>
                     <Link to={tool.path} className="mt-4 block">
-                      <Button size="sm" className="w-full group/btn">
-                        {tool.cta}
-                        <ArrowRight className="ml-1 w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" />
+                      <Button size="sm" className="w-full whitespace-normal h-auto min-h-9 py-1.5 leading-tight group/btn">
+                        <span>{tool.cta}</span>
+                        <ArrowRight className="ml-1 w-3 h-3 shrink-0 group-hover/btn:translate-x-0.5 transition-transform" />
                       </Button>
                     </Link>
                   </div>
