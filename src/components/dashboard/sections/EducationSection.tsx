@@ -568,7 +568,7 @@ export function EducationSection() {
                 </div>
                 <Progress value={progressPercent} className="h-3" />
                 <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-2">
-                  <Link to="/dashboard/auditor">
+                  <Link to="/auditor">
                     <Button className="w-full whitespace-normal h-auto min-h-9 py-1.5 leading-tight" size="sm">
                       <ScanSearch className="w-4 h-4 mr-2 shrink-0" />
                       AI Auditor

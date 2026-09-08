@@ -297,8 +297,7 @@ const FHAChatroom = () => {
       if (selectedFile) {
         try {
           const fileExt = selectedFile.name.split('.').pop();
-          const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-          const filePath = `fha-chatroom-attachments/${fileName}`;
+          const filePath = `${user.id}/fha-chatroom-attachments/${Date.now()}.${fileExt}`;
 
           if (selectedFile.type.startsWith('image/')) attachmentType = 'image';
           else if (selectedFile.type.startsWith('video/')) attachmentType = 'video';

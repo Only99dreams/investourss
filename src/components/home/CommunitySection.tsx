@@ -228,19 +228,26 @@ const CommunitySection = () => {
       let attachmentType = null;
 
       if (selectedFile) {
-        const fileExt = selectedFile.name.split(".").pop();
-        const filePath = `post-attachments/${user.id}/${Date.now()}.${fileExt}`;
-        if (selectedFile.type.startsWith("image/")) attachmentType = "image";
-        else if (selectedFile.type.startsWith("video/")) attachmentType = "video";
-        else attachmentType = "document";
+        try {
+          const fileExt = selectedFile.name.split(".").pop();
+          const filePath = `${user.id}/post-attachments/${Date.now()}.${fileExt}`;
+          if (selectedFile.type.startsWith("image/")) attachmentType = "image";
+          else if (selectedFile.type.startsWith("video/")) attachmentType = "video";
+          else attachmentType = "document";
 
-        const { data, error: uploadError } = await supabase.storage
-          .from("attachments")
-          .upload(filePath, selectedFile, { cacheControl: "3600", upsert: false });
-        if (uploadError) throw uploadError;
-        if (data) {
-          const { data: { publicUrl } } = supabase.storage.from("attachments").getPublicUrl(filePath);
-          attachmentUrl = publicUrl;
+          const { data, error: uploadError } = await supabase.storage
+            .from("attachments")
+            .upload(filePath, selectedFile, { cacheControl: "3600", upsert: false });
+          if (uploadError) throw uploadError;
+          if (data) {
+            const { data: { publicUrl } } = supabase.storage.from("attachments").getPublicUrl(filePath);
+            attachmentUrl = publicUrl;
+          }
+        } catch (uploadError) {
+          console.error("File upload error:", uploadError);
+          toast({ title: "Upload Failed", description: "Failed to upload file. You can still post without it.", variant: "destructive" });
+          attachmentUrl = null;
+          attachmentType = null;
         }
       }
 

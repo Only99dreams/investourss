@@ -46,16 +46,16 @@ const AuditorLanding = () => {
             Connect your financial records and discover your Financial Health Score, hidden bank
             overcharges and your estimated recoverable amount — in minutes, with AI.
           </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Button asChild size="xl" variant="hero">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch justify-center gap-3 sm:gap-4 w-full max-w-md sm:max-w-none mx-auto">
+            <Button asChild size="xl" variant="hero" className="w-full sm:w-auto">
               <Link to="/auditor/connect">
                 Start Free Audit <ArrowRight className="w-5 h-5 ml-2" />
               </Link>
             </Button>
-            <Button asChild size="xl" variant="outline">
+            <Button asChild size="xl" variant="outline" className="w-full sm:w-auto">
               <Link to="/auditor/packs">View Pricing</Link>
             </Button>
-            <Button asChild size="xl" variant="outline">
+            <Button asChild size="xl" variant="outline" className="w-full sm:w-auto whitespace-normal h-auto min-h-12 py-2">
               <Link to="/ambassador">Join Financial Health Ambassadors</Link>
             </Button>
           </div>

@@ -253,7 +253,7 @@ const FHAChatroomHub = () => {
 
       if (selectedFile) {
         const fileExt = selectedFile.name.split(".").pop();
-        const filePath = `fha-chatroom-attachments/${user.id}/${Date.now()}.${fileExt}`;
+        const filePath = `${user.id}/fha-chatroom-attachments/${Date.now()}.${fileExt}`;
         if (selectedFile.type.startsWith("image/")) attachmentType = "image";
         else if (selectedFile.type.startsWith("video/")) attachmentType = "video";
         else attachmentType = "document";

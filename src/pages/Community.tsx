@@ -368,8 +368,7 @@ const Community = () => {
       if (selectedFile) {
         try {
           const fileExt = selectedFile.name.split('.').pop();
-          const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-          const filePath = `post-attachments/${fileName}`;
+          const filePath = `${user.id}/post-attachments/${Date.now()}.${fileExt}`;
 
           if (selectedFile.type.startsWith('image/')) attachmentType = 'image';
           else if (selectedFile.type.startsWith('video/')) attachmentType = 'video';

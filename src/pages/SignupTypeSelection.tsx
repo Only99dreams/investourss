@@ -116,12 +116,16 @@ const typeParam = searchParams.get("type");
   });
 
   const handleSelectType = (typeId: string) => {
-    setSearchParams({ type: typeId });
+    const params = new URLSearchParams(searchParams);
+    params.set("type", typeId);
+    setSearchParams(params);
     setSelectedType(typeId);
   };
 
   const handleBackToSelection = () => {
-    setSearchParams({});
+    const params = new URLSearchParams(searchParams);
+    params.delete("type");
+    setSearchParams(params);
     setSelectedType(null);
   };
 

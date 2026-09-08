@@ -10,7 +10,7 @@ import investoursLogo from "@/assets/investours-logo.png";
 
 const sidebarItems = [
   { icon: GraduationCap, label: "Education", path: "/dashboard/education" },
-  { icon: ScanSearch, label: "AI Auditor", path: "/dashboard/auditor", subtitle: "Financial Health" },
+  { icon: ScanSearch, label: "AI Auditor", path: "/auditor", subtitle: "Financial Health" },
   { icon: HeartPulse, label: "Financial Health Guidance", path: "/dashboard/health-guidance", subtitle: "Guidance & Reports" },
   { icon: FileText, label: "My Plans", path: "/dashboard/plans", subtitle: "Business Plans" },
   { icon: User, label: "Profile", path: "/dashboard/profile" },

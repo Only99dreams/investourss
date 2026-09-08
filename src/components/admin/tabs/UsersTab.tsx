@@ -64,6 +64,9 @@ const UsersTab = () => {
   const [portfolio, setPortfolio] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [followers, setFollowers] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [referralStats, setReferralStats] = useState<any>(null);
+  const [referrerMap, setReferrerMap] = useState<Record<string, string>>({});
 
   const formatNaira = (value: number) =>
     `₦${Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -75,6 +78,7 @@ const UsersTab = () => {
     setDetailsLoading(true);
     setPortfolio(null);
     setFollowers([]);
+    setReferralStats(null);
 
     try {
       const { data: portfolioData, error: portfolioError } = await supabase
@@ -90,6 +94,14 @@ const UsersTab = () => {
         .limit(100);
       if (followersError) throw followersError;
       setFollowers(followersData || []);
+
+      const { data: statsData, error: statsError } = await supabase
+        .from("referral_stats")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (statsError) throw statsError;
+      setReferralStats(statsData || null);
     } catch (error) {
       console.error("Error loading user details:", error);
       toast({
@@ -115,6 +127,17 @@ const UsersTab = () => {
 
       if (error) throw error;
       setUsers(data || []);
+
+      const { data: allProfiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, full_name, email");
+      if (profilesError) throw profilesError;
+
+      const map: Record<string, string> = {};
+      (allProfiles || []).forEach((p) => {
+        map[p.id] = p.full_name || p.email || p.id;
+      });
+      setReferrerMap(map);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error("Error fetching users:", error);
@@ -207,6 +230,7 @@ const UsersTab = () => {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Referred By</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Tier</TableHead>
@@ -219,7 +243,7 @@ const UsersTab = () => {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center h-24">
+                    <TableCell colSpan={10} className="text-center h-24">
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -230,6 +254,9 @@ const UsersTab = () => {
                         {user.full_name || "N/A"}
                       </TableCell>
                       <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        {user.referred_by ? referrerMap[user.referred_by] || "N/A" : "—"}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
                           {user.assigned_role || "user"}
@@ -273,7 +300,7 @@ const UsersTab = () => {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleViewDetails(user)}>
                               <Eye className="mr-2 h-4 w-4" />
-                              FHA Portfolio & Followers
+                              Referral, Followers & FHA Details
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -405,7 +432,7 @@ const UsersTab = () => {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <PieChart className="w-5 h-5 text-primary" />
-                FHA Portfolio & Followers
+                User Details
               </DialogTitle>
               <DialogDescription>
                 {selectedUser?.full_name || "User"} · {selectedUser?.email}
@@ -416,43 +443,86 @@ const UsersTab = () => {
               <div className="flex justify-center p-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : !portfolio?.has_ambassador ? (
-              <p className="text-sm text-muted-foreground py-4">
-                This user is not an active Financial Health Ambassador, so there is no FHA portfolio to show.
-              </p>
             ) : (
               <div className="space-y-4 py-2">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="rounded-lg border bg-background/60 p-3">
-                    <p className="text-xs text-muted-foreground">Earned from Individuals</p>
-                    <p className="text-lg font-bold">{formatNaira(portfolio.total_earned_individuals)}</p>
+                    <p className="text-xs text-muted-foreground">Referred By</p>
+                    <p className="text-sm font-semibold mt-1">
+                      {selectedUser?.referred_by
+                        ? referrerMap[selectedUser.referred_by] || "N/A"
+                        : "No referrer"}
+                    </p>
                   </div>
                   <div className="rounded-lg border bg-background/60 p-3">
-                    <p className="text-xs text-muted-foreground">Earned from Businesses</p>
-                    <p className="text-lg font-bold">{formatNaira(portfolio.total_earned_businesses)}</p>
+                    <p className="text-xs text-muted-foreground">Referral Code</p>
+                    <p className="text-sm font-semibold mt-1">
+                      {selectedUser?.referral_code || "—"}
+                    </p>
                   </div>
-                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
-                    <p className="text-xs text-muted-foreground">Current Portfolio Value</p>
-                    <p className="text-lg font-bold text-primary">{formatNaira(portfolio.current_portfolio_value)}</p>
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">Link Clicks</p>
+                    <p className="text-lg font-bold mt-1">{referralStats?.total_clicks ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">Total Signups</p>
+                    <p className="text-lg font-bold mt-1">{referralStats?.total_signups ?? 0}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { label: "Pack Users (Individuals)", value: portfolio.packs?.individuals?.total_users ?? 0, commission: portfolio.packs?.individuals?.total_commission ?? 0 },
-                    { label: "Pack Users (Businesses)", value: portfolio.packs?.businesses?.total_users ?? 0, commission: portfolio.packs?.businesses?.total_commission ?? 0 },
-                    { label: "Subscribers (Individuals)", value: portfolio.subscribers?.individuals?.total_users ?? 0, commission: portfolio.subscribers?.individuals?.total_commission ?? 0 },
-                    { label: "Subscribers (Businesses)", value: portfolio.subscribers?.businesses?.total_users ?? 0, commission: portfolio.subscribers?.businesses?.total_commission ?? 0 },
-                  ].map((card) => (
-                    <div key={card.label} className="rounded-lg border bg-background/60 p-3">
-                      <p className="text-xs text-muted-foreground">{card.label}</p>
-                      <p className="text-xl font-bold">{card.value}</p>
-                      <p className="text-xs text-primary font-semibold">{formatNaira(card.commission)} earned</p>
-                    </div>
-                  ))}
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Total Referral Earnings</p>
+                  <p className="text-lg font-bold text-primary">
+                    {formatNaira(referralStats?.total_earnings)}
+                  </p>
                 </div>
               </div>
             )}
+
+            <div className="pt-2">
+              <p className="text-sm font-medium mb-2">FHA Portfolio</p>
+              {detailsLoading ? (
+                <div className="flex justify-center p-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : !portfolio?.has_ambassador ? (
+                <p className="text-sm text-muted-foreground py-3 rounded-lg border bg-background/60 px-3">
+                  This user is not an active Financial Health Ambassador, so there is no FHA portfolio to show.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-lg border bg-background/60 p-3">
+                      <p className="text-xs text-muted-foreground">Earned from Individuals</p>
+                      <p className="text-lg font-bold">{formatNaira(portfolio.total_earned_individuals)}</p>
+                    </div>
+                    <div className="rounded-lg border bg-background/60 p-3">
+                      <p className="text-xs text-muted-foreground">Earned from Businesses</p>
+                      <p className="text-lg font-bold">{formatNaira(portfolio.total_earned_businesses)}</p>
+                    </div>
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                      <p className="text-xs text-muted-foreground">Current Portfolio Value</p>
+                      <p className="text-lg font-bold text-primary">{formatNaira(portfolio.current_portfolio_value)}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: "Pack Users (Individuals)", value: portfolio.packs?.individuals?.total_users ?? 0, commission: portfolio.packs?.individuals?.total_commission ?? 0 },
+                      { label: "Pack Users (Businesses)", value: portfolio.packs?.businesses?.total_users ?? 0, commission: portfolio.packs?.businesses?.total_commission ?? 0 },
+                      { label: "Subscribers (Individuals)", value: portfolio.subscribers?.individuals?.total_users ?? 0, commission: portfolio.subscribers?.individuals?.total_commission ?? 0 },
+                      { label: "Subscribers (Businesses)", value: portfolio.subscribers?.businesses?.total_users ?? 0, commission: portfolio.subscribers?.businesses?.total_commission ?? 0 },
+                    ].map((card) => (
+                      <div key={card.label} className="rounded-lg border bg-background/60 p-3">
+                        <p className="text-xs text-muted-foreground">{card.label}</p>
+                        <p className="text-xl font-bold">{card.value}</p>
+                        <p className="text-xs text-primary font-semibold">{formatNaira(card.commission)} earned</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="pt-2">
               <p className="text-sm font-medium mb-2">
