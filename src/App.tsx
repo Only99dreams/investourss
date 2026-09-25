@@ -26,6 +26,7 @@ import SubscriptionPage from "./pages/SubscriptionPage";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import ReferralCapture from "@/components/ReferralCapture";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <ReferralCapture />
           <Routes>
             <Route path="/" element={<Welcome />} />
             <Route path="/home" element={<AuditorLanding />} />

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,12 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Copy, Check, Users, MousePointer, UserCheck, Crown, TrendingUp, Eye, EyeOff, Link2, UserPlus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  Copy, Check, Users, MousePointer, UserCheck, Crown, Link2, UserPlus,
+  MessageCircle, Twitter, Facebook, RefreshCw, AlertCircle,
+} from "lucide-react";
 import { isActiveSubscriber, isPremiumTier } from "@/lib/subscription";
+import { buildReferralLink, callReferralRpc, normalizeReferralCode } from "@/lib/referral";
 
 export function ReferralsSection() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { toast } = useToast();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [stats, setStats] = useState<any>(null);
@@ -25,10 +28,75 @@ export function ReferralsSection() {
   const [hasAmbassador, setHasAmbassador] = useState(false);
   const [followerEarnings, setFollowerEarnings] = useState<Record<string, number>>({});
   const [followerCount, setFollowerCount] = useState(0);
-  const [copied, setCopied] = useState(false);
-  const [showReferralCode, setShowReferralCode] = useState(false);
+  const [copied, setCopied] = useState<"link" | "code" | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
-  const referralLink = `${window.location.origin}/signup?ref=${profile?.referral_code}`;
+  const referralCode = normalizeReferralCode(profile?.referral_code);
+  const referralLink = buildReferralLink(referralCode);
+
+  const copyText = useCallback(
+    async (text: string, label: string, which: "link" | "code") => {
+      if (!text) {
+        toast({ title: "Nothing to copy", description: "Your referral code is missing.", variant: "destructive" });
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // Clipboard API needs a secure context; fall back to a temporary input.
+        const el = document.createElement("textarea");
+        el.value = text;
+        el.style.position = "fixed";
+        el.style.opacity = "0";
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+      }
+      setCopied(which);
+      toast({ title: "Copied!", description: `${label} copied to clipboard` });
+      setTimeout(() => setCopied(null), 2000);
+    },
+    [toast],
+  );
+
+  const copyLink = () => copyText(referralLink, "Referral link", "link");
+  const copyCode = () => copyText(referralCode, "Referral code", "code");
+
+  const shareUrl = (channel: "whatsapp" | "x" | "facebook") => {
+    const text = "Join me on Investours — the AI Financial Auditor that shows you where your money is leaking.";
+    const urls = {
+      whatsapp: `https://wa.me/?text=${encodeURIComponent(`${text} ${referralLink}`)}`,
+      x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(referralLink)}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`,
+    };
+    window.open(urls[channel], "_blank", "noopener,noreferrer,width=600,height=500");
+  };
+
+  /** Only needed if a profile predates referral codes. */
+  const regenerateCode = async () => {
+    setRegenerating(true);
+    try {
+      const res = await callReferralRpc("regenerate_referral_code", {});
+      if (res.error) throw new Error("The server could not create a code.");
+      const code = normalizeReferralCode(res.data as string | null);
+      if (!code) throw new Error("No code was returned. Please contact support.");
+      await refreshProfile();
+      toast({
+        title: "Referral code ready",
+        description: `Your new code is ${code}. Share it with your link.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Could not create a code",
+        description:
+          err instanceof Error ? err.message : "Please contact support and we'll fix it.",
+        variant: "destructive",
+      });
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const fetchFollowers = async (userId: string) => {
     // Exact count is fetched separately: a limit() on the list query would cap
@@ -118,20 +186,6 @@ export function ReferralsSection() {
     return () => { supabase.removeChannel(channel); };
   }, [user]);
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(referralLink);
-    setCopied(true);
-    toast({ title: "Copied!", description: "Referral link copied to clipboard" });
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const copyCode = () => {
-    navigator.clipboard.writeText(profile?.referral_code || "");
-    setCopied(true);
-    toast({ title: "Copied!", description: "Referral code copied to clipboard" });
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const referredCount = followerCount;
 
   const totalEarnings = hasAmbassador
@@ -157,7 +211,7 @@ export function ReferralsSection() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Referral Link - Hidden by default */}
+      {/* Referral Link — always visible so it can be copied in one tap */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -170,32 +224,79 @@ export function ReferralsSection() {
                   <p className="text-sm text-muted-foreground mb-3">
                     Share your referral link or code to earn followers and 30% commission automatically.
                   </p>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-background/80 rounded-lg px-4 py-2 text-sm font-mono truncate">
-                        {showReferralCode ? referralLink : "••••••••"}
+
+                  {referralCode ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0 bg-background/80 rounded-lg px-4 py-2 text-sm font-mono truncate">
+                          {referralLink}
+                        </div>
+                        <Button
+                          onClick={copyLink}
+                          variant="outline"
+                          size="icon"
+                          title="Copy referral link"
+                        >
+                          {copied === "link" ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+                        </Button>
                       </div>
-                      <Button 
-                        onClick={() => setShowReferralCode(!showReferralCode)} 
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-muted-foreground mr-1">Your code:</span>
+                        <Badge variant="secondary" className="font-mono">{referralCode}</Badge>
+                        <Button onClick={copyCode} variant="outline" size="sm" className="gap-2">
+                          {copied === "code" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          {copied === "code" ? "Copied" : "Copy Code"}
+                        </Button>
+                        <span className="text-muted-foreground mx-1" aria-hidden>·</span>
+                        <Button
+                          onClick={() => shareUrl("whatsapp")}
+                          variant="outline"
+                          size="icon"
+                          title="Share on WhatsApp"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          onClick={() => shareUrl("x")}
+                          variant="outline"
+                          size="icon"
+                          title="Share on X"
+                        >
+                          <Twitter className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          onClick={() => shareUrl("facebook")}
+                          variant="outline"
+                          size="icon"
+                          title="Share on Facebook"
+                        >
+                          <Facebook className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span className="flex-1">
+                        Your profile has no referral code yet, so links you share would not work.
+                      </span>
+                      <Button
+                        onClick={regenerateCode}
                         variant="outline"
-                        size="icon"
+                        size="sm"
+                        disabled={regenerating}
+                        className="shrink-0"
                       >
-                        {showReferralCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        {regenerating ? (
+                          <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-4 h-4 mr-1" />
+                        )}
+                        Create Code
                       </Button>
                     </div>
-                    {showReferralCode && (
-                      <div className="flex flex-wrap gap-2">
-                        <Button onClick={copyLink} variant="default" size="sm" className="gap-2">
-                          {copied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
-                          {copied ? "Copied" : "Copy Link"}
-                        </Button>
-                        <Button onClick={copyCode} variant="outline" size="sm" className="gap-2">
-                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                          {copied ? "Copied" : "Copy Code"}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -253,7 +354,7 @@ export function ReferralsSection() {
                       <p className="text-muted-foreground">Recurring</p>
                     </div>
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <p className="font-semibold">2%</p>
+                      <p className="font-semibold">5%</p>
                       <p className="text-muted-foreground">Indirect</p>
                     </div>
                   </div>
@@ -273,7 +374,7 @@ export function ReferralsSection() {
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-3 text-center">
                     Direct commissions on first-time purchases (30%) and repurchases/renewals (15%).
-                    2% indirect bonus on purchases by your followers&apos; own referrals. Rates apply to
+                    5% indirect bonus on purchases by your followers&apos; own referrals. Rates apply to
                     the actual price (VAT excluded).
                   </p>
             </CardContent>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, User, Users, ArrowRight, Check, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, User, Users, ArrowRight, Check, Eye, EyeOff, UserCheck, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  readReferralCode, normalizeReferralCode, verifyReferralCode, clearReferralCode,
+} from "@/lib/referral";
 import investoursLogo from "@/assets/investours-logo.png";
 import { Footer } from "@/components/ui/Footer";
 
@@ -65,32 +68,40 @@ const typeParam = searchParams.get("type");
     setSelectedType(typeParam && userTypes.some((t) => t.id === typeParam) ? typeParam : null);
   }, [typeParam]);
 
-  // Record a referral click once when the page loads with a ?ref= code
+  // Referral code arrives from the shared link (?ref=CODE) or was captured
+  // earlier in this browsing session by <ReferralCapture />.
+  const initialReferralCode = normalizeReferralCode(
+    searchParams.get("ref") || readReferralCode(),
+  );
+  const [referralStatus, setReferralStatus] = useState<
+    { state: "idle" } | { state: "checking" } | { state: "valid"; name: string | null } | { state: "invalid" }
+  >({ state: "idle" });
+
+  // Verify the captured code so the visitor can see their referrer is linked.
   useEffect(() => {
-    const urlRef = searchParams.get("ref");
-    if (urlRef) {
-      supabase.rpc("record_referral_click", { p_code: urlRef }).catch(() => {});
+    const code = normalizeReferralCode(searchParams.get("ref") || readReferralCode());
+    if (!code) {
+      setReferralStatus({ state: "idle" });
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
+    setReferralStatus({ state: "checking" });
+    verifyReferralCode(code).then((result) => {
+      if (cancelled) return;
+      setReferralStatus(
+        result.valid
+          ? { state: "valid", name: result.referrerName ?? null }
+          : { state: "invalid" },
+      );
+    });
+    return () => { cancelled = true; };
+  }, [searchParams]);
 
   // Form states
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [emailOptIn, setEmailOptIn] = useState(true);
-
-  // Get referral code from URL params or sessionStorage
-  const getInitialReferralCode = () => {
-    const urlRef = searchParams.get("ref");
-    if (urlRef) return urlRef;
-    const storedRef = sessionStorage.getItem("referral_code");
-    if (storedRef) {
-      sessionStorage.removeItem("referral_code"); // Clear after use
-      return storedRef;
-    }
-    return "";
-  };
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -99,7 +110,7 @@ const typeParam = searchParams.get("type");
     phone: "",
     gender: "",
     country: "",
-    referralCode: getInitialReferralCode(),
+    referralCode: initialReferralCode,
     disability: "",
     accountType: "individual",
     // B2B fields
@@ -143,6 +154,15 @@ const typeParam = searchParams.get("type");
       return;
     }
 
+    if (referralStatus.state === "invalid") {
+      toast({
+        title: "Invalid Referral Code",
+        description: "That referral code was not recognised. Please check it and try again.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -152,8 +172,11 @@ const typeParam = searchParams.get("type");
         full_name: selectedType === 'individual' ? formData.fullName : formData.contactName,
         user_type: selectedType
       };
-      if (formData.referralCode) {
-        signUpMetadata.referral_code = formData.referralCode.trim();
+      const referralCode = normalizeReferralCode(formData.referralCode);
+      if (referralCode) {
+        // Carried in signup metadata so handle_new_user() can attribute the
+        // referral server-side even when email confirmation is enabled.
+        signUpMetadata.referral_code = referralCode;
       }
       const { error } = await signUp(formData.email, formData.password, signUpMetadata);
 
@@ -213,9 +236,9 @@ const typeParam = searchParams.get("type");
         }
 
         // Handle referral code (SECURITY DEFINER RPC so the link can't silently fail)
-        if (formData.referralCode) {
+        if (referralCode) {
           const { error: refError } = await supabase.rpc('apply_referral_code', {
-            p_referral_code: formData.referralCode.trim(),
+            p_referral_code: referralCode,
           });
           if (refError) console.error('Failed to apply referral code:', refError);
         }
@@ -223,6 +246,9 @@ const typeParam = searchParams.get("type");
 
       // Check if user session exists (email confirmation off) or needs to confirm email
       const { data: { session } } = await supabase.auth.getSession();
+
+      // The code has now been handed to the server; don't reuse it on a later sign-up.
+      clearReferralCode();
 
       if (session) {
         // Send welcome email (fire-and-forget)
@@ -550,6 +576,19 @@ const typeParam = searchParams.get("type");
                       value={formData.referralCode}
                       onChange={(e) => setFormData({ ...formData, referralCode: e.target.value })}
                     />
+                    {referralStatus.state === "valid" && (
+                      <p className="flex items-center gap-1.5 text-xs text-green-600">
+                        <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                        Referral code applied
+                        {referralStatus.name ? ` — invited by ${referralStatus.name}` : ""}.
+                      </p>
+                    )}
+                    {referralStatus.state === "invalid" && (
+                      <p className="flex items-center gap-1.5 text-xs text-destructive">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        We could not find that referral code. Please double-check it.
+                      </p>
+                    )}
                   </div>
 
                   {selectedType === "firm" && (
@@ -682,6 +721,20 @@ const typeParam = searchParams.get("type");
             Tell us who you are so we can personalize your experience and guide your financial progress.
           </p>
         </motion.div>
+
+        {referralStatus.state === "valid" && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 flex items-center justify-center gap-2 rounded-xl border border-green-600/30 bg-green-50 px-4 py-3 text-sm text-green-700"
+          >
+            <UserCheck className="w-4 h-4 shrink-0" />
+            <span>
+              Referral code <span className="font-semibold">{initialReferralCode}</span> applied
+              {referralStatus.name ? ` — invited by ${referralStatus.name}` : ""}.
+            </span>
+          </motion.div>
+        )}
 
         {/* User Type Cards */}
         <motion.div

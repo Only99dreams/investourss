@@ -4,14 +4,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { 
   User, Wallet, GraduationCap, TrendingUp, FileText, Users, 
   Settings, Bell, MessageSquare, AlertCircle, Share2, Trophy,
-  Target, LogOut, Shield, Umbrella, Award, ScanSearch, PieChart, HeartPulse
+  Target, LogOut, Shield, Umbrella, Award, ScanSearch, PieChart, History
 } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
 const sidebarItems = [
   { icon: GraduationCap, label: "Education", path: "/dashboard/education" },
-  { icon: ScanSearch, label: "AI Auditor", path: "/auditor", subtitle: "Financial Health" },
-  { icon: HeartPulse, label: "Financial Health Guidance", path: "/dashboard/health-guidance", subtitle: "Guidance & Reports" },
+  { icon: ScanSearch, label: "AI Auditor", path: "/dashboard/auditor", subtitle: "Latest Audit Report" },
+  { icon: History, label: "Audit History", path: "/dashboard/audit-history", subtitle: "Reports & PDFs" },
   { icon: FileText, label: "My Plans", path: "/dashboard/plans", subtitle: "Business Plans" },
   { icon: User, label: "Profile", path: "/dashboard/profile" },
   { icon: Bell, label: "Notifications", path: "/dashboard/notifications" },

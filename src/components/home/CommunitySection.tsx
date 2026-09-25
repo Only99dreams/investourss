@@ -297,34 +297,30 @@ const CommunitySection = () => {
     const isLiked = userLikes.has(postId);
 
     try {
+      // posts.likes_count is maintained by a database trigger. Writing it here
+      // too would double-count, and the RLS policy on posts only lets an
+      // author update their own row, so the write was silently dropped for
+      // every other user's post.
       if (isLiked) {
-        await supabase
+        const { error } = await supabase
           .from('post_likes')
           .delete()
           .eq('post_id', postId)
           .eq('user_id', user.id);
-        
+        if (error) throw error;
+
         setUserLikes(prev => {
           const newSet = new Set(prev);
           newSet.delete(postId);
           return newSet;
         });
-
-        await supabase
-          .from('posts')
-          .update({ likes_count: Math.max(0, (posts.find(p => p.id === postId)?.likes_count || 1) - 1) })
-          .eq('id', postId);
       } else {
-        await supabase
+        const { error } = await supabase
           .from('post_likes')
           .insert({ post_id: postId, user_id: user.id });
-        
-        setUserLikes(prev => new Set([...prev, postId]));
+        if (error) throw error;
 
-        await supabase
-          .from('posts')
-          .update({ likes_count: (posts.find(p => p.id === postId)?.likes_count || 0) + 1 })
-          .eq('id', postId);
+        setUserLikes(prev => new Set([...prev, postId]));
       }
 
       setPosts(prev => prev.map(post => 
@@ -334,6 +330,11 @@ const CommunitySection = () => {
       ));
     } catch (error) {
       console.error("Error toggling like:", error);
+      toast({
+        title: "Couldn't update like",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -352,11 +353,7 @@ const CommunitySection = () => {
 
       if (error) throw error;
 
-      await supabase
-        .from('posts')
-        .update({ comments_count: (posts.find(p => p.id === postId)?.comments_count || 0) + 1 })
-        .eq('id', postId);
-
+      // posts.comments_count is maintained by a database trigger.
       setPosts(prev => prev.map(post => 
         post.id === postId 
           ? { ...post, comments_count: post.comments_count + 1 }
@@ -395,15 +392,12 @@ const CommunitySection = () => {
       }
       
       if (user) {
-        await supabase
+        const { error: shareError } = await supabase
           .from('post_shares')
           .insert({ post_id: postId, user_id: user.id, platform: 'copy' });
-        
-        await supabase
-          .from('posts')
-          .update({ shares_count: (posts.find(p => p.id === postId)?.shares_count || 0) + 1 })
-          .eq('id', postId);
+        if (shareError) console.error("Failed to record share:", shareError);
 
+        // posts.shares_count is maintained by a database trigger.
         setPosts(prev => prev.map(post => 
           post.id === postId 
             ? { ...post, shares_count: post.shares_count + 1 }

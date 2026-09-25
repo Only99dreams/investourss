@@ -64,7 +64,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.55 }}
             className="text-sm sm:text-base md:text-lg text-foreground mb-3 sm:mb-4"
           >
-            <em>Your Financial Doctor</em>
+            <em>Your Money Doctor</em>
           </motion.p>
 
           <motion.p
@@ -97,7 +97,7 @@ const Welcome = () => {
             </Link>
           </motion.div>
 
-          {/* What your Financial Doctor does */}
+          {/* What your Money Doctor does */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -105,7 +105,7 @@ const Welcome = () => {
             className="mb-10 sm:mb-12"
           >
             <h2 className="text-base sm:text-lg font-bold text-foreground mb-4 sm:mb-5">
-              What your Financial Doctor does
+              What your Money Doctor does
             </h2>
             <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2 sm:gap-3 text-muted-foreground text-left">
               {doctorSteps.map((item) => (

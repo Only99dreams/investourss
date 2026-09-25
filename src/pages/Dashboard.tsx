@@ -16,9 +16,10 @@ import { NotificationsSection } from "@/components/dashboard/sections/Notificati
 import { LeaderboardSection } from "@/components/dashboard/sections/LeaderboardSection";
 import { SavedPlansSection } from "@/components/dashboard/sections/SavedPlansSection";
 import { AuditorDashboard } from "@/pages/AuditorDashboard";
-import FinancialHealthGuidancePage from "@/pages/FinancialHealthGuidancePage";
+import AuditHistoryPage from "@/pages/AuditHistoryPage";
 import { FHAPortfolioSection } from "@/components/dashboard/sections/FHAPortfolioSection";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { captureReferralCode } from "@/lib/referral";
 import { Loader2 } from "lucide-react";
 
 const Dashboard = () => {
@@ -29,11 +30,8 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!isLoading && !user) {
-      // Check for referral code and store it before redirect
-      const refCode = searchParams.get("ref");
-      if (refCode) {
-        sessionStorage.setItem("referral_code", refCode);
-      }
+      // Keep any ?ref= code so the visitor is still credited after they sign up.
+      captureReferralCode(searchParams.get("ref"));
       navigate("/auth");
     }
   }, [user, isLoading, navigate, searchParams]);
@@ -138,12 +136,14 @@ const Dashboard = () => {
               <AuditorDashboard embedded />
             </>
           } />
-          <Route path="/health-guidance" element={
+          <Route path="/audit-history" element={
             <>
-              <DashboardHeader title="Financial Health Guidance" onMenuClick={() => setSidebarOpen(true)} />
-              <FinancialHealthGuidancePage />
+              <DashboardHeader title="Audit History" onMenuClick={() => setSidebarOpen(true)} />
+              <AuditHistoryPage />
             </>
           } />
+          {/* Legacy path kept so older links/bookmarks still land in the right place */}
+          <Route path="/health-guidance" element={<Navigate to="/dashboard/audit-history" replace />} />
           <Route path="/fha-portfolio" element={
             <>
               <DashboardHeader title="FHA Portfolio" onMenuClick={() => setSidebarOpen(true)} />

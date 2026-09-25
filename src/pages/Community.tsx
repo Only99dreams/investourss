@@ -64,6 +64,22 @@ const sendNotification = (payload: Record<string, unknown>) => {
   supabase.functions.invoke('send-notification', { body: payload }).catch(() => {});
 };
 
+/** navigator.clipboard needs a secure context; fall back to execCommand. */
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.style.position = "fixed";
+    el.style.opacity = "0";
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+  }
+};
+
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Banknote, Briefcase, Handshake, Rocket, GraduationCap, Calendar, Megaphone, MessageSquare, Tag, Search,
   Users, Heart, Share2, Filter
@@ -392,10 +408,17 @@ const Community = () => {
         }
       }
 
+      // An admin can deactivate the category the composer last used, which
+      // would silently post under a category that isn't in the filter list.
+      const activeCategoryNames = categories.filter(c => c.name !== 'all').map(c => c.name);
+      const category = activeCategoryNames.includes(newPostCategory)
+        ? newPostCategory
+        : (activeCategoryNames[0] ?? 'general');
+
       const { error } = await supabase.from('posts').insert({
         author_id: user.id,
-        content: newPostContent,
-        category: newPostCategory,
+        content: newPostContent.trim(),
+        category,
         attachment_url: attachmentUrl,
         attachment_type: attachmentType,
         is_approved: true
@@ -406,7 +429,7 @@ const Community = () => {
       toast({ title: "Success!", description: "Your post has been published." });
       
       setNewPostContent("");
-      setNewPostCategory("general");
+      setNewPostCategory(category);
       setSelectedFile(null);
       setFilePreview(null);
       setIsCreateOpen(false);
@@ -448,49 +471,81 @@ const Community = () => {
 
   const handleLike = async (postId: string, isLiked: boolean) => {
     if (!user) {
-      toast({ title: "Login Required", description: "Please login to like posts." });
+      toast({ title: "Login Required", description: "Please login to like posts.", variant: "destructive" });
       return;
     }
 
+    const post = posts.find(p => p.id === postId);
+    const nextLiked = !isLiked;
+
+    // Optimistic update for a snappy UI. posts.likes_count is owned by a
+    // database trigger (20260910000000), so the next fetch is the truth.
+    setPosts(prev => prev.map(p =>
+      p.id === postId
+        ? {
+            ...p,
+            user_liked: nextLiked,
+            likes_count: Math.max(0, (p.likes_count || 0) + (nextLiked ? 1 : -1)),
+          }
+        : p
+    ));
+
     try {
-      if (isLiked) {
-        await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', user.id);
-        setPosts(prev => prev.map(p => 
-          p.id === postId ? { ...p, likes_count: Math.max(0, (p.likes_count || 1) - 1), user_liked: false } : p
-        ));
-      } else {
-        await supabase.from('post_likes').insert({ post_id: postId, user_id: user.id });
-        setPosts(prev => prev.map(p => 
-          p.id === postId ? { ...p, likes_count: (p.likes_count || 0) + 1, user_liked: true } : p
-        ));
-        // Notify post author (fire-and-forget, skip if liking own post)
-        const post = posts.find(p => p.id === postId);
-        if (post && post.author_id !== user.id) {
-          sendNotification({
-            type: 'post_liked',
-            recipient_id: post.author_id,
-            actor_name: profile?.full_name || 'Someone',
-            post_id: postId,
-            post_preview: post.content,
-          });
-        }
+      // Supabase resolves with { error } rather than throwing, so the error
+      // has to be inspected explicitly or a rejected write looks successful.
+      const { error } = nextLiked
+        ? await supabase.from('post_likes').insert({ post_id: postId, user_id: user.id })
+        : await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', user.id);
+
+      if (error) throw error;
+
+      // Notify post author (fire-and-forget, skip if liking own post)
+      if (nextLiked && post && post.author_id !== user.id) {
+        sendNotification({
+          type: 'post_liked',
+          recipient_id: post.author_id,
+          actor_name: profile?.full_name || 'Someone',
+          post_id: postId,
+          post_preview: post.content,
+        });
       }
     } catch (error) {
       console.error('Error toggling like:', error);
+      // Roll the optimistic change back so the UI matches the database.
+      setPosts(prev => prev.map(p =>
+        p.id === postId
+          ? {
+              ...p,
+              user_liked: isLiked,
+              likes_count: Math.max(0, (p.likes_count || 0) + (nextLiked ? -1 : 1)),
+            }
+          : p
+      ));
+      toast({
+        title: "Couldn't update like",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
   const handleShare = async (postId: string, platform: string) => {
-    try {
-      const post = posts.find(p => p.id === postId);
-      const ref = profile?.referral_code ? `&ref=${profile.referral_code}` : "";
-      const shareUrl = `${window.location.origin}/api/share?post=${postId}${ref}`;
-      const pageUrl = `${window.location.origin}/community?post=${postId}${ref}`;
-      const shareText = `Check out this post from Investours Opportunity Hub: "${post?.content?.substring(0, 100)}..."\n\n${pageUrl}`;
+    const post = posts.find(p => p.id === postId);
+    const ref = profile?.referral_code ? `&ref=${profile.referral_code}` : "";
+    // shareUrl hits the OG-image endpoint for rich previews; pageUrl is the
+    // plain in-app link, used wherever an API route can't be relied on.
+    const shareUrl = `${window.location.origin}/api/share?post=${postId}${ref}`;
+    const pageUrl = `${window.location.origin}/community?post=${postId}${ref}`;
+    const shareText = `Check out this post from Investours Opportunity Hub: "${post?.content?.substring(0, 100)}..."\n\n${pageUrl}`;
 
+    try {
+      // Record the share before opening the window: a popup blocker must not
+      // cost us the metric, and the insert is fire-and-forget either way.
       if (user) {
-        await supabase.from('post_shares').insert({ post_id: postId, user_id: user.id, platform });
-        setPosts(prev => prev.map(p => p.id === postId ? { ...p, shares_count: (p.shares_count || 0) + 1 } : p));
+        const { error: shareError } = await supabase
+          .from('post_shares')
+          .insert({ post_id: postId, user_id: user.id, platform });
+        if (shareError) console.error('Failed to record share:', shareError);
       }
 
       switch (platform) {
@@ -509,14 +564,33 @@ const Community = () => {
         case 'email':
           window.location.href = `mailto:?subject=Check this out from Investours&body=${encodeURIComponent(shareText)}`;
           break;
+        case 'native':
+          // Mobile share sheet; must be called directly from the click handler.
+          if (navigator.share) {
+            await navigator.share({ title: "Investours Opportunity Hub", text: shareText, url: shareUrl });
+          } else {
+            await copyToClipboard(shareUrl);
+            toast({ title: "Copied!", description: "Post link copied to clipboard." });
+          }
+          break;
         case 'copy':
-          await navigator.clipboard.writeText(pageUrl);
+        default:
+          try {
+            await navigator.clipboard.writeText(pageUrl);
+          } catch {
+            await copyToClipboard(pageUrl);
+          }
           toast({ title: "Copied!", description: "Link copied to clipboard." });
           break;
       }
 
       setSharePostId(null);
     } catch (error) {
+      // A cancelled native share sheet throws AbortError; that is not a fault.
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setSharePostId(null);
+        return;
+      }
       console.error('Error sharing:', error);
       toast({ title: "Error", description: "Failed to share post.", variant: "destructive" });
     }
@@ -552,17 +626,22 @@ const Community = () => {
 
   const handleAddComment = async (postId: string) => {
     if (!user) {
-      toast({ title: "Login Required", description: "Please login to comment." });
+      toast({ title: "Login Required", description: "Please login to comment.", variant: "destructive" });
       return;
     }
 
-    const newComment = newCommentMap[postId] || "";
-    if (!newComment.trim()) return;
+    const newComment = (newCommentMap[postId] || "").trim();
+    if (!newComment) return;
 
     try {
-      await supabase.from('post_comments').insert({ post_id: postId, author_id: user.id, content: newComment });
+      const { error } = await supabase
+        .from('post_comments')
+        .insert({ post_id: postId, author_id: user.id, content: newComment });
+      if (error) throw error;
+
       setNewCommentMap(prev => ({ ...prev, [postId]: "" }));
       fetchComments(postId);
+      // posts.comments_count is owned by a database trigger; just reflect it.
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p));
       // Notify post author (skip if commenting on own post)
       const post = posts.find(p => p.id === postId);
@@ -578,6 +657,11 @@ const Community = () => {
       }
     } catch (error) {
       console.error('Error adding comment:', error);
+      toast({
+        title: "Couldn't post comment",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -946,6 +1030,11 @@ const Community = () => {
                                   return null;
                                 })()}
                                 <div className="grid grid-cols-2 gap-3 py-4">
+                                  {typeof navigator !== "undefined" && "share" in navigator && (
+                                    <Button variant="outline" className="col-span-2 flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'native')}>
+                                      <Share2 className="w-5 h-5" /><span>Share via device</span>
+                                    </Button>
+                                  )}
                                   <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'facebook')}>
                                     <Facebook className="w-5 h-5" /><span>Facebook</span>
                                   </Button>

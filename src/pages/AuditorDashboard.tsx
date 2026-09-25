@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
@@ -18,6 +18,7 @@ import { Footer } from "@/components/ui/Footer";
 import { HealthScoreGauge } from "@/components/auditor/HealthScoreGauge";
 import { BlurredReport } from "@/components/auditor/BlurredReport";
 import { FinancialHealthGuidance, type FinancialHealthGuidanceProps } from "@/components/auditor/FinancialHealthGuidance";
+import { ContinuousReportingSection } from "@/components/dashboard/sections/ContinuousReportingSection";
 import {
   HEALTH_STATUS_META, auditPeriodLabel, formatNaira, monthLabel,
   DEFAULT_ACCESS, type AuditAccess,
@@ -54,6 +55,7 @@ interface AuditorDashboardProps {
 
 export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) => {
   const { user, profile, isLoading: authLoading } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [latestAudit, setLatestAudit] = useState<FinancialAudit | null>(null);
   const [selectedAudit, setSelectedAudit] = useState<FinancialAudit | null>(null);
@@ -86,7 +88,11 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
       const audits = (auditsRes.data ?? []) as FinancialAudit[];
       setLatestAudit(audits[0] ?? null);
       setHistory(audits);
-      setSelectedAudit(null);
+      // Deep link from Audit History: /dashboard/auditor?audit=<id>
+      const requestedId = searchParams.get("audit");
+      setSelectedAudit(
+        (requestedId ? audits.find((a) => a.id === requestedId) ?? null : null),
+      );
 
       const raw = (snapshotsRes.data ?? []) as { snapshot_date: string; score: number }[];
       setTimeline(
@@ -100,11 +106,40 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, searchParams]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (window.location.hash === "#reporting") {
+      document
+        .getElementById("continuous-reporting")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [searchParams, loading]);
+
+  /** Drop the ?audit= deep link so a reload shows the latest report again. */
+  const showLatestAudit = useCallback(() => {
+    setSelectedAudit(null);
+    if (searchParams.has("audit")) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("audit");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  /** Open a past audit and keep the URL shareable via ?audit=<id>. */
+  const selectAudit = useCallback(
+    (audit: FinancialAudit) => {
+      setSelectedAudit(audit);
+      const next = new URLSearchParams(searchParams);
+      next.set("audit", audit.id);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const handleDownloadPdf = useCallback(
     (audit: FinancialAudit) => {
@@ -170,7 +205,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
     if (!access.free_audit_used) {
       return {
         label: "1",
-        sub: "Your FREE 6-month audit is still available.",
+        sub: "Your FREE 1-month audit is still available.",
         button: "Get More Credits",
       };
     }
@@ -190,7 +225,14 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
   }
 
   const content = (
-    <main className="flex-1 container mx-auto px-4 pt-24 md:pt-28 pb-8 max-w-6xl">
+    <main
+      className={cn(
+        "flex-1 container mx-auto px-4 pb-8 max-w-6xl",
+        // Standalone pages render the site Header, so they need the top offset.
+        // Embedded inside the dashboard shell, DashboardHeader already offsets.
+        embedded ? "pt-4 md:pt-6" : "pt-24 md:pt-28",
+      )}
+    >
       {/* Hero / summary card */}
       {!loading && viewingAudit && statusMeta && (
         <motion.div
@@ -204,7 +246,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
                 <History className="w-3 h-3" />
                 Viewing past audit
               </Badge>
-              <Button variant="outline" size="sm" onClick={() => setSelectedAudit(null)}>
+              <Button variant="outline" size="sm" onClick={showLatestAudit}>
                 <ArrowRight className="w-4 h-4 mr-1 rotate-180" />
                 Back to Latest Audit
               </Button>
@@ -216,7 +258,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
               <div className="flex-1 text-center md:text-left">
                 <Badge variant="outline" className="mb-2">
                   <CalendarClock className="w-3 h-3 mr-1" />
-                  {auditPeriodLabel(viewingAudit) || "Last 6 months"} · Last audit{" "}
+                  {auditPeriodLabel(viewingAudit) || "Monthly audit"} · Last audit{" "}
                   {new Date(viewingAudit.created_at).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}
                 </Badge>
                 <h1 className="text-2xl md:text-3xl font-bold mb-1">Financial Health Dashboard</h1>
@@ -262,7 +304,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-2">
                 <FileSearch className="w-7 h-7 text-primary" />
               </div>
-              <CardTitle className="text-xl">Get Your FREE 6-Month Financial Audit</CardTitle>
+              <CardTitle className="text-xl">Get Your FREE 1-Month Financial Audit</CardTitle>
               <CardDescription>
                 Connect your financial records and discover your Financial Health Score plus the
                 money you may have lost to leakages and bank overcharges — for free.
@@ -271,7 +313,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
             <CardContent>
               <Button asChild size="lg">
                 <Link to="/auditor/connect">
-                  Start Free Audit <ArrowRight className="w-4 h-4 ml-2" />
+                  Start Audit Now <ArrowRight className="w-4 h-4 ml-2" />
                 </Link>
               </Button>
             </CardContent>
@@ -345,6 +387,13 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
         />
       )}
 
+      {/* Continuous reporting (weekly / monthly monitoring) */}
+      {!loading && viewingAudit && (
+        <div className="mb-8">
+          <ContinuousReportingSection />
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-2 gap-6 mb-8">
         {/* Timeline */}
         {!loading && (timeline.length > 0 || viewingAudit) && (
@@ -388,25 +437,32 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
           </Card>
         )}
 
-        {/* Audit History */}
+        {/* Recent Audits */}
         {!loading && history.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <History className="w-4 h-4 text-primary" />
-                Audit History
-              </CardTitle>
-              <CardDescription>Every audit is stored for comparison.</CardDescription>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <History className="w-4 h-4 text-primary" />
+                  Recent Audits
+                </CardTitle>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/dashboard/audit-history">
+                    View All <ArrowRight className="w-4 h-4 ml-1" />
+                  </Link>
+                </Button>
+              </div>
+              <CardDescription>Your last {Math.min(4, history.length)} audits. Compare or revisit any of them.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {history.slice(0, 6).map((a) => {
+              {history.slice(0, 4).map((a) => {
                 const meta = HEALTH_STATUS_META[a.health_status as keyof typeof HEALTH_STATUS_META] ?? HEALTH_STATUS_META.critical;
                 const isSelected = selectedAudit?.id === a.id;
                 return (
                   <button
                     type="button"
                     key={a.id}
-                    onClick={() => setSelectedAudit(a)}
+                    onClick={() => selectAudit(a)}
                     className={cn(
                       "w-full flex items-center justify-between p-3 rounded-lg border bg-card/40 text-left transition-colors",
                       isSelected ? "border-primary bg-primary/5" : "hover:border-primary/40 hover:bg-muted/50",
@@ -421,7 +477,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
                           {new Date(a.created_at).toLocaleDateString("en-NG", { month: "long", year: "numeric" })} Audit
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {a.is_free ? "Free 6-month audit" : "Paid audit"} · {meta.label}
+                          {auditPeriodLabel(a) || (a.is_free ? "Free audit" : "Paid audit")} · {meta.label}
                         </p>
                       </div>
                     </div>

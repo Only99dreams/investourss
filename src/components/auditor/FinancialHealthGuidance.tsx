@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   HeartPulse, CheckCircle2, AlertTriangle, Lightbulb, Target,
   PiggyBank, BellRing, TrendingUp, TrendingDown, ShieldCheck, ArrowRight,
@@ -54,6 +54,16 @@ export function FinancialHealthGuidance({
   periodEnd,
   report,
 }: FinancialHealthGuidanceProps) {
+  const navigate = useNavigate();
+
+  const scrollToMonitoring = () => {
+    const el = document.getElementById("continuous-reporting");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    navigate("/dashboard/auditor#reporting");
+  };
   const statusMeta =
     HEALTH_STATUS_META[healthStatus as keyof typeof HEALTH_STATUS_META] ?? HEALTH_STATUS_META.critical;
 
@@ -64,7 +74,7 @@ export function FinancialHealthGuidance({
       );
       if (m > 0) return m;
     }
-    return 6;
+    return 1;
   }, [periodStart, periodEnd]);
 
   const monthlyIncome = totalIncome / months;
@@ -302,13 +312,12 @@ export function FinancialHealthGuidance({
               </p>
               <div className="mt-2">
                 <Button
-                  asChild
+                  type="button"
                   size="sm"
+                  onClick={scrollToMonitoring}
                   className="bg-background text-primary hover:bg-background/90 w-full"
                 >
-                  <Link to="/dashboard/health-guidance#reporting">
-                    Set Up Monitoring <ArrowRight className="w-4 h-4 ml-1" />
-                  </Link>
+                  Set Up Monitoring <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </div>
             </div>

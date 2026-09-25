@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
-  ArrowRight, Search, Eye, Banknote, BellRing, Lock, Check, Sparkles,
+  ArrowRight, Search, Eye, Banknote, BellRing, Lock, Check, Sparkles, Stethoscope,
   FileSearch, TrendingUp, Wallet, ShieldCheck, PiggyBank,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import { Footer } from "@/components/ui/Footer";
+import CommunitySection from "@/components/home/CommunitySection";
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -20,6 +21,11 @@ const fadeUp = {
 
 const AuditorLanding = () => {
   const { user } = useAuth();
+  const { pathname } = useLocation();
+
+  // This page is routed at both /home and /auditor. The community feed is a
+  // home-page section, so it stays off the auditor funnel.
+  const isAuditorRoute = pathname.startsWith("/auditor");
 
   return (
     <div className="min-h-screen gradient-hero flex flex-col relative overflow-hidden">
@@ -34,7 +40,7 @@ const AuditorLanding = () => {
         {/* Hero */}
         <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="text-center mb-16">
           <Badge variant="outline" className="mb-4">
-            <Sparkles className="w-3 h-3 mr-1 text-primary" /> FREE 6-Month Financial Audit
+            <Stethoscope className="w-3 h-3 mr-1 text-primary" /> Your Money Doctor
           </Badge>
           <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold text-foreground mb-4">
             AI Financial Auditor
@@ -49,7 +55,7 @@ const AuditorLanding = () => {
           <div className="flex flex-col sm:flex-row flex-wrap items-stretch justify-center gap-3 sm:gap-4 w-full max-w-md sm:max-w-none mx-auto">
             <Button asChild size="xl" variant="hero" className="w-full sm:w-auto">
               <Link to="/auditor/connect">
-                Start Free Audit <ArrowRight className="w-5 h-5 ml-2" />
+                Start Audit Now <ArrowRight className="w-5 h-5 ml-2" />
               </Link>
             </Button>
             <Button asChild size="xl" variant="outline" className="w-full sm:w-auto">
@@ -100,7 +106,7 @@ const AuditorLanding = () => {
             {[
               { n: "1", title: "Register / Login", desc: "Create your free account." },
               { n: "2", title: "Connect Financial Data", desc: "SMS alerts, email statements, PDF uploads or Open Banking." },
-              { n: "3", title: "Run FREE Audit", desc: "One free 6-month financial audit for every new account." },
+              { n: "3", title: "Run FREE Audit", desc: "One free 1-month financial audit for every new account." },
               { n: "4", title: "Upgrade & Recover", desc: "Unlock the full report, recommendations and monitoring." },
             ].map((s, i) => (
               <motion.div key={s.n} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="text-center">
@@ -207,12 +213,20 @@ const AuditorLanding = () => {
                 </Link>
               </Button>
               <p className="text-sm text-primary-foreground/70 mt-3">
-                Every new account receives ONE FREE 6-month Financial Audit.
+                Every new account receives ONE FREE 1-month Financial Audit.
               </p>
             </CardContent>
           </Card>
         </motion.section>
       </main>
+
+      {/* Community — home page only, sitting just above the footer. This
+          component also serves /auditor, where it doesn't belong. */}
+      {!isAuditorRoute && (
+        <div className="relative z-10">
+          <CommunitySection />
+        </div>
+      )}
 
       <Footer />
     </div>

@@ -98,12 +98,25 @@ export const DEFAULT_ACCESS: AuditAccess = {
   credits_remaining: 0,
 };
 
-export const auditPeriodLabel = (report?: { periodStart?: string; periodEnd?: string }): string => {
-  if (!report?.periodStart || !report?.periodEnd) return "";
-  const start = new Date(report.periodStart);
-  const end = new Date(report.periodEnd);
+/**
+ * Human label for an audit's reporting window. Accepts either the camelCase
+ * shape stored inside report_json or the snake_case columns on
+ * financial_audits, so callers can pass a whole audit row.
+ */
+export const auditPeriodLabel = (report?: {
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  audit_period_start?: string | null;
+  audit_period_end?: string | null;
+}): string => {
+  const start = report?.periodStart ?? report?.audit_period_start ?? null;
+  const end = report?.periodEnd ?? report?.audit_period_end ?? null;
+  if (!start || !end) return "";
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "";
   const fmt = (d: Date) => d.toLocaleDateString("en-NG", { month: "short", year: "numeric" });
-  return `${fmt(start)} – ${fmt(end)}`;
+  return `${fmt(startDate)} – ${fmt(endDate)}`;
 };
 
 export const sampleSmsAlerts = `Alert: Withdrawal NGN25,000.00 on 12/07/26 by POS. Avail Bal: NGN612,000.00. Txn ID: 1001.

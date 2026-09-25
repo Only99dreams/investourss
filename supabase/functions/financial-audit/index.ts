@@ -5,6 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Banks issue statements monthly, so the free audit is a 1-month audit.
+const DEFAULT_AUDIT_MONTHS = 1;
+const ALLOWED_AUDIT_MONTHS = [1, 3, 6];
+
+function normalizeAuditMonths(value: unknown): number {
+  const n = Number(value);
+  return ALLOWED_AUDIT_MONTHS.includes(n) ? n : DEFAULT_AUDIT_MONTHS;
+}
+
 const SYSTEM_PROMPT = `You are FinScope, Investours' AI Financial Auditor and a world-class personal finance analyst for Nigeria and Africa.
 
 Your job is to analyze a user's financial records (SMS bank alerts, email statements, or PDF statement text) and produce a Financial Health Audit.
@@ -16,7 +25,7 @@ Extract every transaction you can find. Bank SMS alerts look like:
 
 Rules:
 1. Parse ALL transactions. For each: date (ISO yyyy-mm-dd), description (merchant/counterparty), amount (NGN), type ('credit' for money in, 'debit' for money out), and a category (salary, transfers, shopping, food, transport, utilities, subscriptions, airtime, atm_withdrawal, pos, bills, investment, entertainment, other).
-2. Only count transactions that fall within the last 6 months (or whatever period the data covers). If no dates are present, assume the records cover the stated audit period.
+2. Only count transactions that fall within the audit period stated in the user message (1, 3 or 6 months). If no dates are present, assume the records cover the stated audit period.
 3. Compute:
    - totalIncome: sum of credits
    - totalExpenses: sum of debits
@@ -54,8 +63,9 @@ Respond with STRICT JSON only, no markdown, no commentary. Shape:
 }`;
 
 function buildUserPrompt(input: { text: string; sourceType: string; accountType: string; auditMonths?: number }): string {
-  const months = input.auditMonths ?? 6;
-  return `Audit period: the last ${months} months.
+  const months = input.auditMonths ?? DEFAULT_AUDIT_MONTHS;
+  return `Audit period: the last ${months} month${months === 1 ? "" : "s"}.
+Only include transactions dated within that window. Ignore anything older.
 
 Financial data source: ${input.sourceType}
 Account type: ${input.accountType || 'individual'}
@@ -77,7 +87,7 @@ interface ExtractedTransaction {
 }
 
 // Deterministic fallback: parse bank SMS alerts without calling the AI gateway.
-function parseFromText(text: string): {
+function parseFromText(text: string, months: number = DEFAULT_AUDIT_MONTHS): {
   transactions: ExtractedTransaction[];
   periodStart: string;
   periodEnd: string;
@@ -139,7 +149,7 @@ function parseFromText(text: string): {
 
   const end = new Date();
   const start = new Date();
-  start.setMonth(start.getMonth() - 6);
+  start.setMonth(start.getMonth() - months);
 
   return {
     transactions,
@@ -148,8 +158,8 @@ function parseFromText(text: string): {
   };
 }
 
-function buildFallbackReport(text: string, accountType: string) {
-  const { transactions, periodStart, periodEnd } = parseFromText(text);
+function buildFallbackReport(text: string, accountType: string, months: number = DEFAULT_AUDIT_MONTHS) {
+  const { transactions, periodStart, periodEnd } = parseFromText(text, months);
 
   const income = transactions.filter((t) => t.type === 'credit');
   const expenses = transactions.filter((t) => t.type === 'debit');
@@ -204,11 +214,12 @@ function buildFallbackReport(text: string, accountType: string) {
   const healthStatus = score >= 80 ? 'excellent' : score >= 65 ? 'good' : score >= 50 ? 'needs_attention' : 'critical';
 
   const monthlyScores: { month: string; score: number }[] = [];
-  for (let i = 5; i >= 0; i -= 1) {
+  for (let i = months - 1; i >= 0; i -= 1) {
     const d = new Date();
     d.setMonth(d.getMonth() - i);
     const month = d.toISOString().slice(0, 7);
-    monthlyScores.push({ month, score: Math.max(10, Math.min(100, score + (5 - i) * 2 - 4)) });
+    // The most recent month is the audited score; earlier months trend up to it.
+    monthlyScores.push({ month, score: Math.max(10, Math.min(100, score - i * 2)) });
   }
 
   return {
@@ -347,7 +358,7 @@ function clampReport(r: AiRecord, accountType: string) {
   };
 }
 
-async function callAI(text: string, sourceType: string, accountType: string) {
+async function callAI(text: string, sourceType: string, accountType: string, auditMonths: number) {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
@@ -361,7 +372,7 @@ async function callAI(text: string, sourceType: string, accountType: string) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [
-          { role: "user", parts: [{ text: buildUserPrompt({ text, sourceType, accountType }) }] },
+          { role: "user", parts: [{ text: buildUserPrompt({ text, sourceType, accountType, auditMonths }) }] },
         ],
         generationConfig: { responseMimeType: "application/json", temperature: 0 },
       }),
@@ -392,7 +403,8 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { text = '', sourceType = 'sms', accountType = 'individual', auditMonths = 6 } = body;
+    const { text = '', sourceType = 'sms', accountType = 'individual' } = body;
+    const auditMonths = normalizeAuditMonths(body.auditMonths);
 
     if (!text || text.trim().length < 10) {
       return new Response(
@@ -403,7 +415,7 @@ serve(async (req) => {
 
     let report;
     try {
-      const raw = await callAI(text, sourceType, accountType);
+      const raw = await callAI(text, sourceType, accountType, auditMonths);
       report = clampReport(raw, accountType);
     } catch (err) {
       // AI gateway failure -> deterministic fallback so the audit still completes.
@@ -415,7 +427,7 @@ serve(async (req) => {
         });
       }
       console.warn('AI analysis failed, using fallback parser:', e?.message || e);
-      report = buildFallbackReport(text, accountType);
+      report = buildFallbackReport(text, accountType, auditMonths);
     }
 
     return new Response(JSON.stringify({ success: true, report }), {

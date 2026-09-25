@@ -37,6 +37,14 @@ const AUDIT_STEPS = [
   "Generating recommendations",
 ];
 
+// Selectable statement windows. 1 month is the default because banks send
+// statements monthly; the free audit is a 1-month audit.
+const STATEMENT_PERIOD_MONTHS: { months: number; label: string }[] = [
+  { months: 1, label: "1 month" },
+  { months: 3, label: "3 months" },
+  { months: 6, label: "6 months" },
+];
+
 // supabase.functions.invoke() throws a generic FunctionsHttpError on non-2xx.
 // The real reason is in the edge function's response body, which lives on error.context.
 async function functionErrorMessage(err: unknown): Promise<string> {
@@ -61,8 +69,9 @@ const AuditorConnect = () => {
   const [fileContent, setFileContent] = useState("");
   const [running, setRunning] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
-  const [emailMonths, setEmailMonths] = useState(6);
-  const [statementMonths, setStatementMonths] = useState(6);
+  // Most banks issue a statement every month, so the default audit window is
+  // 1 month. Customers can widen it to a quarter or a half-year.
+  const [statementPeriod, setStatementPeriod] = useState(STATEMENT_PERIOD_MONTHS[0].months);
   const [fetchingEmails, setFetchingEmails] = useState(false);
   const [fetchResult, setFetchResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [oauthConn, setOauthConn] = useState<{ provider: "gmail" | "outlook"; email: string; refreshToken: string } | null>(null);
@@ -227,7 +236,7 @@ const AuditorConnect = () => {
         body: {
           provider: oauthConn.provider,
           refreshToken: oauthConn.refreshToken,
-          months: emailMonths,
+          months: statementPeriod,
         },
       });
       if (error) throw new Error(await functionErrorMessage(error));
@@ -242,7 +251,7 @@ const AuditorConnect = () => {
       setText(data.text);
       setFetchResult({
         ok: true,
-        message: `Fetched ${data.fetched} bank message(s). Review and click "Run FREE 6-Month Audit" below.`,
+        message: `Fetched ${data.fetched} bank message(s). Review and click "Start Audit Now" below.`,
       });
     } catch (err) {
       console.error(err);
@@ -336,7 +345,7 @@ const AuditorConnect = () => {
           text: activeText,
           sourceType,
           accountType: "individual",
-          auditMonths: sourceType === "email" ? emailMonths : statementMonths,
+          auditMonths: statementPeriod,
         },
       });
 
@@ -474,7 +483,7 @@ const AuditorConnect = () => {
           </Button>
           <h1 className="text-3xl md:text-4xl font-bold mb-2">Connect Financial Data</h1>
           <p className="text-muted-foreground max-w-2xl">
-            Connect your records to run your FREE 6-month Financial Audit. We analyze your
+            Connect your records to run your FREE 1-month Financial Audit. We analyze your
             transactions, detect hidden leakages and estimate how much you can recover.
           </p>
         </motion.div>
@@ -508,6 +517,31 @@ const AuditorConnect = () => {
 
         <Card className="mb-6">
           <CardContent className="p-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="statement-period">Statement period</Label>
+                <select
+                  id="statement-period"
+                  value={statementPeriod}
+                  onChange={(e) => setStatementPeriod(Number(e.target.value))}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {STATEMENT_PERIOD_MONTHS.map((p) => (
+                    <option key={p.months} value={p.months}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground flex-1 min-w-[200px]">
+                {statementPeriod === 1
+                  ? "Your free audit covers the last 1 month — upload this month's statement."
+                  : `Auditing the last ${statementPeriod} months of statements.`}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardContent className="p-6">
             {sourceType === "open_banking" ? (
               <div className="text-center py-6 space-y-4">
                 <Landmark className="w-10 h-10 text-primary mx-auto" />
@@ -521,23 +555,9 @@ const AuditorConnect = () => {
               </div>
             ) : sourceType === "pdf" ? (
               <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="pdf">Upload PDF statement</Label>
-                    <Input id="pdf" type="file" accept=".pdf,.txt" onChange={handleFileUpload} disabled={parsingPdf} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="statement-months">Statement period</Label>
-                    <select
-                      id="statement-months"
-                      value={statementMonths}
-                      onChange={(e) => setStatementMonths(Number(e.target.value))}
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value={6}>6 months</option>
-                      <option value={12}>12 months</option>
-                    </select>
-                  </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="pdf">Upload PDF statement</Label>
+                  <Input id="pdf" type="file" accept=".pdf,.txt" onChange={handleFileUpload} disabled={parsingPdf} />
                 </div>
                 {parsingPdf && (
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -605,15 +625,6 @@ const AuditorConnect = () => {
                           <span className="min-w-0 flex-1">
                             Connected: <span className="font-medium">{oauthConn.email || oauthConn.provider}</span>
                           </span>
-                          <select
-                            value={emailMonths}
-                            onChange={(e) => setEmailMonths(Number(e.target.value))}
-                            className="h-7 rounded-md border border-input bg-background px-2 text-xs"
-                          >
-                            <option value={6}>6 mo</option>
-                            <option value={12}>12 mo</option>
-                            <option value={24}>24 mo</option>
-                          </select>
                           <Button
                             type="button"
                             size="sm"
@@ -716,11 +727,16 @@ const AuditorConnect = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button size="lg" className="flex-1" onClick={runAudit} disabled={!canRun}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Run FREE {sourceType === "email" ? emailMonths : statementMonths}-Month Audit
-            </Button>
+          <div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button size="lg" className="flex-1" onClick={runAudit} disabled={!canRun}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Start Audit Now
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Auditing your last {statementPeriod} month{statementPeriod === 1 ? "" : "s"} of statements
+            </p>
           </div>
         )}
 
