@@ -27,7 +27,8 @@ import {
   Calendar,
   Megaphone,
   Tag,
-  Search
+  Search,
+  AlertTriangle
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -167,7 +168,31 @@ const Community = () => {
   });
   const { toast } = useToast();
   const { user, profile, roles } = useAuth();
+
   const isAdmin = roles?.includes('admin') || profile?.assigned_role === 'admin';
+
+  // Set when a post had to be filed under a legacy enum value because
+  // posts.category has not been converted to TEXT yet (migration
+  // 20260911000000). Persisted so the warning survives a reload.
+  const [needsCategoryMigration, setNeedsCategoryMigration] = useState(
+    () => {
+      try {
+        return localStorage.getItem("investours_category_migration_pending") === "1";
+      } catch {
+        return false;
+      }
+    },
+  );
+
+  const markCategoryMigrationNeeded = useCallback((value: boolean) => {
+    setNeedsCategoryMigration(value);
+    try {
+      if (value) localStorage.setItem("investours_category_migration_pending", "1");
+      else localStorage.removeItem("investours_category_migration_pending");
+    } catch {
+      /* private mode - warning just won't persist */
+    }
+  }, []);
 
   const fetchCategories = async () => {
     try {
@@ -175,7 +200,10 @@ const Community = () => {
         .from('post_categories')
         .select('*')
         .eq('is_active', true)
-        .order('sort_order');
+        // Admin sets the order from the dashboard; name is a stable tiebreaker
+        // for any rows that still share a sort_order.
+        .order('sort_order')
+        .order('name');
       if (error) throw error;
       if (data && data.length > 0) {
         setCategories([
@@ -282,10 +310,34 @@ const Community = () => {
       }, () => {
         fetchPosts();
       })
+      // Reorder / rename / activate categories from the admin dashboard and
+      // have the filter row follow along without a reload.
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'post_categories'
+      }, () => {
+        fetchCategories();
+      })
       .subscribe();
+
+    // Realtime needs post_categories in the supabase_realtime publication
+    // (migration 20260911000000). Refetching whenever the tab becomes visible
+    // covers the case where it isn't published yet, and also catches admin
+    // edits made from another device.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchCategories();
+        fetchPosts();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
 
     return () => {
       supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -445,9 +497,12 @@ const Community = () => {
           if (!retry.error) {
             usedCategory = 'finance';
             result = retry;
+            // Remember it, so a persistent warning shows instead of every post
+            // quietly disappearing into the wrong category.
+            markCategoryMigrationNeeded(true);
             toast({
               title: "Posted under Finance",
-              description: "That category isn't available yet — your post went to Finance instead.",
+              description: "Categories need a database update before your chosen one can be used.",
             });
           }
         }
@@ -457,6 +512,12 @@ const Community = () => {
         // Surface the real reason (RLS, invalid column, enum, FK...) instead of
         // a bare "posting error".
         throw new Error(`${result.error.message} (${result.error.code ?? 'no code'})`);
+      }
+
+      // A post went through under its chosen category, so the enum conversion
+      // has clearly been applied - retire the warning.
+      if (usedCategory === category) {
+        markCategoryMigrationNeeded(false);
       }
 
       toast({ title: "Success!", description: "Your post has been published." });
@@ -828,6 +889,28 @@ const Community = () => {
                 </div>
               </div>
             </div>
+
+            {/* Category setup warning */}
+            {needsCategoryMigration && (
+              <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <p className="flex-1">
+                  Posts are being filed under <strong>Finance</strong> because the
+                  database still expects the old category type. Run migration{" "}
+                  <code className="font-mono">20260911000000_fix_posts_category_enum.sql</code>{" "}
+                  to restore your chosen categories.{" "}
+                  {isAdmin && "You can run it from Admin → Supabase SQL editor."}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => markCategoryMigrationNeeded(false)}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            )}
 
             {/* Category Filter */}
             <div className="flex items-center gap-2 overflow-x-auto pb-2">

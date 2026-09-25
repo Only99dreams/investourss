@@ -1,4 +1,21 @@
 import { useState, useEffect } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
@@ -28,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, MessageSquare, CheckCircle, Eye, EyeOff, Trash2, Plus, Tag } from "lucide-react";
+import { Loader2, MessageSquare, CheckCircle, Eye, EyeOff, Trash2, Plus, Tag, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -44,11 +61,112 @@ const COLOR_OPTIONS = [
   { label: "Gray", value: "bg-gray-100 text-gray-800" },
 ];
 
+interface PostCategory {
+  id: string;
+  name: string;
+  label: string;
+  icon: string | null;
+  color: string | null;
+  sort_order: number | null;
+  is_active: boolean | null;
+}
+
+/** One draggable row. Only the handle starts a drag, so the row's buttons stay clickable. */
+function SortableCategoryRow({
+  category,
+  position,
+  total,
+  onMoveUp,
+  onMoveDown,
+  onToggle,
+  onDelete,
+}: {
+  category: PostCategory;
+  position: number;
+  total: number;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: category.id });
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={isDragging ? "relative z-10 bg-muted shadow-lg" : undefined}
+    >
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <span className="w-5 text-center text-sm text-muted-foreground">{position}</span>
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            aria-label={`Reorder ${category.label}`}
+            title="Drag to reorder"
+            className="cursor-grab touch-none rounded p-0.5 text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            disabled={position === 1}
+            title="Move up"
+            onClick={onMoveUp}
+          >
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            disabled={position === total}
+            title="Move down"
+            onClick={onMoveDown}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+      <TableCell className="font-mono text-sm">{category.name}</TableCell>
+      <TableCell>{category.label}</TableCell>
+      <TableCell>
+        <Badge variant={category.is_active ? "default" : "secondary"}>
+          {category.is_active ? "Active" : "Inactive"}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={onToggle}>
+            {category.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+          <Button size="sm" variant="outline" className="text-destructive" onClick={onDelete}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 const CommunityTab = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<PostCategory[]>([]);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryLabel, setNewCategoryLabel] = useState("");
@@ -58,6 +176,13 @@ const CommunityTab = () => {
   const { user, roles, profile } = useAuth();
 
   const isAdmin = roles?.includes('admin') || profile?.assigned_role === 'admin';
+
+  // A small activation distance keeps a click on the handle from starting a
+  // drag, and the keyboard sensor keeps reordering possible without a mouse.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   useEffect(() => {
     if (user && isAdmin) {
@@ -107,9 +232,10 @@ const CommunityTab = () => {
       const { data, error } = await supabase
         .from('post_categories')
         .select('*')
-        .order('sort_order');
+        .order('sort_order')
+        .order('name');
       if (error) throw error;
-      setCategories(data || []);
+      setCategories((data ?? []) as PostCategory[]);
     } catch {
       setCategories([]);
     }
@@ -145,6 +271,64 @@ const CommunityTab = () => {
     }
   };
 
+  /** The order the table renders in, and drag-and-drop mutates. */
+  const orderedCategories = [...categories].sort(
+    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+  );
+
+  /**
+   * Persist a new sequence by renumbering 1..N rather than swapping two
+   * values, so duplicate or zeroed sort_order rows can't wedge the list.
+   */
+  const persistOrder = async (next: PostCategory[], successMessage: string) => {
+    setCategories(next);
+    try {
+      for (let i = 0; i < next.length; i += 1) {
+        const { error } = await supabase
+          .from('post_categories')
+          .update({ sort_order: i + 1 })
+          .eq('id', next[i].id);
+        if (error) throw error;
+      }
+      toast({ title: "Order updated", description: successMessage });
+    } catch (error) {
+      console.error("Error reordering categories:", error);
+      toast({ title: "Error", description: "Failed to save the new order", variant: "destructive" });
+      fetchCategories();
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const from = orderedCategories.findIndex((c) => c.id === active.id);
+    const to = orderedCategories.findIndex((c) => c.id === over.id);
+    if (from < 0 || to < 0) return;
+
+    const moved = orderedCategories[from];
+    void persistOrder(
+      arrayMove(orderedCategories, from, to),
+      `"${moved.label}" moved to position ${to + 1}.`,
+    );
+  };
+
+  /**
+   * Move a category one slot up (-1) or down (+1) and persist the new order.
+   * Kept as a keyboard/accessible alternative to dragging.
+   */
+  const moveCategory = async (id: string, dir: -1 | 1) => {
+    const idx = orderedCategories.findIndex((c) => c.id === id);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= orderedCategories.length) return;
+
+    const movedLabel = orderedCategories[idx].label;
+    void persistOrder(
+      arrayMove(orderedCategories, idx, target),
+      `"${movedLabel}" moved ${dir === -1 ? "up" : "down"}.`,
+    );
+  };
+
   const handleAddCategory = async () => {
     if (!newCategoryName.trim() || !newCategoryLabel.trim()) {
       toast({ title: "Required", description: "Name and label are required", variant: "destructive" });
@@ -152,12 +336,15 @@ const CommunityTab = () => {
     }
     try {
       const slug = newCategoryName.trim().toLowerCase().replace(/\s+/g, '_');
+      // Append after the highest existing order so a new category never lands
+      // in the middle of the list because of a stray sort_order value.
+      const nextOrder = categories.reduce((max, c) => Math.max(max, c.sort_order ?? 0), 0) + 1;
       const { error } = await supabase.from('post_categories').insert({
         name: slug,
         label: newCategoryLabel.trim(),
         icon: newCategoryIcon,
         color: newCategoryColor,
-        sort_order: categories.length + 1,
+        sort_order: nextOrder,
         is_active: true,
       });
       if (error) throw error;
@@ -168,8 +355,12 @@ const CommunityTab = () => {
       setNewCategoryColor("bg-gray-100 text-gray-800");
       setIsCategoryDialogOpen(false);
       fetchCategories();
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Failed to add category", variant: "destructive" });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add category",
+        variant: "destructive",
+      });
     }
   };
 
@@ -258,34 +449,33 @@ const CommunityTab = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="min-w-[140px]">Order</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Label</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="min-w-[120px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {categories.map(cat => (
-                    <TableRow key={cat.id}>
-                      <TableCell className="font-mono text-sm">{cat.name}</TableCell>
-                      <TableCell>{cat.label}</TableCell>
-                      <TableCell>
-                        <Badge variant={cat.is_active ? "default" : "secondary"}>
-                          {cat.is_active ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => handleToggleCategory(cat.id, cat.is_active)}>
-                            {cat.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleDeleteCategory(cat.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext
+                      items={orderedCategories.map((c) => c.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {orderedCategories.map((cat, index) => (
+                        <SortableCategoryRow
+                          key={cat.id}
+                          category={cat}
+                          position={index + 1}
+                          total={orderedCategories.length}
+                          onMoveUp={() => moveCategory(cat.id, -1)}
+                          onMoveDown={() => moveCategory(cat.id, 1)}
+                          onToggle={() => handleToggleCategory(cat.id, cat.is_active)}
+                          onDelete={() => handleDeleteCategory(cat.id)}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </TableBody>
               </Table>
             </div>

@@ -15,6 +15,10 @@
 -- database. This migration performs that conversion conditionally, so it is
 -- safe whether or not that migration has run.
 --
+-- It also makes the admin category order reliable: post_categories is added to
+-- the realtime publication (so reordering reflects on the public page without a
+-- reload) and every row is given a distinct 1..N sort_order.
+--
 -- Idempotent: re-running is a no-op once the column is TEXT.
 
 DO $$
@@ -69,3 +73,37 @@ BEGIN
   END IF;
 END;
 $$;
+
+-- ------------------------------------------------------------------
+-- Realtime: so category reordering in the admin dashboard shows up on
+-- the public community page without a reload
+-- ------------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'post_categories'
+  ) THEN
+    EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.post_categories';
+  END IF;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN undefined_object THEN NULL;
+END;
+$$;
+
+-- ------------------------------------------------------------------
+-- Give every category a distinct 1..N order so the admin up/down
+-- controls and the public filter row agree on a single sequence
+-- ------------------------------------------------------------------
+WITH ranked AS (
+  SELECT id, row_number() OVER (ORDER BY sort_order ASC NULLS LAST, name ASC) AS rn
+  FROM public.post_categories
+)
+UPDATE public.post_categories p
+SET sort_order = ranked.rn
+FROM ranked
+WHERE p.id = ranked.id
+  AND p.sort_order IS DISTINCT FROM ranked.rn;
