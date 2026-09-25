@@ -415,21 +415,54 @@ const Community = () => {
         ? newPostCategory
         : (activeCategoryNames[0] ?? 'general');
 
-      const { error } = await supabase.from('posts').insert({
-        author_id: user.id,
-        content: newPostContent.trim(),
-        category,
-        attachment_url: attachmentUrl,
-        attachment_type: attachmentType,
-        is_approved: true
-      });
+      const insertPost = async (postCategory: string, url: string | null, type: string | null) =>
+        supabase.from('posts').insert({
+          author_id: user.id,
+          content: newPostContent.trim(),
+          category: postCategory,
+          attachment_url: url,
+          attachment_type: type,
+          is_approved: true
+        });
 
-      if (error) throw error;
+      let usedCategory = category;
+      let result = await insertPost(category, attachmentUrl, attachmentType);
+
+      if (result.error) {
+        console.error('Post insert failed:', result.error);
+
+        // posts.category was originally the post_category enum, which only
+        // accepts ('education','finance','climate','investment','advert',
+        // 'scam_alert','announcement'). Until migration
+        // 20260911000000 converts the column to TEXT, the admin category names
+        // are rejected outright. Retry with a value that is valid under both
+        // the old enum and the new TEXT column so the post still goes through.
+        // 22P02 = invalid_text_representation, 23514 = check_violation.
+        const isCategoryProblem = result.error.code === '22P02' || result.error.code === '23514';
+
+        if (isCategoryProblem && category !== 'finance') {
+          const retry = await insertPost('finance', attachmentUrl, attachmentType);
+          if (!retry.error) {
+            usedCategory = 'finance';
+            result = retry;
+            toast({
+              title: "Posted under Finance",
+              description: "That category isn't available yet — your post went to Finance instead.",
+            });
+          }
+        }
+      }
+
+      if (result.error) {
+        // Surface the real reason (RLS, invalid column, enum, FK...) instead of
+        // a bare "posting error".
+        throw new Error(`${result.error.message} (${result.error.code ?? 'no code'})`);
+      }
 
       toast({ title: "Success!", description: "Your post has been published." });
-      
+
       setNewPostContent("");
-      setNewPostCategory(category);
+      setNewPostCategory(usedCategory);
       setSelectedFile(null);
       setFilePreview(null);
       setIsCreateOpen(false);
