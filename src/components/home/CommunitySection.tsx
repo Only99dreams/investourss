@@ -16,6 +16,7 @@ import { postShareText } from "@/lib/share";
 import { parseVideoLink } from "@/lib/video";
 import { attachThumbnailToUpload, backfillVideoThumbnail, storedThumbnailFor } from "@/lib/videoThumbnail";
 import {
+  buildShareUrl,
   castVote,
   fetchMyVotes,
   fetchVotingPower,
@@ -587,7 +588,9 @@ const CommunitySection = () => {
 
   const handleShare = async (postId: string) => {
     const referralCode = profile?.referral_code || "";
-    const shareUrl = `${window.location.origin}/api/share?post=${postId}${referralCode ? `&ref=${referralCode}` : ""}`;
+    // Cache-busted so a platform that cached an older preview fetches the
+    // current one; the in-app pageUrl below stays stable.
+    const shareUrl = buildShareUrl(postId, referralCode || null);
     const pageUrl = `${window.location.origin}/community?post=${postId}${referralCode ? `&ref=${referralCode}` : ""}`;
     const post = posts.find((p) => p.id === postId);
     // AIWC competition entries carry the full pitch; other posts keep the

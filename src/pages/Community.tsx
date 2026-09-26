@@ -78,6 +78,7 @@ import {
 } from "@/lib/categories";
 import { LinkifiedText } from "@/lib/LinkifiedText";
 import {
+  buildShareUrl,
   castVote,
   fetchMyVotes,
   fetchVotingPower,
@@ -773,9 +774,10 @@ const Community = () => {
   const handleShare = async (postId: string, platform: string) => {
     const post = posts.find(p => p.id === postId);
     const ref = profile?.referral_code ? `&ref=${profile.referral_code}` : "";
-    // shareUrl hits the OG-image endpoint for rich previews; pageUrl is the
-    // plain in-app link, used wherever an API route can't be relied on.
-    const shareUrl = `${window.location.origin}/api/share?post=${postId}${ref}`;
+    // shareUrl hits the OG-image endpoint for rich previews, with a cache-busting
+    // token so a platform that cached an older preview fetches the current one.
+    // pageUrl is the plain in-app destination and stays stable.
+    const shareUrl = buildShareUrl(postId, profile?.referral_code);
     const pageUrl = `${window.location.origin}/community?post=${postId}${ref}`;
     // AIWC competition entries carry the full pitch; other posts keep the
     // short "check this out" summary. The label is checked too, so an entry is

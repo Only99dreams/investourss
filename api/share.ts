@@ -272,13 +272,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     // A user's own upload is left unasserted on purpose.
 
-    // og:url must be the URL whose tags these are. Pointing it at the community
-    // deep link makes the SPA shell the canonical URL, and a crawler that
-    // re-fetches that gets index.html - which carries the Investours logo. The
-    // community link is still offered as the destination to go to.
-    const canonicalUrl = `${SITE_URL}/api/share?post=${encodeURIComponent(postId)}${
-      ref ? `&ref=${encodeURIComponent(ref)}` : ""
-    }`;
+    // og:url must be the URL whose tags these are, including the cache-busting
+    // token it was fetched with. Dropping the token here would let a platform
+    // that re-fetches og:url land on the un-tokenized URL - which is the one
+    // that may still be sitting in a preview cache as the branded logo.
+    const token = (req.query.t as string) || "";
+    const canonicalUrl =
+      `${SITE_URL}/api/share?post=${encodeURIComponent(postId)}` +
+      (ref ? `&ref=${encodeURIComponent(ref)}` : "") +
+      (token ? `&t=${encodeURIComponent(token)}` : "");
 
     // Only a person gets forwarded to the post. A crawler that followed the
     // redirect would land on the SPA shell and re-read the tags from index.html,
