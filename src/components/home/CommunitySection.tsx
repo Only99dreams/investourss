@@ -279,6 +279,9 @@ const CommunitySection = () => {
   // become one, rather than being told they cannot vote and left there.
   const requirePaymentForVoting = () => setUpgradeOpen(true);
 
+  // Allowance spent for this stage: offer a top-up rather than a dead end.
+  const needMoreVotes = () => setUpgradeOpen(true);
+
   const fetchUserLikes = async () => {
     if (!user) return;
     try {
@@ -1092,6 +1095,7 @@ const CommunitySection = () => {
                               busy={votingPostId === post.id}
                               onVote={(amount) => handleVote(post.id, amount)}
                               onRequirePayment={requirePaymentForVoting}
+                              onNeedMoreVotes={needMoreVotes}
                               className="text-xs"
                             />
                           </div>

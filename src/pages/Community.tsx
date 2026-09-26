@@ -377,6 +377,11 @@ const Community = () => {
   // become one, rather than being told they cannot vote and left there.
   const requirePaymentForVoting = () => setUpgradeOpen(true);
 
+  // A member whose allowance for this stage is spent is offered a top-up. The
+  // same modal works for both cases: it already shows the credit packs and the
+  // plans side by side, and the button wording reflects which they hold.
+  const needMoreVotes = () => setUpgradeOpen(true);
+
   useEffect(() => {
     fetchPosts();
     fetchStats();
@@ -1377,6 +1382,7 @@ const Community = () => {
                               busy={votingPostId === post.id}
                               onVote={(amount) => handleVote(post.id, amount)}
                               onRequirePayment={requirePaymentForVoting}
+                              onNeedMoreVotes={needMoreVotes}
                             />
                             
                             {/* Share Button with Dialog */}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Loader2, TrendingUp, Vote } from "lucide-react";
+import { Check, Coins, Loader2, TrendingUp, Vote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
@@ -16,7 +16,10 @@ interface VoteButtonProps {
   isOwnPost: boolean;
   busy: boolean;
   onVote: (amount: number) => void;
+  /** No plan at all: offer subscribe or buy credit. */
   onRequirePayment: () => void;
+  /** Has a plan but has spent this stage's allowance: offer a way to get more. */
+  onNeedMoreVotes: () => void;
   className?: string;
 }
 
@@ -27,6 +30,10 @@ interface VoteButtonProps {
  * their tier, and can change or withdraw that number. A user who cannot vote
  * still sees the count - hiding it would look like the feature is missing - but
  * tapping it explains what voting requires instead of silently doing nothing.
+ *
+ * Every dead end offers the way out: no plan opens the subscribe/credit modal,
+ * and an exhausted allowance offers a top-up, because "you cannot vote" with
+ * no next step is the one outcome worth avoiding.
  */
 export function VoteButton({
   votesCount,
@@ -36,6 +43,7 @@ export function VoteButton({
   busy,
   onVote,
   onRequirePayment,
+  onNeedMoreVotes,
   className,
 }: VoteButtonProps) {
   const [open, setOpen] = useState(false);
@@ -108,9 +116,40 @@ export function VoteButton({
         </div>
 
         {maxOnThisPost <= 0 ? (
-          <p className="text-sm text-muted-foreground">
-            You have used all your votes for this stage.
-          </p>
+          // Out of votes for this stage. Offering the way to get more beats
+          // leaving them on a dead end, and the route differs by what they
+          // actually hold: a pack holder can top up, a subscriber can only
+          // move up a plan or wait for the next stage.
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              You have used all {power.votes_per_stage} of your {power.source_label} votes for{" "}
+              {power.stage_name}.
+            </p>
+            <Button
+              size="sm"
+              className="w-full"
+              disabled={busy}
+              onClick={() => {
+                setOpen(false);
+                onNeedMoreVotes();
+              }}
+            >
+              {power.source === "credit_pack" ? (
+                <>
+                  <Coins className="w-4 h-4 mr-2" />
+                  Buy more credit to vote
+                </>
+              ) : (
+                <>
+                  <TrendingUp className="w-4 h-4 mr-2" />
+                  Get more votes per stage
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Your allowance refreshes at the start of the next stage.
+            </p>
+          </div>
         ) : (
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground">

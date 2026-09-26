@@ -405,14 +405,16 @@ BEGIN
     -- ("Starter Pack") does not silently strip voting power. The strongest
     -- active pack wins, so buying up tops the tier up.
     --
-    -- Deliberately NOT filtered on credits_remaining: those credits pay for
-    -- audits, and a member who bought the pack and used them has still paid.
-    -- status and expires_at are what say whether the pack is live.
+    -- credits_remaining > 0 is required, so a member who has spent the pack on
+    -- audits loses voting along with it. The UI offers buying more rather than
+    -- leaving them on a dead button, which is the point: voting power is
+    -- something the pack pays for, not a perpetual discount on having paid once.
     FOR r IN
       SELECT DISTINCT ucp.pack_name
       FROM public.user_credit_packs ucp
       WHERE ucp.user_id = v_uid
         AND ucp.status = 'active'
+        AND ucp.credits_remaining > 0
         AND (ucp.expires_at IS NULL OR ucp.expires_at > now())
     LOOP
       v_best := 0;
