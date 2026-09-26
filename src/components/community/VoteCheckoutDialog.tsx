@@ -170,6 +170,27 @@ export function VoteCheckoutDialog({
 
         {view === "choose" && (
           <div className="space-y-3">
+            {/* Credit first: it is the lower-commitment option and the one most
+                members voting on a single stage actually want. Subscription is a
+                larger ongoing decision and reads better placed second. */}
+            <button
+              type="button"
+              onClick={() => setView("pack")}
+              className="w-full rounded-lg border border-primary/40 bg-primary/5 p-3 text-left transition-colors hover:bg-primary/10"
+            >
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <Coins className="w-4 h-4 text-primary" />
+                Buy credit
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Pay-as-you-go, no commitment.{" "}
+                {VOTING_TIERS.filter((t) => t.source === "credit_pack")
+                  .map((t) => `${t.label} ${t.votes_per_stage}`)
+                  .join(" · ")}{" "}
+                votes per stage.
+              </p>
+            </button>
+
             <button
               type="button"
               onClick={() => setView("subscribe")}
@@ -182,24 +203,6 @@ export function VoteCheckoutDialog({
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Recurring, unlocks the whole platform.{" "}
                 {VOTING_TIERS.filter((t) => t.source === "subscription")
-                  .map((t) => `${t.label} ${t.votes_per_stage}`)
-                  .join(" · ")}{" "}
-                votes per stage.
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setView("pack")}
-              className="w-full rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted"
-            >
-              <p className="flex items-center gap-2 text-sm font-semibold">
-                <Coins className="w-4 h-4 text-primary" />
-                Buy credit
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Pay-as-you-go, no commitment.{" "}
-                {VOTING_TIERS.filter((t) => t.source === "credit_pack")
                   .map((t) => `${t.label} ${t.votes_per_stage}`)
                   .join(" · ")}{" "}
                 votes per stage.

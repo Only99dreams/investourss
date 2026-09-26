@@ -130,7 +130,7 @@ export function VoteButton({
             Cast your vote
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {power.source_label} &middot; {power.stage_name} &middot; {remaining} of{" "}
+            {power.source_label} &middot; this stage &middot; {remaining} of{" "}
             {power.votes_per_stage} left
           </p>
         </div>
@@ -144,8 +144,8 @@ export function VoteButton({
           // nowhere.
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              You have used all {power.votes_per_stage} of your {power.source_label} votes for{" "}
-              {power.stage_name}.
+              You have used all {power.votes_per_stage} of your {power.source_label} votes for this
+              stage.
             </p>
             {canUpgrade ? (
               <>
