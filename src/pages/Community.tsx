@@ -1158,10 +1158,27 @@ const Community = () => {
             </div>
           </motion.div>
 
-          {/* Posts Grid */}
+          {/* Posts Grid.
+              Three items so the leaderboard can sit above the feed on mobile
+              without dragging Stats and the join CTA up with it. On mobile the
+              grid is a single column and `order` decides the stack; from lg up,
+              every item is explicitly placed, so `order` no longer applies and
+              the original two-column arrangement is unchanged. The feed spans
+              both rows because it is far taller than the sidebar, which would
+              otherwise push Stats below the whole feed. */}
           <div className="grid lg:grid-cols-3 gap-6">
+            {/* Vote Leaderboard - one ranking per category, hidden until
+                something has actually been voted on. */}
+            <div className="order-1 lg:col-start-3 lg:row-start-1">
+              <CategoryLeaderboard
+                categories={activeCategories.map((c) => ({ name: c.name, label: c.label }))}
+                activeCategory={activeCategory}
+                onSelectCategory={setActiveCategory}
+              />
+            </div>
+
             {/* Main Feed */}
-            <div className="lg:col-span-2 space-y-4">
+            <div className="order-2 space-y-4 lg:col-start-1 lg:col-end-3 lg:row-span-2">
               {isLoading ? (
                 <Card>
                   <CardContent className="py-12 flex items-center justify-center">
@@ -1527,16 +1544,9 @@ const Community = () => {
               onPurchased={() => void onVotingPurchased()}
             />
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Vote Leaderboard - one ranking per category, hidden until
-                  something has actually been voted on. */}
-              <CategoryLeaderboard
-                categories={activeCategories.map((c) => ({ name: c.name, label: c.label }))}
-                activeCategory={activeCategory}
-                onSelectCategory={setActiveCategory}
-              />
-
+            {/* Sidebar: everything below the feed on desktop, and below the
+                leaderboard on mobile too. */}
+            <div className="order-3 space-y-6 lg:col-start-3 lg:row-start-2">
               {/* Stats */}
               <Card>
                 <CardHeader>
