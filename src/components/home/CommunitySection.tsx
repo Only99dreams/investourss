@@ -12,6 +12,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn, generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
+import { postShareText } from "@/lib/share";
 import { LinkifiedText } from "@/lib/LinkifiedText";
 
 interface Post {
@@ -382,7 +383,9 @@ const CommunitySection = () => {
     const shareUrl = `${window.location.origin}/api/share?post=${postId}${referralCode ? `&ref=${referralCode}` : ""}`;
     const pageUrl = `${window.location.origin}/community?post=${postId}${referralCode ? `&ref=${referralCode}` : ""}`;
     const post = posts.find((p) => p.id === postId);
-    const shareText = `Check out this post from Investours Opportunity Hub: "${post?.content?.substring(0, 100)}..."\n\n${pageUrl}`;
+    // AIWC competition entries carry the full pitch; other posts keep the
+    // short "check this out" summary.
+    const shareText = postShareText(post, pageUrl);
 
     try {
       if (navigator.share && navigator.canShare?.({ text: shareText })) {

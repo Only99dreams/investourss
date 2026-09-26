@@ -31,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     const postRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/posts?id=eq.${postId}&select=content,attachment_url,attachment_type,author_id,likes_count,comments_count`,
+      `${SUPABASE_URL}/rest/v1/posts?id=eq.${postId}&select=content,category,attachment_url,attachment_type,author_id,likes_count,comments_count`,
       { headers }
     );
 
@@ -61,9 +61,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const commentsCount = post.comments_count || 0;
 
     const ogTitle = `${authorName} shared a post on Investours Opportunity Hub`;
-    const ogDescription = contentPreview
-      ? `${contentPreview}${contentPreview.length >= 200 ? "..." : ""} — ${likesCount} likes, ${commentsCount} comments`
-      : "Check out this opportunity on Investours";
+
+    // Investours Idea Competition entries get the competition pitch in the
+    // link preview. This condensed string is kept in step by hand with
+    // src/lib/share.ts - this function is bundled separately by Vercel and
+    // cannot import from src/.
+    const isAiwc = (post.category || "").trim().toLowerCase() === "aiwc";
+    const ogDescription = isAiwc
+      ? "I’m competing in the Investours Idea Competition! Voting is open to eligible " +
+        "Premium subscribers, with voting power determined by their plan. Premium " +
+        "starts from ₦1,700."
+      : contentPreview
+        ? `${contentPreview}${contentPreview.length >= 200 ? "..." : ""} — ${likesCount} likes, ${commentsCount} comments`
+        : "Check out this opportunity on Investours";
     const ogImage =
       post.attachment_type === "image" && post.attachment_url
         ? post.attachment_url

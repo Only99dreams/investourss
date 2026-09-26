@@ -62,6 +62,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
+import { postShareText } from "@/lib/share";
 import { LinkifiedText } from "@/lib/LinkifiedText";
 
 const sendNotification = (payload: Record<string, unknown>) => {
@@ -694,7 +695,9 @@ const Community = () => {
     // plain in-app link, used wherever an API route can't be relied on.
     const shareUrl = `${window.location.origin}/api/share?post=${postId}${ref}`;
     const pageUrl = `${window.location.origin}/community?post=${postId}${ref}`;
-    const shareText = `Check out this post from Investours Opportunity Hub: "${post?.content?.substring(0, 100)}..."\n\n${pageUrl}`;
+    // AIWC competition entries carry the full pitch; other posts keep the
+    // short "check this out" summary.
+    const shareText = postShareText(post, pageUrl);
 
     try {
       // Record the share before opening the window: a popup blocker must not
