@@ -276,7 +276,7 @@ ${ogImageWidth ? `  <meta property="og:image:width" content="${ogImageWidth}" />
   <meta name="twitter:description" content="${escapeHtml(ogDescription)}" />
   <meta name="twitter:image" content="${escapeHtml(ogImage)}" />
 
-  <link rel="canonical" href="${escapeHtml(communityUrl)}" />
+  <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
   <meta http-equiv="refresh" content="0;url=${escapeHtml(communityUrl)}" />
   <script>window.location.replace("${escapeHtml(communityUrl)}");</script>
 </head>

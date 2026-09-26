@@ -80,12 +80,21 @@ export function VoteButton({
     className,
   );
 
+  // The word "Vote" is always present and the count sits beside it, rather than
+  // the count replacing it. Swapping one for the other meant the control stopped
+  // reading as an action as soon as a post had any votes, and the count alone
+  // looked like a static total.
+  const count = (
+    <span className="tabular-nums text-xs text-muted-foreground">{votesCount}</span>
+  );
+
   // The author cannot back their own post, so the control is inert for them.
   if (isOwnPost) {
     return (
       <span className={cn(label, "opacity-70")} title="You cannot vote for your own post">
         <Vote className="w-4 h-4" />
-        {votesCount > 0 ? votesCount : "Vote"}
+        Vote
+        {count}
       </span>
     );
   }
@@ -101,7 +110,8 @@ export function VoteButton({
         title="Voting is for subscribers and credit pack holders"
       >
         <Vote className="w-4 h-4" />
-        {votesCount > 0 ? votesCount : "Vote"}
+        Vote
+        {count}
       </button>
     );
   }
@@ -115,7 +125,8 @@ export function VoteButton({
           ) : (
             <Vote className={cn("w-4 h-4", myVote > 0 && "fill-current")} />
           )}
-          {votesCount > 0 ? votesCount : "Vote"}
+          Vote
+          {count}
           {myVote > 0 && (
             <span className="text-[10px] font-semibold px-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
               +{myVote}
