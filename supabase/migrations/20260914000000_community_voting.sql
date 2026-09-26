@@ -43,6 +43,29 @@
 -- This migration is idempotent and safe to re-run.
 
 -- ------------------------------------------------------------------
+-- 0. Drop any earlier version of these functions first
+-- ------------------------------------------------------------------
+-- CREATE OR REPLACE cannot change a function's OUT-parameter row type, so
+-- editing a RETURNS TABLE shape and re-running fails with:
+--   ERROR: 42P13 cannot change return type of existing function
+-- This migration changed get_category_leaderboard's columns when the board was
+-- corrected to rank post authors rather than voters, which is exactly that case.
+--
+-- Dropping unconditionally is safe and makes the migration genuinely re-runnable
+-- from any earlier state, not just a clean database. The functions are
+-- recreated below in the same transaction, and nothing in the schema depends on
+-- them (no views, rules or triggers reference them), so there is nothing to
+-- cascade. This matches the pattern the rest of this project already uses.
+DROP FUNCTION IF EXISTS public.get_category_leaderboard(TEXT, INTEGER);
+DROP FUNCTION IF EXISTS public.get_voted_categories();
+DROP FUNCTION IF EXISTS public.get_my_votes(UUID[]);
+DROP FUNCTION IF EXISTS public.cast_post_vote(UUID, INTEGER);
+DROP FUNCTION IF EXISTS public.get_voting_power(UUID);
+DROP FUNCTION IF EXISTS public.sync_post_votes_count();
+DROP FUNCTION IF EXISTS public.set_voting_stage(TEXT, INTEGER, TIMESTAMPTZ, TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS public.get_current_voting_stage();
+
+-- ------------------------------------------------------------------
 -- 1. Voting stages: exactly one is current at a time
 -- ------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.voting_stages (
