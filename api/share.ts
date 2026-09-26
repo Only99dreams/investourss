@@ -26,6 +26,31 @@ function escapeHtml(str: string): string {
 }
 
 /**
+ * Link-preview crawlers.
+ *
+ * These must be served the og: tags and NOT be redirected. A
+ * `<meta http-equiv="refresh">` looks inert, but WhatsApp, Facebook and several
+ * others follow it: they would fetch this page, read the correct og:image, then
+ * follow the refresh to /community, get the SPA shell, and re-read the tags from
+ * index.html - which carries the Investours logo. That is why every og: fix
+ * appeared to do nothing. A person following the link still gets forwarded.
+ */
+const CRAWLER_UA =
+  /facebookexternalhit|facebookcatalog|facebot|whatsapp|twitterbot|linkedinbot|slackbot|slack-imgproxy|discordbot|telegrambot|skypeuripreview|applebot|redditbot|embedly|pinterest|quora|vkshare|w3c_validator|bot\b|crawler|spider|preview/i;
+
+function isLinkPreviewCrawler(userAgent: string): boolean {
+  if (!userAgent) return false;
+  // A real browser never matches: the pattern deliberately avoids bare
+  // substrings that appear in Chrome, Safari or the WhatsApp in-app browser
+  // (whose UA says "MicroMessenger", not "WhatsApp").
+  if (/mozilla/i.test(userAgent) && !/bot|crawler|spider|preview/i.test(userAgent)) {
+    // Still allow explicitly-named crawlers that also send a Mozilla token.
+    return CRAWLER_UA.test(userAgent);
+  }
+  return CRAWLER_UA.test(userAgent);
+}
+
+/**
  * Does a public storage object exist?
  *
  * A HEAD is enough and avoids pulling the image down. Bounded by a short
@@ -255,6 +280,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ref ? `&ref=${encodeURIComponent(ref)}` : ""
     }`;
 
+    // Only a person gets forwarded to the post. A crawler that followed the
+    // redirect would land on the SPA shell and re-read the tags from index.html,
+    // which is how a correct og:image still ended up rendering as the logo.
+    const forwardToPost = !isLinkPreviewCrawler(String(req.headers["user-agent"] ?? ""));
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -277,7 +307,7 @@ ${ogImageWidth ? `  <meta property="og:image:width" content="${ogImageWidth}" />
   <meta name="twitter:image" content="${escapeHtml(ogImage)}" />
 
   <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
-  <meta http-equiv="refresh" content="0;url=${escapeHtml(communityUrl)}" />
+${forwardToPost ? `  <meta http-equiv="refresh" content="0;url=${escapeHtml(communityUrl)}" />
   <script>window.location.replace("${escapeHtml(communityUrl)}");</script>
 </head>
 <body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,sans-serif;background:#f9fafb;">
@@ -287,7 +317,11 @@ ${ogImageWidth ? `  <meta property="og:image:width" content="${ogImageWidth}" />
     <a href="${escapeHtml(communityUrl)}" style="color:#2563eb;text-decoration:underline;">Click here if not redirected</a>
   </div>
 </body>
-</html>`;
+</html>` : `</head>
+<body>
+  <a href="${escapeHtml(communityUrl)}">View this post on Investours</a>
+</body>
+</html>`}`;
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=300, s-maxage=300");
