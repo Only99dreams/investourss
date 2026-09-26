@@ -1,8 +1,19 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://xpghrhuxmfaljtptvriy.supabase.co";
-const SUPABASE_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhwZ2hyaHV4bWZhbGp0cHR2cml5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyMzE4MjcsImV4cCI6MjA4MTgwNzgyN30.aNfG9tEKRcgNR36HvN1wX3sux4R6Z6_wTApBBMMboEc";
-const SITE_URL = "https://investours.app";
+// These must come from the environment. This used to fall back to a hardcoded
+// Supabase project, which pointed at the wrong database: every post lookup
+// missed, and the handler responded with a 302 redirect. A redirect carries no
+// og: tags at all, so shared links had no title, no thumbnail and no pitch,
+// and the failure was invisible. If the config is missing we now say so instead
+// of silently reading from the wrong place.
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+const SUPABASE_KEY =
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_PUBLISHABLE_KEY ||
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  "";
+const SITE_URL = process.env.SITE_URL || "https://investours.app";
 const DEFAULT_IMAGE = `${SITE_URL}/logo.png`;
 
 function escapeHtml(str: string): string {
@@ -22,6 +33,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.redirect(302, `${SITE_URL}/community`);
   }
 
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    // Previously this was papered over with a hardcoded fallback pointing at a
+    // different project, so a misconfigured deployment looked exactly like a
+    // missing post: a 302, and therefore no og: tags at all.
+    console.error(
+      "[api/share] Missing Supabase configuration. Set SUPABASE_URL and " +
+        "SUPABASE_ANON_KEY (or the VITE_-prefixed equivalents) on the server.",
+    );
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(500).send(
+      `<!DOCTYPE html><html><head><meta charset="utf-8" />` +
+        `<title>Share link unavailable</title></head><body>` +
+        `<h1>Share link unavailable</h1>` +
+        `<p>This share link is temporarily misconfigured. ` +
+        `<a href="${escapeHtml(`${SITE_URL}/community`)}">Visit the community</a>.</p>` +
+        `</body></html>`,
+    );
+  }
+
   const communityUrl = `${SITE_URL}/community?post=${postId}${ref ? `&ref=${ref}` : ""}`;
 
   try {
@@ -35,10 +65,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { headers }
     );
 
+    if (!postRes.ok) {
+      console.error(`[api/share] Post lookup failed: ${postRes.status} ${await postRes.text()}`);
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(502).send(
+        `<!DOCTYPE html><html><head><meta charset="utf-8" />` +
+          `<title>Share link unavailable</title></head><body>` +
+          `<h1>Share link unavailable</h1>` +
+          `<p>We could not load this post. ` +
+          `<a href="${escapeHtml(`${SITE_URL}/community`)}">Visit the community</a>.</p>` +
+          `</body></html>`,
+      );
+    }
+
     const posts = await postRes.json();
-    const post = posts?.[0];
+    const post = Array.isArray(posts) ? posts[0] : null;
 
     if (!post) {
+      // A genuine miss: the post is gone, unapproved or hidden by RLS. A
+      // redirect is the right response for a crawler hitting an unknown post.
+      console.warn(`[api/share] No visible post for id ${postId}`);
       return res.redirect(302, `${SITE_URL}/community`);
     }
 
