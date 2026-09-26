@@ -22,7 +22,7 @@ import {
   type VotingPower,
 } from "@/lib/voting";
 import { VoteButton } from "@/components/community/VoteButton";
-import { VoteUpgradeDialog } from "@/components/community/VoteUpgradeDialog";
+import { VoteCheckoutDialog } from "@/components/community/VoteCheckoutDialog";
 import {
   DEFAULT_CATEGORIES,
   LEGACY_ENUM_CATEGORIES,
@@ -275,12 +275,15 @@ const CommunitySection = () => {
     }
   };
 
-  // A member without a subscription or credit pack is offered the two ways to
-  // become one, rather than being told they cannot vote and left there.
+  // Taken through the actual checkout in place, so a member never loses their
+  // scroll position to go and pay. Power is re-read on success because the
+  // purchase is what grants it.
   const requirePaymentForVoting = () => setUpgradeOpen(true);
-
-  // Allowance spent for this stage: offer a top-up rather than a dead end.
   const needMoreVotes = () => setUpgradeOpen(true);
+  const onVotingPurchased = async () => {
+    setVotingPower(await fetchVotingPower());
+    await fetchPosts();
+  };
 
   const fetchUserLikes = async () => {
     if (!user) return;
@@ -652,8 +655,12 @@ const CommunitySection = () => {
     <section className="py-16 bg-secondary/30">
         <div className="container mx-auto px-4">
 
-        {/* Shown when a member without a plan tries to vote */}
-        <VoteUpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} />
+        {/* Buy voting power in place, without leaving the page */}
+        <VoteCheckoutDialog
+          open={upgradeOpen}
+          onOpenChange={setUpgradeOpen}
+          onPurchased={() => void onVotingPurchased()}
+        />
 
         {/* Evidence of Activity & Impact */}
         <div className="mb-16">

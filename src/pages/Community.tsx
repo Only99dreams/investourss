@@ -84,7 +84,7 @@ import {
   type VotingPower,
 } from "@/lib/voting";
 import { VoteButton } from "@/components/community/VoteButton";
-import { VoteUpgradeDialog } from "@/components/community/VoteUpgradeDialog";
+import { VoteCheckoutDialog } from "@/components/community/VoteCheckoutDialog";
 import { CategoryLeaderboard } from "@/components/community/CategoryLeaderboard";
 
 const sendNotification = (payload: Record<string, unknown>) => {
@@ -373,14 +373,16 @@ const Community = () => {
     }
   };
 
-  // A member without a subscription or credit pack is offered the two ways to
-  // become one, rather than being told they cannot vote and left there.
+  // A member without a plan, or one whose allowance is spent, is taken through
+  // the actual checkout rather than bounced to another page, so they never lose
+  // their place in the feed. Power is re-read on success because the purchase
+  // is what grants it.
   const requirePaymentForVoting = () => setUpgradeOpen(true);
-
-  // A member whose allowance for this stage is spent is offered a top-up. The
-  // same modal works for both cases: it already shows the credit packs and the
-  // plans side by side, and the button wording reflects which they hold.
   const needMoreVotes = () => setUpgradeOpen(true);
+  const onVotingPurchased = async () => {
+    await fetchVoting();
+    await fetchPosts();
+  };
 
   useEffect(() => {
     fetchPosts();
@@ -1518,8 +1520,12 @@ const Community = () => {
               )}
             </div>
 
-            {/* Shown when a member without a plan tries to vote */}
-            <VoteUpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} />
+            {/* Buy voting power in place, without leaving the community */}
+            <VoteCheckoutDialog
+              open={upgradeOpen}
+              onOpenChange={setUpgradeOpen}
+              onPurchased={() => void onVotingPurchased()}
+            />
 
             {/* Sidebar */}
             <div className="space-y-6">
