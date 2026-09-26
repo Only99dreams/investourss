@@ -77,6 +77,15 @@ import {
   type Category,
 } from "@/lib/categories";
 import { LinkifiedText } from "@/lib/LinkifiedText";
+import {
+  castVote,
+  fetchMyVotes,
+  fetchVotingPower,
+  VOTING_TIERS,
+  type VotingPower,
+} from "@/lib/voting";
+import { VoteButton } from "@/components/community/VoteButton";
+import { CategoryLeaderboard } from "@/components/community/CategoryLeaderboard";
 
 const sendNotification = (payload: Record<string, unknown>) => {
   supabase.functions.invoke('send-notification', { body: payload }).catch(() => {});
@@ -113,6 +122,7 @@ interface Post {
   likes_count: number;
   comments_count: number;
   shares_count: number;
+  votes_count: number;
   is_pinned: boolean;
   created_at: string;
   author?: {
@@ -157,6 +167,9 @@ const Community = () => {
   // thumbnails change and re-issues a HEAD for every video on the page.
   const posterChecks = useRef<Set<string>>(new Set());
   const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
+  const [votingPower, setVotingPower] = useState<VotingPower | null>(null);
+  const [myVotes, setMyVotes] = useState<Record<string, number>>({});
+  const [votingPostId, setVotingPostId] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>({});
   const [newCommentMap, setNewCommentMap] = useState<Record<string, string>>({});
@@ -268,6 +281,14 @@ const Community = () => {
       }));
 
       setPosts(enrichedPosts);
+
+      // Only ask which posts this user has backed once the ids are known, so
+      // the vote buttons render in the correct state on first paint.
+      if (user) {
+        setMyVotes(await fetchMyVotes(postsData.map(p => p.id)));
+      } else {
+        setMyVotes({});
+      }
     } catch (error) {
       console.error('Error fetching posts:', error);
       toast({
@@ -300,6 +321,67 @@ const Community = () => {
     }
   };
 
+  const fetchVoting = useCallback(async () => {
+    if (!user) {
+      setVotingPower(null);
+      return;
+    }
+    setVotingPower(await fetchVotingPower());
+  }, [user]);
+
+  const handleVote = async (postId: string, amount: number) => {
+    if (!user) {
+      toast({ title: "Login Required", description: "Please sign in to vote.", variant: "destructive" });
+      return;
+    }
+    setVotingPostId(postId);
+    try {
+      // The database owns every rule here: payment, self-voting, the stage, and
+      // the remaining allowance. Its refusal reason is what gets shown, rather
+      // than a client-side guess that could be wrong.
+      const result = await castVote(postId, amount);
+
+      if (!result.ok) {
+        toast({ title: "Vote not counted", description: result.message, variant: "destructive" });
+        // Payment state or the stage may have changed under us.
+        void fetchVoting();
+        return;
+      }
+
+      setMyVotes((prev) => {
+        const next = { ...prev };
+        if (amount <= 0) delete next[postId];
+        else next[postId] = amount;
+        return next;
+      });
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, votes_count: result.post_votes_count } : p)),
+      );
+      setVotingPower((prev) =>
+        prev ? { ...prev, votes_remaining: result.votes_remaining } : prev,
+      );
+    } catch (error) {
+      console.error("Vote failed:", error);
+      toast({
+        title: "Vote not counted",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setVotingPostId(null);
+    }
+  };
+
+  const requirePaymentForVoting = () => {
+    toast({
+      title: "Voting is for paid members",
+      description: VOTING_TIERS.filter((t) => t.source === "subscription")
+        .map((t) => `${t.label}: ${t.votes_per_stage}`)
+        .join("  ·  ") + " vote(s) per stage",
+      variant: "destructive",
+    });
+  };
+
   useEffect(() => {
     fetchPosts();
     fetchStats();
@@ -307,6 +389,7 @@ const Community = () => {
     // Verifies whether posts.category is still an enum, so the warning banner
     // reflects the real database state rather than a remembered flag.
     void checkCategoryColumn();
+    void fetchVoting();
 
     const channel = supabase
       .channel('posts-realtime')
@@ -1289,6 +1372,17 @@ const Community = () => {
                               <MessageSquare className="w-4 h-4" />
                               {post.comments_count || 0}
                             </button>
+
+                            {/* Vote Button - beside Share */}
+                            <VoteButton
+                              votesCount={post.votes_count || 0}
+                              myVote={myVotes[post.id] || 0}
+                              power={votingPower}
+                              isOwnPost={user?.id === post.author_id}
+                              busy={votingPostId === post.id}
+                              onVote={(amount) => handleVote(post.id, amount)}
+                              onRequirePayment={requirePaymentForVoting}
+                            />
                             
                             {/* Share Button with Dialog */}
                             <Dialog open={sharePostId === post.id} onOpenChange={(open) => setSharePostId(open ? post.id : null)}>
@@ -1425,6 +1519,14 @@ const Community = () => {
 
             {/* Sidebar */}
             <div className="space-y-6">
+              {/* Vote Leaderboard - one ranking per category, hidden until
+                  something has actually been voted on. */}
+              <CategoryLeaderboard
+                categories={activeCategories.map((c) => ({ name: c.name, label: c.label }))}
+                activeCategory={activeCategory}
+                onSelectCategory={setActiveCategory}
+              />
+
               {/* Stats */}
               <Card>
                 <CardHeader>
@@ -1442,6 +1544,14 @@ const Community = () => {
                     <span className="text-muted-foreground">Total Posts</span>
                     <span className="font-semibold">{communityStats.totalPosts}</span>
                   </div>
+                  {votingPower && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Your votes this stage</span>
+                      <span className="font-semibold">
+                        {votingPower.votes_remaining}/{votingPower.votes_per_stage} left
+                      </span>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

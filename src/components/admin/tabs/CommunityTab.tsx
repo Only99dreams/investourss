@@ -45,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, MessageSquare, CheckCircle, Eye, EyeOff, Trash2, Plus, Tag, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { Loader2, MessageSquare, CheckCircle, Eye, EyeOff, Trash2, Plus, Tag, ArrowUp, ArrowDown, GripVertical, Vote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -69,6 +69,15 @@ interface PostCategory {
   color: string | null;
   sort_order: number | null;
   is_active: boolean | null;
+}
+
+interface VotingStage {
+  id: string;
+  name: string;
+  stage_number: number;
+  is_current: boolean;
+  opens_at: string | null;
+  closes_at: string | null;
 }
 
 /** One draggable row. Only the handle starts a drag, so the row's buttons stay clickable. */
@@ -172,6 +181,9 @@ const CommunityTab = () => {
   const [newCategoryLabel, setNewCategoryLabel] = useState("");
   const [newCategoryIcon, setNewCategoryIcon] = useState("Tag");
   const [newCategoryColor, setNewCategoryColor] = useState("bg-gray-100 text-gray-800");
+  const [stages, setStages] = useState<VotingStage[]>([]);
+  const [newStageName, setNewStageName] = useState("");
+  const [advancingStage, setAdvancingStage] = useState(false);
   const { toast } = useToast();
   const { user, roles, profile } = useAuth();
 
@@ -184,10 +196,58 @@ const CommunityTab = () => {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const fetchStages = async () => {
+    const { data, error } = await supabase
+      .from("voting_stages")
+      .select("id, name, stage_number, is_current, opens_at, closes_at")
+      .order("stage_number");
+    if (error) {
+      // Migration not applied yet; the card simply stays empty.
+      console.warn("Voting stages unavailable:", error.message);
+      return;
+    }
+    setStages((data ?? []) as VotingStage[]);
+  };
+
+  /**
+   * Open a new voting stage. The per-stage allowance is what "N votes per
+   * stage" means, so this is the only way to refresh anyone's allowance - and
+   * it is deliberately irreversible from here, since old votes stay on record
+   * for the previous stage.
+   */
+  const advanceStage = async () => {
+    const name = newStageName.trim();
+    if (!name) {
+      toast({ title: "Name required", description: "Give the stage a name, e.g. 'Stage 2'.", variant: "destructive" });
+      return;
+    }
+    setAdvancingStage(true);
+    try {
+      const { error } = await supabase.rpc("set_voting_stage", { p_name: name });
+      if (error) throw error;
+      toast({
+        title: `${name} is now open`,
+        description: "Everyone's voting allowance has been refreshed for this stage.",
+      });
+      setNewStageName("");
+      await fetchStages();
+    } catch (error) {
+      console.error("Failed to advance stage:", error);
+      toast({
+        title: "Could not open the stage",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setAdvancingStage(false);
+    }
+  };
+
   useEffect(() => {
     if (user && isAdmin) {
       fetchPosts();
       fetchCategories();
+      void fetchStages();
     } else {
       setLoading(false);
     }
@@ -388,6 +448,61 @@ const CommunityTab = () => {
 
   return (
     <div className="space-y-6">
+      {/* Voting Stages - the per-stage allowance is refreshed by opening a new one */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Vote className="w-5 h-5" /> Voting Stage
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {stages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No stages yet. Open the first one to start accepting votes.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {stages.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between rounded-lg border px-3 py-2"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{s.name}</p>
+                    <p className="text-xs text-muted-foreground">Stage {s.stage_number}</p>
+                  </div>
+                  {s.is_current ? (
+                    <Badge>Open now</Badge>
+                  ) : (
+                    <Badge variant="secondary">Closed</Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Label className="sr-only">New stage name</Label>
+              <Input
+                value={newStageName}
+                onChange={(e) => setNewStageName(e.target.value)}
+                placeholder="e.g. Stage 2"
+                disabled={advancingStage}
+              />
+            </div>
+            <Button onClick={advanceStage} disabled={advancingStage || !newStageName.trim()}>
+              {advancingStage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Open stage
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Opening a new stage gives every paid member a fresh voting allowance. Votes already
+            cast stay counted against the stage they were cast in.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Category Management */}
       <Card>
         <CardHeader>

@@ -16,6 +16,14 @@ import { postShareText } from "@/lib/share";
 import { parseVideoLink } from "@/lib/video";
 import { attachThumbnailToUpload, backfillVideoThumbnail, storedThumbnailFor } from "@/lib/videoThumbnail";
 import {
+  castVote,
+  fetchMyVotes,
+  fetchVotingPower,
+  VOTING_TIERS,
+  type VotingPower,
+} from "@/lib/voting";
+import { VoteButton } from "@/components/community/VoteButton";
+import {
   DEFAULT_CATEGORIES,
   LEGACY_ENUM_CATEGORIES,
   ENUM_SAFE_CATEGORY,
@@ -36,6 +44,7 @@ interface Post {
   likes_count: number;
   comments_count: number;
   shares_count: number;
+  votes_count: number;
   author_id: string;
   attachment_url: string | null;
   attachment_type: string | null;
@@ -82,6 +91,9 @@ const CommunitySection = () => {
   // every video on the page.
   const posterChecks = useRef<Set<string>>(new Set());
   const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
+  const [votingPower, setVotingPower] = useState<VotingPower | null>(null);
+  const [myVotes, setMyVotes] = useState<Record<string, number>>({});
+  const [votingPostId, setVotingPostId] = useState<string | null>(null);
   const { toast } = useToast();
 
   /**
@@ -111,6 +123,9 @@ const CommunitySection = () => {
     fetchPosts();
     if (user) {
       fetchUserLikes();
+      void fetchVotingPower().then(setVotingPower);
+    } else {
+      setVotingPower(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -181,7 +196,7 @@ const CommunitySection = () => {
     try {
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
-        .select('id, content, created_at, likes_count, comments_count, shares_count, author_id, attachment_url, attachment_type')
+        .select('id, content, created_at, likes_count, comments_count, shares_count, votes_count, author_id, attachment_url, attachment_type')
         .eq('is_approved', true)
         .eq('is_hidden', false)
         .order('created_at', { ascending: false })
@@ -203,12 +218,71 @@ const CommunitySection = () => {
       })) as Post[];
       
       setPosts(postsWithProfiles);
+
+      // Only ask which posts this user has backed once the ids are known.
+      if (user) {
+        setMyVotes(await fetchMyVotes(postsWithProfiles.map((p) => p.id)));
+      } else {
+        setMyVotes({});
+      }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error("Error fetching posts:", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleVote = async (postId: string, amount: number) => {
+    if (!user) {
+      toast({ title: "Login Required", description: "Please sign in to vote.", variant: "destructive" });
+      return;
+    }
+    setVotingPostId(postId);
+    try {
+      // Payment, self-voting, stage and remaining allowance are all re-checked
+      // by the database; its refusal reason is what gets shown.
+      const result = await castVote(postId, amount);
+
+      if (!result.ok) {
+        toast({ title: "Vote not counted", description: result.message, variant: "destructive" });
+        setVotingPower(await fetchVotingPower());
+        return;
+      }
+
+      setMyVotes((prev) => {
+        const next = { ...prev };
+        if (amount <= 0) delete next[postId];
+        else next[postId] = amount;
+        return next;
+      });
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, votes_count: result.post_votes_count } : p)),
+      );
+      setVotingPower((prev) =>
+        prev ? { ...prev, votes_remaining: result.votes_remaining } : prev,
+      );
+    } catch (error) {
+      console.error("Vote failed:", error);
+      toast({
+        title: "Vote not counted",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setVotingPostId(null);
+    }
+  };
+
+  const requirePaymentForVoting = () => {
+    toast({
+      title: "Voting is for paid members",
+      description:
+        VOTING_TIERS.filter((t) => t.source === "subscription")
+          .map((t) => `${t.label}: ${t.votes_per_stage}`)
+          .join("  ·  ") + " vote(s) per stage",
+      variant: "destructive",
+    });
   };
 
   const fetchUserLikes = async () => {
@@ -1011,6 +1085,18 @@ const CommunitySection = () => {
                               <Share2 className="w-4 h-4" />
                               {post.shares_count || 0}
                             </button>
+
+                            {/* Vote Button - beside Share */}
+                            <VoteButton
+                              votesCount={post.votes_count || 0}
+                              myVote={myVotes[post.id] || 0}
+                              power={votingPower}
+                              isOwnPost={user?.id === post.author_id}
+                              busy={votingPostId === post.id}
+                              onVote={(amount) => handleVote(post.id, amount)}
+                              onRequirePayment={requirePaymentForVoting}
+                              className="text-xs"
+                            />
                           </div>
 
                           {/* Comments Section */}
