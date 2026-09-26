@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Check, Coins, Loader2, TrendingUp, Vote } from "lucide-react";
+import { Check, Loader2, TrendingUp, Vote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { VotingPower } from "@/lib/voting";
+import { VOTING_TIERS, type VotingPower } from "@/lib/voting";
 
 interface VoteButtonProps {
   /** Votes on the post, from `posts.votes_count`. */
@@ -51,6 +51,19 @@ export function VoteButton({
   const canVote = Boolean(power) && !isOwnPost;
   const maxOnThisPost = power ? power.votes_remaining + myVote : 0;
   const remaining = power?.votes_remaining ?? 0;
+
+  // The tier above the one they hold, if there is one. Voting power is a
+  // property of the tier, so an exhausted allowance is fixed by moving up a tier
+  // rather than by buying anything.
+  const tiers = power
+    ? VOTING_TIERS.filter((t) => t.source === power.source).sort(
+        (a, b) => a.votes_per_stage - b.votes_per_stage,
+      )
+    : [];
+  const nextTier = power ? tiers.find((t) => t.votes_per_stage > power.votes_per_stage) : undefined;
+  const canUpgrade = Boolean(nextTier);
+  const nextTierLabel = nextTier?.label ?? "";
+  const nextTierVotes = nextTier?.votes_per_stage ?? 0;
 
   const label = cn(
     "flex items-center gap-1.5 transition-colors",
@@ -116,39 +129,45 @@ export function VoteButton({
         </div>
 
         {maxOnThisPost <= 0 ? (
-          // Out of votes for this stage. Offering the way to get more beats
-          // leaving them on a dead end, and the route differs by what they
-          // actually hold: a pack holder can top up, a subscriber can only
-          // move up a plan or wait for the next stage.
+          // Out of votes for this stage. The route is an UPGRADE, never buying
+          // more votes: a higher tier is what raises the allowance, and framing
+          // it as a top-up would read as votes being sold. Someone already on
+          // the top tier cannot upgrade, so they are told the truth and pointed
+          // at the next stage instead of being offered a button that leads
+          // nowhere.
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
               You have used all {power.votes_per_stage} of your {power.source_label} votes for{" "}
               {power.stage_name}.
             </p>
-            <Button
-              size="sm"
-              className="w-full"
-              disabled={busy}
-              onClick={() => {
-                setOpen(false);
-                onNeedMoreVotes();
-              }}
-            >
-              {power.source === "credit_pack" ? (
-                <>
-                  <Coins className="w-4 h-4 mr-2" />
-                  Buy more credit to vote
-                </>
-              ) : (
-                <>
+            {canUpgrade ? (
+              <>
+                <p className="text-sm">
+                  Upgrade to{" "}
+                  <span className="font-semibold">
+                    {nextTierLabel} gives {nextTierVotes} votes per stage
+                  </span>
+                  , up from {power.votes_per_stage}.
+                </p>
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={busy}
+                  onClick={() => {
+                    setOpen(false);
+                    onNeedMoreVotes();
+                  }}
+                >
                   <TrendingUp className="w-4 h-4 mr-2" />
-                  Get more votes per stage
-                </>
-              )}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Your allowance refreshes at the start of the next stage.
-            </p>
+                  Upgrade for more votes
+                </Button>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {power.source_label} is already our highest voting tier. Your
+                allowance refreshes at the start of the next stage.
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
