@@ -64,6 +64,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
 import { postShareText, isAiwcCategory } from "@/lib/share";
 import { parseVideoLink, attachmentThumbnail } from "@/lib/video";
+import {
+  DEFAULT_CATEGORIES,
+  LEGACY_ENUM_CATEGORIES,
+  ENUM_SAFE_CATEGORY,
+  isCategoryValueError,
+  isCategoryColumnStillEnum,
+  loadPostCategories,
+  pickStorableCategory,
+  reconcileCategory,
+  type Category,
+} from "@/lib/categories";
 import { LinkifiedText } from "@/lib/LinkifiedText";
 
 const sendNotification = (payload: Record<string, unknown>) => {
@@ -90,45 +101,6 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Banknote, Briefcase, Handshake, Rocket, GraduationCap, Calendar, Megaphone, MessageSquare, Tag, Search,
   Users, Heart, Share2, Filter, Leaf, TrendingUp, AlertTriangle
 };
-
-interface Category {
-  id: string;
-  name: string;
-  label: string;
-  icon: string;
-  color: string;
-}
-
-const DEFAULT_CATEGORIES: Category[] = [
-  { id: "all", name: "all", label: "All Posts", icon: "MessageSquare", color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100" },
-  { id: "funding_grants", name: "funding_grants", label: "Funding & Grants", icon: "Banknote", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" },
-  { id: "jobs_gigs", name: "jobs_gigs", label: "Jobs & Gigs", icon: "Briefcase", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" },
-  { id: "partnerships", name: "partnerships", label: "Partnerships", icon: "Handshake", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100" },
-  { id: "accelerators", name: "accelerators", label: "Accelerators & Competitions", icon: "Rocket", color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100" },
-  { id: "scholarships", name: "scholarships", label: "Scholarships & Fellowships", icon: "GraduationCap", color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100" },
-  { id: "training_events", name: "training_events", label: "Training & Events", icon: "Calendar", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" },
-  { id: "announcements", name: "announcements", label: "Community Announcements", icon: "Megaphone", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100" },
-  { id: "general", name: "general", label: "General", icon: "Tag", color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100" },
-];
-
-/**
- * The values the original `post_category` enum accepts.
- *
- * While `posts.category` is still that enum, only these seven can be stored,
- * so they are what the composer and the filter row fall back to. Offering
- * names the database would reject is what pushed every post into a phantom
- * "Finance" bucket that no filter could find.
- */
-const LEGACY_ENUM_CATEGORIES: Category[] = [
-  { id: "all", name: "all", label: "All Posts", icon: "MessageSquare", color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100" },
-  { id: "finance", name: "finance", label: "Finance", icon: "Banknote", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" },
-  { id: "education", name: "education", label: "Education", icon: "GraduationCap", color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100" },
-  { id: "investment", name: "investment", label: "Investment", icon: "TrendingUp", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" },
-  { id: "climate", name: "climate", label: "Climate", icon: "Leaf", color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100" },
-  { id: "announcement", name: "announcement", label: "Announcement", icon: "Megaphone", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100" },
-  { id: "advert", name: "advert", label: "Advert", icon: "Tag", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100" },
-  { id: "scam_alert", name: "scam_alert", label: "Scam Alert", icon: "AlertTriangle", color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100" },
-];
 
 interface Post {
   id: string;
@@ -227,31 +199,12 @@ const Community = () => {
   const activeCategories = categoryStillEnum ? LEGACY_ENUM_CATEGORIES : categories;
 
   const fetchCategories = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('post_categories')
-        .select('*')
-        .eq('is_active', true)
-        // Admin sets the order from the dashboard; name is a stable tiebreaker
-        // for any rows that still share a sort_order.
-        .order('sort_order')
-        .order('name');
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setCategories([
-          { id: "all", name: "all", label: "All Posts", icon: "MessageSquare", color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100" },
-          ...data.map((c: { name: string; label: string; icon?: string | null; color?: string | null }) => ({
-            id: c.name,
-            name: c.name,
-            label: c.label,
-            icon: c.icon || "Tag",
-            color: c.color || "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100",
-          }))
-        ]);
-      }
-    } catch {
-      // fallback to defaults
-    }
+    const loaded = await loadPostCategories();
+    setCategories(loaded);
+    // "general" is the traditional default but is admin-defined and often
+    // absent, so the remembered value is reconciled against what loaded. This
+    // also covers an admin renaming or deactivating it while the page is open.
+    setNewPostCategory((prev) => reconcileCategory(prev, loaded));
   };
 
   /**
@@ -264,24 +217,9 @@ const Community = () => {
    * depending on someone posting again after the migration.
    */
   const checkCategoryColumn = useCallback(async () => {
-    try {
-      // Deliberately uses the admin list, not activeCategories: a legacy enum
-      // value would be accepted by both column types and prove nothing.
-      const probe =
-        categories.find((c) => c.name !== "all")?.name ?? "funding_grants";
-      const { error } = await supabase
-        .from("posts")
-        .select("id")
-        .eq("category", probe)
-        .limit(1);
-
-      const stillEnum = error?.code === "22P02" || error?.code === "23514";
-      setCategoryStillEnum(stillEnum);
-      if (!stillEnum) markCategoryMigrationNeeded(false);
-    } catch {
-      // Probe unavailable (offline, missing grants) - don't nag.
-      setCategoryStillEnum(false);
-    }
+    const stillEnum = await isCategoryColumnStillEnum(categories);
+    setCategoryStillEnum(stillEnum);
+    if (!stillEnum) markCategoryMigrationNeeded(false);
   }, [categories, markCategoryMigrationNeeded]);
 
   const fetchPosts = async () => {
@@ -551,10 +489,7 @@ const Community = () => {
 
       // An admin can deactivate the category the composer last used, which
       // would silently post under a category that isn't in the filter list.
-      const activeCategoryNames = activeCategories.filter(c => c.name !== 'all').map(c => c.name);
-      const category = activeCategoryNames.includes(newPostCategory)
-        ? newPostCategory
-        : (activeCategoryNames[0] ?? 'general');
+      const category = pickStorableCategory(newPostCategory, activeCategories);
 
       const insertPost = async (postCategory: string, url: string | null, type: string | null) =>
         supabase.from('posts').insert({
@@ -574,17 +509,14 @@ const Community = () => {
 
         // posts.category was originally the post_category enum, which only
         // accepts ('education','finance','climate','investment','advert',
-        // 'scam_alert','announcement'). Until migration
-        // 20260911000000 converts the column to TEXT, the admin category names
-        // are rejected outright. Retry with a value that is valid under both
-        // the old enum and the new TEXT column so the post still goes through.
-        // 22P02 = invalid_text_representation, 23514 = check_violation.
-        const isCategoryProblem = result.error.code === '22P02' || result.error.code === '23514';
-
-        if (isCategoryProblem && category !== 'finance') {
-          const retry = await insertPost('finance', attachmentUrl, attachmentType);
+        // 'scam_alert','announcement'). Until the column is converted to TEXT,
+        // the admin category names are rejected outright. Retry with a value
+        // that is valid under both the old enum and the new TEXT column so the
+        // post still goes through.
+        if (isCategoryValueError(result.error) && category !== ENUM_SAFE_CATEGORY) {
+          const retry = await insertPost(ENUM_SAFE_CATEGORY, attachmentUrl, attachmentType);
           if (!retry.error) {
-            usedCategory = 'finance';
+            usedCategory = ENUM_SAFE_CATEGORY;
             result = retry;
             // Remember it, so a persistent warning shows instead of every post
             // quietly disappearing into the wrong category.

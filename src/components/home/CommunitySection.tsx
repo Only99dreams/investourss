@@ -14,6 +14,18 @@ import { formatDistanceToNow } from "date-fns";
 import { cn, generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
 import { postShareText } from "@/lib/share";
 import { parseVideoLink } from "@/lib/video";
+import {
+  DEFAULT_CATEGORIES,
+  LEGACY_ENUM_CATEGORIES,
+  ENUM_SAFE_CATEGORY,
+  isCategoryValueError,
+  isCategoryColumnStillEnum,
+  loadPostCategories,
+  pickStorableCategory,
+  reconcileCategory,
+  type Category,
+} from "@/lib/categories";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LinkifiedText } from "@/lib/LinkifiedText";
 
 interface Post {
@@ -57,9 +69,39 @@ const CommunitySection = () => {
   const [loadingComments, setLoadingComments] = useState<Set<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [videoLink, setVideoLink] = useState("");
+  const [linkPreview, setLinkPreview] = useState<string | null>(null);
+  // This composer used to hardcode 'finance', so every post made from the home
+  // page landed in Finance no matter what it was about.
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
+  const [categoryStillEnum, setCategoryStillEnum] = useState(false);
+  const [newPostCategory, setNewPostCategory] = useState<string>("general");
   const [videoThumbnails, setVideoThumbnails] = useState<Record<string, string>>({});
   const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  /**
+   * The category list the composer offers. While `posts.category` is still the
+   * old enum this falls back to the seven values the database will accept, so
+   * whatever the user picks is always storable. Mirrors the community page.
+   */
+  const activeCategories = categoryStillEnum ? LEGACY_ENUM_CATEGORIES : categories;
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const loaded = await loadPostCategories();
+      if (cancelled) return;
+      setCategories(loaded);
+      // "general" is the traditional default but is admin-defined and often
+      // absent, so the remembered value is reconciled against what loaded.
+      setNewPostCategory((prev) => reconcileCategory(prev, loaded));
+      setCategoryStillEnum(await isCategoryColumnStillEnum(loaded));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     fetchPosts();
@@ -226,12 +268,28 @@ const CommunitySection = () => {
   const handlePost = async () => {
     if (!newPost.trim() || !user) return;
 
+    // A pasted video link wins over an uploaded file: it is what the creator
+    // asked for, and a poster frame can still be derived from it.
+    const linkedVideo = videoLink.trim() ? parseVideoLink(videoLink.trim()) : null;
+
+    if (videoLink.trim() && !linkedVideo) {
+      toast({
+        title: "Unrecognised video link",
+        description: "Paste a YouTube, Vimeo or direct video-file link (https://...).",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsPosting(true);
     try {
       let attachmentUrl = null;
       let attachmentType = null;
 
-      if (selectedFile) {
+      if (linkedVideo) {
+        attachmentUrl = linkedVideo.url;
+        attachmentType = "video";
+      } else if (selectedFile) {
         try {
           const fileExt = selectedFile.name.split(".").pop();
           const filePath = `${user.id}/post-attachments/${Date.now()}.${fileExt}`;
@@ -255,26 +313,61 @@ const CommunitySection = () => {
         }
       }
 
-      const { error } = await supabase
-        .from('posts')
-        .insert({
+      // An admin can deactivate the category this composer last used, which
+      // would silently file the post under something the filters never show.
+      const category = pickStorableCategory(newPostCategory, activeCategories);
+
+      const insertPost = async (postCategory: string) =>
+        supabase.from('posts').insert({
           content: newPost.trim(),
           author_id: user.id,
-          category: 'finance',
+          category: postCategory,
           attachment_url: attachmentUrl,
           attachment_type: attachmentType,
           is_approved: true
         });
 
-      if (error) throw error;
+      let usedCategory = category;
+      let result = await insertPost(category);
+
+      if (result.error) {
+        console.error('Post insert failed:', result.error);
+
+        // posts.category began as a seven-value enum. If that is somehow still
+        // the case, retry with a value both column types accept rather than
+        // dropping the post.
+        if (isCategoryValueError(result.error) && category !== ENUM_SAFE_CATEGORY) {
+          const retry = await insertPost(ENUM_SAFE_CATEGORY);
+          if (!retry.error) {
+            usedCategory = ENUM_SAFE_CATEGORY;
+            result = retry;
+            setCategoryStillEnum(true);
+            toast({
+              title: "Posted under Finance",
+              description: "Categories need a database update before your chosen one can be used.",
+            });
+          }
+        }
+      }
+
+      if (result.error) {
+        // Surface the real reason (RLS, invalid column, enum, FK...) instead of
+        // a bare "posting error".
+        throw new Error(`${result.error.message} (${result.error.code ?? 'no code'})`);
+      }
 
       toast({
         title: "Posted!",
-        description: "Your post has been shared with the community."
+        description: usedCategory === category
+          ? "Your post has been shared with the community."
+          : `Your post has been shared under ${usedCategory}.`,
       });
       setNewPost("");
+      setNewPostCategory(usedCategory);
       setSelectedFile(null);
       setFilePreview(null);
+      setVideoLink("");
+      setLinkPreview(null);
       fetchPosts();
     } catch (error) {
       console.error("Error posting:", error);
@@ -591,6 +684,28 @@ const CommunitySection = () => {
                         placeholder="Share your thoughts, ask questions, or share investment insights..."
                         className="resize-none min-h-[80px]"
                       />
+                      {linkPreview && (
+                        <div className="relative rounded-lg overflow-hidden border">
+                          <img
+                            src={linkPreview}
+                            alt="Video preview"
+                            className="w-full max-h-40 object-cover"
+                            onError={() => setLinkPreview(null)}
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center">
+                              <Play className="w-5 h-5 text-foreground ml-0.5" />
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { setVideoLink(""); setLinkPreview(null); }}
+                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80"
+                          >
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      )}
                       {filePreview && (
                         <div className="relative rounded-lg overflow-hidden border">
                           {selectedFile?.type.startsWith("image/") ? (
@@ -613,6 +728,48 @@ const CommunitySection = () => {
                           </button>
                         </div>
                       )}
+                      <div className="space-y-1.5">
+                        <Input
+                          type="url"
+                          inputMode="url"
+                          placeholder="Paste a video link (YouTube, Vimeo) - optional"
+                          value={videoLink}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setVideoLink(value);
+                            // A link and an upload are mutually exclusive, and
+                            // the poster frame is derived from the URL.
+                            setLinkPreview(parseVideoLink(value.trim())?.thumbnailUrl ?? null);
+                            if (value.trim()) {
+                              setSelectedFile(null);
+                              setFilePreview(null);
+                            }
+                          }}
+                          disabled={isPosting}
+                          className="text-sm"
+                        />
+                        {videoLink.trim() && !parseVideoLink(videoLink.trim()) && (
+                          <p className="text-xs text-destructive">
+                            That does not look like a video link yet.
+                          </p>
+                        )}
+                      </div>
+                      <Select
+                        value={newPostCategory}
+                        onValueChange={setNewPostCategory}
+                        disabled={isPosting}
+                      >
+                        <SelectTrigger className="w-full sm:w-64" aria-label="Post category">
+                          <SelectValue placeholder="Choose a category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {activeCategories.filter((c) => c.name !== "all").map((cat) => (
+                            <SelectItem key={cat.name} value={cat.name}>
+                              {cat.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <div className="flex justify-between items-center">
                         <label className="cursor-pointer">
                           <input
@@ -620,7 +777,7 @@ const CommunitySection = () => {
                             accept="image/*,video/*"
                             className="hidden"
                             onChange={handleFileSelect}
-                            disabled={isPosting}
+                            disabled={isPosting || Boolean(videoLink.trim())}
                           />
                           <Button variant="ghost" size="sm" asChild>
                             <span>
