@@ -62,7 +62,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
-import { postShareText } from "@/lib/share";
+import { postShareText, isAiwcCategory } from "@/lib/share";
 import { LinkifiedText } from "@/lib/LinkifiedText";
 
 const sendNotification = (payload: Record<string, unknown>) => {
@@ -696,8 +696,11 @@ const Community = () => {
     const shareUrl = `${window.location.origin}/api/share?post=${postId}${ref}`;
     const pageUrl = `${window.location.origin}/community?post=${postId}${ref}`;
     // AIWC competition entries carry the full pitch; other posts keep the
-    // short "check this out" summary.
-    const shareText = postShareText(post, pageUrl);
+    // short "check this out" summary. The label is checked too, so an entry is
+    // recognised whichever way the admin named the category.
+    const isAiwc =
+      isAiwcCategory(post?.category) || isAiwcCategory(getCategoryLabel(post?.category));
+    const shareText = postShareText(post, pageUrl, getCategoryLabel(post?.category));
 
     try {
       // Record the share before opening the window: a popup blocker must not
@@ -711,13 +714,29 @@ const Community = () => {
 
       switch (platform) {
         case 'facebook':
-          window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, 'facebook-share', 'width=600,height=400');
+          // `quote` is what puts the pitch into the composed post; passing only
+          // the URL would show nothing but the link preview.
+          window.open(
+            `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`,
+            'facebook-share', 'width=600,height=400'
+          );
           break;
         case 'twitter':
           window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`, 'twitter-share', 'width=600,height=400');
           break;
         case 'linkedin':
-          window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, 'linkedin-share', 'width=600,height=400');
+          // LinkedIn's share endpoint accepts no prefilled text, so put the
+          // message on the clipboard first and explain the paste.
+          if (isAiwc) {
+            await copyToClipboard(shareText);
+            window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, 'linkedin-share', 'width=600,height=400');
+            toast({
+              title: "Copied for LinkedIn",
+              description: "Paste it into your post — LinkedIn accepts no prefilled text.",
+            });
+          } else {
+            window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, 'linkedin-share', 'width=600,height=400');
+          }
           break;
         case 'whatsapp':
           window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, 'whatsapp-share');
@@ -730,18 +749,21 @@ const Community = () => {
           if (navigator.share) {
             await navigator.share({ title: "Investours Opportunity Hub", text: shareText, url: shareUrl });
           } else {
-            await copyToClipboard(shareUrl);
-            toast({ title: "Copied!", description: "Post link copied to clipboard." });
+            await copyToClipboard(shareText);
+            toast({ title: "Copied!", description: "Post and link copied to clipboard." });
           }
           break;
         case 'copy':
         default:
-          try {
-            await navigator.clipboard.writeText(pageUrl);
-          } catch {
-            await copyToClipboard(pageUrl);
-          }
-          toast({ title: "Copied!", description: "Link copied to clipboard." });
+          // A competition entry has to leave with the pitch, so copy the whole
+          // message rather than a bare URL. Other posts stay link-only.
+          await copyToClipboard(isAiwc ? shareText : pageUrl);
+          toast({
+            title: "Copied!",
+            description: isAiwc
+              ? "The competition pitch and link are on your clipboard."
+              : "Link copied to clipboard.",
+          });
           break;
       }
 
@@ -1246,7 +1268,13 @@ const Community = () => {
                                     <Mail className="w-5 h-5" /><span>Email</span>
                                   </Button>
                                   <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'copy')}>
-                                    <Copy className="w-5 h-5" /><span>Copy Link</span>
+                                    <Copy className="w-5 h-5" />
+                                    <span>
+                                      {isAiwcCategory(post.category) ||
+                                      isAiwcCategory(getCategoryLabel(post.category))
+                                        ? "Copy pitch + link"
+                                        : "Copy Link"}
+                                    </span>
                                   </Button>
                                 </div>
                               </DialogContent>

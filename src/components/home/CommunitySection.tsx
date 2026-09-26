@@ -391,7 +391,20 @@ const CommunitySection = () => {
       if (navigator.share && navigator.canShare?.({ text: shareText })) {
         await navigator.share({ title: "Investours Opportunity Hub", text: shareText, url: shareUrl });
       } else {
-        await navigator.clipboard.writeText(shareUrl);
+        // Copy the whole message, not a bare URL, so the pitch survives a paste
+        // into a chat or a DM.
+        try {
+          await navigator.clipboard.writeText(shareText);
+        } catch {
+          const el = document.createElement("textarea");
+          el.value = shareText;
+          el.style.position = "fixed";
+          el.style.opacity = "0";
+          document.body.appendChild(el);
+          el.select();
+          document.execCommand("copy");
+          document.body.removeChild(el);
+        }
       }
       
       if (user) {

@@ -63,10 +63,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ogTitle = `${authorName} shared a post on Investours Opportunity Hub`;
 
     // Investours Idea Competition entries get the competition pitch in the
-    // link preview. This condensed string is kept in step by hand with
-    // src/lib/share.ts - this function is bundled separately by Vercel and
-    // cannot import from src/.
-    const isAiwc = (post.category || "").trim().toLowerCase() === "aiwc";
+    // link preview. Matched loosely because the admin-defined slug may be
+    // 'aiwc', 'aiwc_competition', and so on. This condensed string is kept in
+    // step by hand with src/lib/share.ts - this function is bundled separately
+    // by Vercel and cannot import from src/.
+    const rawCategory = (post.category || "").trim().toLowerCase();
+    const compactCategory = rawCategory.replace(/[\s_.-]+/g, "");
+    const isAiwc =
+      rawCategory.includes("aiwc") ||
+      compactCategory === "ideacompetition" ||
+      compactCategory === "competition";
     const ogDescription = isAiwc
       ? "I’m competing in the Investours Idea Competition! Voting is open to eligible " +
         "Premium subscribers, with voting power determined by their plan. Premium " +

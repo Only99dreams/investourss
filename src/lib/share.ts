@@ -8,8 +8,22 @@
 
 export const AIWC_CATEGORY = "aiwc";
 
-export const isAiwcCategory = (category?: string | null): boolean =>
-  (category ?? "").trim().toLowerCase() === AIWC_CATEGORY;
+/**
+ * Is this an Investours Idea Competition category?
+ *
+ * Tolerant on purpose: `posts.category` stores the admin-defined slug, which
+ * may be `aiwc`, `aiwc_competition`, `aiwc-competition` and so on, while the
+ * visible label may read "AIWC Competition" or "Idea Competition". Matching
+ * only the exact slug meant a share could silently fall back to the generic
+ * summary for a post that was plainly a competition entry.
+ */
+export function isAiwcCategory(value?: string | null): boolean {
+  const v = (value ?? "").trim().toLowerCase();
+  if (!v) return false;
+  if (v.includes("aiwc")) return true;
+  const compact = v.replace(/[\s_.-]+/g, "");
+  return compact === "ideacompetition" || compact === "competition";
+}
 
 /**
  * The write-up attached to every AIWC share. Kept verbatim, including the
@@ -53,12 +67,17 @@ export const AIWC_OG_DESCRIPTION =
 /**
  * The message body for sharing a post. AIWC entries get the full pitch;
  * everything else keeps the usual "check out this post" summary.
+ *
+ * `categoryLabel` is the admin-facing label, checked alongside the stored
+ * slug so a competition entry is recognised whichever form the admin named
+ * it with.
  */
 export function postShareText(
   post: { category?: string | null; content?: string | null } | undefined | null,
   pageUrl: string,
+  categoryLabel?: string,
 ): string {
-  if (isAiwcCategory(post?.category)) {
+  if (isAiwcCategory(post?.category) || isAiwcCategory(categoryLabel)) {
     return `${AIWC_SHARE_TEXT}\n\n${pageUrl}`;
   }
 
