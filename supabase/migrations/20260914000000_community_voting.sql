@@ -52,10 +52,35 @@
 -- corrected to rank post authors rather than voters, which is exactly that case.
 --
 -- Dropping unconditionally is safe and makes the migration genuinely re-runnable
--- from any earlier state, not just a clean database. The functions are
--- recreated below in the same transaction, and nothing in the schema depends on
--- them (no views, rules or triggers reference them), so there is nothing to
--- cascade. This matches the pattern the rest of this project already uses.
+-- from any earlier state, not just a clean database. The functions are recreated
+-- below in the same transaction. This matches the pattern the rest of this
+-- project already uses.
+--
+-- The trigger must be dropped BEFORE its function. Postgres records a
+-- dependency from a trigger to the function it calls, so dropping the function
+-- first fails with:
+--   ERROR: 2BP01 cannot drop function sync_post_votes_count()
+--          because other objects depend on it
+-- CASCADE would work but is needlessly broad - it would silently drop anything
+-- else that happened to reference the function. The trigger is recreated in
+-- section 4.
+--
+-- Guarded on the table existing, because `DROP TRIGGER IF EXISTS` only tolerates
+-- a missing TRIGGER: with no such table it still fails with
+--   ERROR: 42P01 relation "post_votes" does not exist
+-- which would break this migration on a clean database, the common case.
+DO $$
+BEGIN
+  IF to_regclass('public.post_votes') IS NOT NULL THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS trg_post_votes_count ON public.post_votes';
+  END IF;
+END;
+$$;
+
+-- Order matters: the plpgsql bodies call each other, and get_my_votes is
+-- LANGUAGE sql, whose body is parsed at creation and therefore does record a
+-- dependency on get_current_voting_stage. Dropping the callers before the
+-- callees avoids a second dependency error.
 DROP FUNCTION IF EXISTS public.get_category_leaderboard(TEXT, INTEGER);
 DROP FUNCTION IF EXISTS public.get_voted_categories();
 DROP FUNCTION IF EXISTS public.get_my_votes(UUID[]);
