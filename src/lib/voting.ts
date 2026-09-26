@@ -62,32 +62,21 @@ export const VOTING_TIERS: {
 ];
 
 /**
- * Build the URL used for a share.
+ * The canonical URL for a post: /post/:id
  *
- * The `t` parameter exists purely to defeat link-preview caches. WhatsApp, X and
- * Facebook each cache a URL's preview the first time they fetch it, for weeks
- * or months, and there is no way for the site to invalidate that. A preview
- * fetched before an og:image was correct therefore sticks, and re-sharing the
- * same URL replays it forever - which is indistinguishable from the fix not
- * having worked.
+ * One stable, deterministic URL per post, and the only one that carries sharing
+ * metadata. /api/share exists solely to redirect old links here.
  *
- * Varying the token means each share is a URL no platform has seen, so the
- * preview is fetched fresh from the endpoint. The server ignores the parameter;
- * postId is the only thing it reads.
- *
- * The in-app pageUrl deliberately does NOT get this treatment: it is the
- * destination a person lands on, and it should stay stable so it is not
- * uncacheable and does not pollute analytics with a new URL per share.
+ * There is deliberately NO cache-busting token. A random parameter made each
+ * share a URL no platform had cached, which works around preview caches, but it
+ * gives one post an unbounded number of URLs - wrong for canonical correctness,
+ * analytics and any CDN. Preview caches are refreshed by sharing a different
+ * post, not by mutating the URL.
  */
-export function buildShareUrl(postId: string, ref?: string | null): string {
+export function buildShareUrl(postId: string, _ref?: string | null): string {
   const origin =
     typeof window !== "undefined" ? window.location.origin : "https://investours.app";
-  const refPart = ref ? `&ref=${encodeURIComponent(ref)}` : "";
-  // Time alone is not unique: Date.now() has millisecond resolution, so two
-  // shares in the same millisecond would collide and hit the same cache entry.
-  // The random suffix makes each share distinct whatever the timing.
-  const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-  return `${origin}/api/share?post=${encodeURIComponent(postId)}${refPart}&t=${token}`;
+  return `${origin}/post/${encodeURIComponent(postId)}`;
 }
 
 export const formatVotes = (n: number) =>

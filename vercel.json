@@ -1,7 +1,11 @@
 {
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
+      "source": "/post/:id",
+      "destination": "/api/post/:id"
+    },
+    {
+      "source": "/((?!api/|post/).*)",
       "destination": "/index.html"
     }
   ]
