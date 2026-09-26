@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { 
   Users, 
@@ -64,6 +64,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
 import { postShareText, isAiwcCategory } from "@/lib/share";
 import { parseVideoLink, attachmentThumbnail } from "@/lib/video";
+import { attachThumbnailToUpload, backfillVideoThumbnail, storedThumbnailFor } from "@/lib/videoThumbnail";
 import {
   DEFAULT_CATEGORIES,
   LEGACY_ENUM_CATEGORIES,
@@ -152,6 +153,9 @@ const Community = () => {
   const [videoLink, setVideoLink] = useState("");
   const [linkPreview, setLinkPreview] = useState<string | null>(null);
   const [videoThumbnails, setVideoThumbnails] = useState<Record<string, string>>({});
+  // One poster lookup per post, ever. Without this the effect re-runs whenever
+  // thumbnails change and re-issues a HEAD for every video on the page.
+  const posterChecks = useRef<Set<string>>(new Set());
   const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>({});
@@ -379,19 +383,41 @@ const Community = () => {
 
   useEffect(() => {
     posts.forEach((post) => {
-      if (post.attachment_type === "video" && post.attachment_url && !videoThumbnails[post.id]) {
-        // Link-based videos already have a poster derived from their URL, so
-        // there is nothing to grab from the browser here.
-        if (parseVideoLink(post.attachment_url)?.thumbnailUrl) return;
-        generateVideoThumbnail(post.attachment_url).then((thumb) => {
-          if (thumb) {
-            setVideoThumbnails((prev) => ({ ...prev, [post.id]: thumb }));
+      if (post.attachment_type !== "video" || !post.attachment_url) return;
+      if (videoThumbnails[post.id] || posterChecks.current.has(post.id)) return;
+      posterChecks.current.add(post.id);
+
+      // Link-based videos already have a poster derived from their URL, so
+      // there is nothing to grab from the browser here.
+      if (parseVideoLink(post.attachment_url)?.thumbnailUrl) return;
+
+      void (async () => {
+        // Prefer the stored frame: it is the same image the share preview
+        // will use, and it costs one HEAD instead of a decode.
+        const stored = await storedThumbnailFor(post.attachment_url!);
+        if (stored) {
+          setVideoThumbnails((prev) => ({ ...prev, [post.id]: stored }));
+          return;
+        }
+
+        // Videos uploaded before frames were stored have none. The author can
+        // generate one for themselves on sight; anyone else only gets a frame
+        // in-browser for the card, never a write to storage.
+        if (user && post.author_id === user.id) {
+          const backfilled = await backfillVideoThumbnail(post.attachment_url!);
+          if (backfilled) {
+            setVideoThumbnails((prev) => ({ ...prev, [post.id]: backfilled }));
+            fetchPosts();
+            return;
           }
-        });
-      }
+        }
+
+        const frame = await generateVideoThumbnail(post.attachment_url!);
+        if (frame) setVideoThumbnails((prev) => ({ ...prev, [post.id]: frame }));
+      })();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posts]);
+  }, [posts, user]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -478,6 +504,13 @@ const Community = () => {
           if (data) {
             const { data: { publicUrl } } = supabase.storage.from('attachments').getPublicUrl(filePath);
             attachmentUrl = publicUrl;
+
+            // An uploaded file has no poster frame the way a YouTube link does.
+            // Capture one now and store it beside the video, otherwise this post
+            // shares with a generic image forever.
+            if (attachmentType === 'video') {
+              await attachThumbnailToUpload(selectedFile, filePath);
+            }
           }
         } catch (uploadError) {
           console.error('File upload error:', uploadError);

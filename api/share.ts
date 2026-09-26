@@ -25,6 +25,26 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
+/**
+ * Does a public storage object exist?
+ *
+ * A HEAD is enough and avoids pulling the image down. Bounded by a short
+ * timeout: this runs inside a link preview, and a share with no thumbnail is a
+ * far better outcome than one that never renders because a HEAD hung.
+ */
+async function objectExists(url: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
+  try {
+    const res = await fetch(url, { method: "HEAD", signal: controller.signal });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const postId = req.query.post as string;
   const ref = (req.query.ref as string) || "";
@@ -126,11 +146,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : contentPreview
         ? `${contentPreview}${contentPreview.length >= 200 ? "..." : ""} — ${likesCount} likes, ${commentsCount} comments`
         : "Check out this opportunity on Investours";
-    // Poster frame for the preview. Images use their own picture; a video link
-    // yields a deterministic provider thumbnail (YouTube/Vimeo), which is the
-    // only kind that works here - the browser-generated frames used elsewhere
-    // are data URLs and are never persisted. Mirrors src/lib/video.ts, which
-    // this function cannot import because Vercel bundles it separately.
+    // Poster frame for the preview, resolved independently of the category so
+    // every post gets its own media:
+    //   - an image post uses its own picture
+    //   - a YouTube/Vimeo link yields a deterministic provider thumbnail
+    //   - an uploaded video has a frame stored next to it, named by convention
+    //     (`123.mp4` -> `123-thumb.jpg`) so it can be found without a new
+    //     column or a backfill job. That candidate is confirmed with a HEAD:
+    //     videos uploaded before frames existed have none, and a broken image
+    //     in a preview is worse than the branded card.
+    // Mirrors src/lib/video.ts and src/lib/videoThumbnail.ts, which this
+    // function cannot import because Vercel bundles it separately.
     const attachmentUrl = post.attachment_url || null;
     let posterFromVideo: string | null = null;
     if (post.attachment_type === "video" && attachmentUrl) {
@@ -154,6 +180,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else if (host.endsWith("vimeo.com")) {
           const id = parsed.pathname.split("/").filter((s) => /^\d+$/.test(s)).pop();
           if (id) posterFromVideo = `https://thumbnail.com/${id}.jpg`;
+        } else if (/\.(mp4|m4v|webm|ogv|mov)$/i.test(parsed.pathname)) {
+          const candidate = new URL(attachmentUrl);
+          candidate.pathname = candidate.pathname.replace(
+            /\.(mp4|m4v|webm|ogv|mov)$/i,
+            "-thumb.jpg",
+          );
+          if (await objectExists(candidate.toString())) posterFromVideo = candidate.toString();
         }
       } catch {
         posterFromVideo = null;

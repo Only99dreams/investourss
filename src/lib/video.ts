@@ -92,6 +92,53 @@ function vimeoId(url: string): string | null {
 
 const DIRECT_VIDEO_EXT = /\.(mp4|m4v|webm|ogv|mov)(\?.*)?$/i;
 
+/** Same as above but path-only, so it can rewrite a storage path in place. */
+const VIDEO_PATH_EXT = /\.(mp4|m4v|webm|ogv|mov)$/i;
+
+/**
+ * Where the poster frame for an uploaded video lives.
+ *
+ * An uploaded file has no poster derivable from its URL the way a YouTube id
+ * is, and the frame the browser generates is a data: URL that is never stored.
+ * So the frame is written next to the video under a name both ends can compute
+ * independently: `123.mp4` -> `123-thumb.jpg`. Deriving it beats storing it in
+ * a column, because the server can then find the poster for every existing
+ * video post without a migration or a backfill job.
+ */
+export function videoThumbPath(videoPathOrUrl: string): string {
+  return videoPathOrUrl.replace(VIDEO_PATH_EXT, "-thumb.jpg");
+}
+
+/**
+ * Public URL of the poster frame for an uploaded video, or null when the
+ * attachment is not a stored video file.
+ *
+ * Returning a candidate is not proof the file exists: older posts predate this
+ * and have no frame. Callers that need certainty (the share endpoint) must
+ * confirm it before using it, and fall back rather than emit a broken image.
+ */
+export function siblingThumbnailUrl(attachmentUrl?: string | null): string | null {
+  if (!attachmentUrl) return null;
+  try {
+    const parsed = new URL(attachmentUrl);
+    if (!VIDEO_PATH_EXT.test(parsed.pathname)) return null;
+    parsed.pathname = videoThumbPath(parsed.pathname);
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** data: URL -> Blob, for uploading a captured frame. */
+export async function dataUrlToBlob(dataUrl: string): Promise<Blob | null> {
+  try {
+    const response = await fetch(dataUrl);
+    return await response.blob();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Describe a pasted video URL, or return null when it is not one. Direct video
  * files have no derivable poster frame, so `thumbnailUrl` is null for them.
