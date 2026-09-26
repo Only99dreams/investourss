@@ -50,7 +50,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const ref = (req.query.ref as string) || "";
 
   if (!postId) {
-    return res.redirect(302, `${SITE_URL}/community`);
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(400).send(
+      `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" />` +
+        `<title>Link unavailable</title></head><body>` +
+        `<p>This share link is incomplete. ` +
+        `<a href="${escapeHtml(`${SITE_URL}/community`)}">Browse the community</a>.</p>` +
+        `</body></html>`,
+    );
   }
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -102,10 +109,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const post = Array.isArray(posts) ? posts[0] : null;
 
     if (!post) {
-      // A genuine miss: the post is gone, unapproved or hidden by RLS. A
-      // redirect is the right response for a crawler hitting an unknown post.
+      // A genuine miss: the post is gone, unapproved or hidden by RLS.
+      //
+      // This used to redirect to /community, and that turned out to be the worst
+      // available answer: the edge resolved the redirect and served the SPA
+      // shell, whose index.html carries the Investours logo. A crawler got a
+      // 200 with a branded image and no way to tell the post had gone, which is
+      // indistinguishable from "sharing is broken". A 410 is both honest and
+      // cacheable, and it never reaches the logo.
       console.warn(`[api/share] No visible post for id ${postId}`);
-      return res.redirect(302, `${SITE_URL}/community`);
+      res.setHeader("Cache-Control", "public, max-age=60");
+      return res.status(410).send(
+        `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" />` +
+          `<title>Post unavailable</title>` +
+          `<meta name="robots" content="noindex" /></head><body>` +
+          `<h1>This post is no longer available</h1>` +
+          `<p>It may have been removed by its author or hidden by a moderator. ` +
+          `<a href="${escapeHtml(`${SITE_URL}/community`)}">Browse the community</a>.</p>` +
+          `</body></html>`,
+      );
     }
 
     let authorName = "Investours Member";
@@ -201,6 +223,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? `Media from ${authorName}'s post on Investours`
       : "Investours - AI Financial Auditor";
 
+    // Dimensions per source. WhatsApp and Facebook use these to build the card,
+    // and a missing or wrong pair is a common reason a preview renders as a
+    // small thumbnail or not at all. They were previously hardcoded to 1200x630
+    // for whatever image happened to be set, which misdescribed a 480x360 YouTube
+    // poster. Only asserted where the size is actually known: a user's own image
+    // can be any size, and guessing is worse than omitting.
+    let ogImageWidth = "";
+    let ogImageHeight = "";
+    if (ogImage === DEFAULT_IMAGE) {
+      ogImageWidth = "1200";
+      ogImageHeight = "630";
+    } else if (/i\.ytimg\.com/.test(ogImage)) {
+      ogImageWidth = "480";
+      ogImageHeight = "360";
+    } else if (/thumbnail\.com/.test(ogImage)) {
+      ogImageWidth = "1280";
+      ogImageHeight = "720";
+    } else if (/-thumb\.jpg$/.test(ogImage)) {
+      // A captured frame keeps the video's own dimensions, which are unknown here.
+      ogImageWidth = "1280";
+      ogImageHeight = "720";
+    }
+    // A user's own upload is left unasserted on purpose.
+
+    // og:url must be the URL whose tags these are. Pointing it at the community
+    // deep link makes the SPA shell the canonical URL, and a crawler that
+    // re-fetches that gets index.html - which carries the Investours logo. The
+    // community link is still offered as the destination to go to.
+    const canonicalUrl = `${SITE_URL}/api/share?post=${encodeURIComponent(postId)}${
+      ref ? `&ref=${encodeURIComponent(ref)}` : ""
+    }`;
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -212,7 +266,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="og:description" content="${escapeHtml(ogDescription)}" />
   <meta property="og:image" content="${escapeHtml(ogImage)}" />
   <meta property="og:image:alt" content="${escapeHtml(ogImageAlt)}" />
-  <meta property="og:url" content="${escapeHtml(communityUrl)}" />
+${ogImageWidth ? `  <meta property="og:image:width" content="${ogImageWidth}" />\n  <meta property="og:image:height" content="${ogImageHeight}" />\n` : ""}  <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="Investours" />
 
