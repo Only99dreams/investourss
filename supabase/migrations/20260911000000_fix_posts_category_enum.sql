@@ -15,6 +15,11 @@
 -- database. This migration performs that conversion conditionally, so it is
 -- safe whether or not that migration has run.
 --
+-- SUPERSEDED: if this has not taken effect, run
+-- 20260912000000_posts_category_text_robust.sql instead - it converts the
+-- column in place rather than add/drop/rename, which is what makes it
+-- reliable when a previous run left the table in a partial state.
+--
 -- It also makes the admin category order reliable: post_categories is added to
 -- the realtime publication (so reordering reflects on the public page without a
 -- reload) and every row is given a distinct 1..N sort_order.

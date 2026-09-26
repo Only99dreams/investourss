@@ -29,7 +29,9 @@ import {
   Tag,
   Search,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  Leaf,
+  TrendingUp
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -84,7 +86,7 @@ const copyToClipboard = async (text: string) => {
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Banknote, Briefcase, Handshake, Rocket, GraduationCap, Calendar, Megaphone, MessageSquare, Tag, Search,
-  Users, Heart, Share2, Filter
+  Users, Heart, Share2, Filter, Leaf, TrendingUp, AlertTriangle
 };
 
 interface Category {
@@ -105,6 +107,25 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: "training_events", name: "training_events", label: "Training & Events", icon: "Calendar", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" },
   { id: "announcements", name: "announcements", label: "Community Announcements", icon: "Megaphone", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100" },
   { id: "general", name: "general", label: "General", icon: "Tag", color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100" },
+];
+
+/**
+ * The values the original `post_category` enum accepts.
+ *
+ * While `posts.category` is still that enum, only these seven can be stored,
+ * so they are what the composer and the filter row fall back to. Offering
+ * names the database would reject is what pushed every post into a phantom
+ * "Finance" bucket that no filter could find.
+ */
+const LEGACY_ENUM_CATEGORIES: Category[] = [
+  { id: "all", name: "all", label: "All Posts", icon: "MessageSquare", color: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100" },
+  { id: "finance", name: "finance", label: "Finance", icon: "Banknote", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" },
+  { id: "education", name: "education", label: "Education", icon: "GraduationCap", color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100" },
+  { id: "investment", name: "investment", label: "Investment", icon: "TrendingUp", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" },
+  { id: "climate", name: "climate", label: "Climate", icon: "Leaf", color: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100" },
+  { id: "announcement", name: "announcement", label: "Announcement", icon: "Megaphone", color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100" },
+  { id: "advert", name: "advert", label: "Advert", icon: "Tag", color: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100" },
+  { id: "scam_alert", name: "scam_alert", label: "Scam Alert", icon: "AlertTriangle", color: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100" },
 ];
 
 interface Post {
@@ -191,6 +212,16 @@ const Community = () => {
     }
   }, []);
 
+  /**
+   * The category list the UI actually offers and filters by.
+   *
+   * While `posts.category` is still the enum this falls back to the seven
+   * values the database will accept, so a chosen category is always storable
+   * and existing posts remain reachable through a filter. Once the migration
+   * lands the admin-managed list takes over automatically.
+   */
+  const activeCategories = categoryStillEnum ? LEGACY_ENUM_CATEGORIES : categories;
+
   const fetchCategories = async () => {
     try {
       const { data, error } = await supabase
@@ -230,6 +261,8 @@ const Community = () => {
    */
   const checkCategoryColumn = useCallback(async () => {
     try {
+      // Deliberately uses the admin list, not activeCategories: a legacy enum
+      // value would be accepted by both column types and prove nothing.
       const probe =
         categories.find((c) => c.name !== "all")?.name ?? "funding_grants";
       const { error } = await supabase
@@ -493,7 +526,7 @@ const Community = () => {
 
       // An admin can deactivate the category the composer last used, which
       // would silently post under a category that isn't in the filter list.
-      const activeCategoryNames = categories.filter(c => c.name !== 'all').map(c => c.name);
+      const activeCategoryNames = activeCategories.filter(c => c.name !== 'all').map(c => c.name);
       const category = activeCategoryNames.includes(newPostCategory)
         ? newPostCategory
         : (activeCategoryNames[0] ?? 'general');
@@ -795,13 +828,13 @@ const Community = () => {
     : posts.filter(post => post.category === activeCategory);
 
   const getCategoryColor = (category: string) => {
-    const cat = categories.find(c => c.name === category);
+    const cat = activeCategories.find(c => c.name === category);
     return cat?.color || "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100";
   };
 
   const getCategoryLabel = (category: string) => {
-    const cat = categories.find(c => c.name === category);
-    return cat?.label || category.replace("_", " ");
+    const cat = activeCategories.find(c => c.name === category);
+    return cat?.label || category.replace(/_/g, " ");
   };
 
   const formatTimeAgo = (date: string) => {
@@ -856,7 +889,7 @@ const Community = () => {
                           <Select value={newPostCategory} onValueChange={setNewPostCategory}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {categories.filter(c => c.name !== 'all').map(cat => (
+                              {activeCategories.filter(c => c.name !== 'all').map(cat => (
                                 <SelectItem key={cat.name} value={cat.name}>{cat.label}</SelectItem>
                               ))}
                             </SelectContent>
@@ -928,10 +961,12 @@ const Community = () => {
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <p className="flex-1">
                   <strong>Confirmed:</strong> <code className="font-mono">posts.category</code> is
-                  still the old <code className="font-mono">post_category</code> enum, so new posts
-                  are being filed under <strong>Finance</strong>. Re-run{" "}
-                  <code className="font-mono">20260911000000_fix_posts_category_enum.sql</code>.
-                  {isAdmin && " It should be run from the Supabase SQL editor."}
+                  still the old <code className="font-mono">post_category</code> enum, so only its
+                  original categories can be used. Posting and filtering are working with those now.
+                  Run{" "}
+                  <code className="font-mono">20260911000000_fix_posts_category_enum.sql</code> to
+                  switch to your own categories from the admin dashboard.
+                  {isAdmin && " You can run it from the Supabase SQL editor."}
                 </p>
                 <div className="flex shrink-0 gap-2">
                   <Button
@@ -956,7 +991,7 @@ const Community = () => {
             {/* Category Filter */}
             <div className="flex items-center gap-2 overflow-x-auto pb-2">
               <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              {categories.map((cat) => {
+              {activeCategories.map((cat) => {
                 const IconComponent = ICON_MAP[cat.icon] || Tag;
                 return (
                   <Button
@@ -1032,7 +1067,7 @@ const Community = () => {
                                 <Select value={newCategoryValue || post.category} onValueChange={setNewCategoryValue}>
                                   <SelectTrigger className="h-7 text-xs w-28 max-w-[9rem] min-w-0"><SelectValue /></SelectTrigger>
                                   <SelectContent>
-                                    {categories.filter(c => c.name !== 'all').map(cat => (
+                                    {activeCategories.filter(c => c.name !== 'all').map(cat => (
                                       <SelectItem key={cat.name} value={cat.name}>{cat.label}</SelectItem>
                                     ))}
                                   </SelectContent>
