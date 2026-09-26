@@ -543,6 +543,11 @@ GRANT EXECUTE ON FUNCTION public.get_my_votes(UUID[]) TO authenticated;
 -- ------------------------------------------------------------------
 -- 7. Per-category leaderboard
 -- ------------------------------------------------------------------
+-- This ranks the people being VOTED FOR, not the people casting votes. An
+-- earlier version grouped by post_votes.user_id, which produced a "most active
+-- voters" list and credited people with the casting rather than the winning.
+-- The unit here is a creator, so a post's votes roll up into its author and one
+-- person with several well-backed posts can outrank a single strong post.
 CREATE OR REPLACE FUNCTION public.get_category_leaderboard(
   p_category TEXT DEFAULT NULL,
   p_limit INTEGER DEFAULT 20
@@ -553,7 +558,8 @@ RETURNS TABLE (
   full_name TEXT,
   avatar_url TEXT,
   total_votes INTEGER,
-  posts_backed INTEGER
+  posts_count INTEGER,
+  top_post_id UUID
 )
 LANGUAGE plpgsql
 STABLE
@@ -563,7 +569,7 @@ AS $$
 BEGIN
   RETURN QUERY
   WITH scoped AS (
-    SELECT pv.user_id, pv.amount
+    SELECT p.author_id, pv.amount, p.id AS post_id
     FROM public.post_votes pv
     JOIN public.posts p ON p.id = pv.post_id
     JOIN public.get_current_voting_stage() s ON s.stage_id = pv.stage_id
@@ -573,18 +579,27 @@ BEGIN
       -- without the explicit IS NULL those votes vanish from every filtered
       -- leaderboard while still appearing in the unfiltered one.
       AND (p_category IS NULL OR p_category = '' OR p.category IS NULL OR p.category = p_category)
+  ),
+  -- Collapse to one row per post first, so posts_count is a count of posts
+  -- rather than of voters, and the best post can be picked out below.
+  per_post AS (
+    SELECT scoped.author_id, scoped.post_id, sum(scoped.amount)::INTEGER AS votes
+    FROM scoped
+    WHERE scoped.author_id IS NOT NULL
+    GROUP BY scoped.author_id, scoped.post_id
   )
   SELECT
-    (row_number() OVER (ORDER BY sum(scoped.amount) DESC, scoped.user_id))::INTEGER,
-    scoped.user_id,
+    (row_number() OVER (ORDER BY sum(per_post.votes) DESC, per_post.author_id))::INTEGER,
+    per_post.author_id,
     COALESCE(pr.full_name, 'Member'),
     pr.avatar_url,
-    sum(scoped.amount)::INTEGER,
-    count(*)::INTEGER
-  FROM scoped
-  LEFT JOIN public.profiles pr ON pr.id = scoped.user_id
-  GROUP BY scoped.user_id, pr.full_name, pr.avatar_url
-  ORDER BY sum(scoped.amount) DESC, scoped.user_id
+    sum(per_post.votes)::INTEGER,
+    count(*)::INTEGER,
+    (array_agg(per_post.post_id ORDER BY per_post.votes DESC, per_post.post_id))[1]
+  FROM per_post
+  LEFT JOIN public.profiles pr ON pr.id = per_post.author_id
+  GROUP BY per_post.author_id, pr.full_name, pr.avatar_url
+  ORDER BY sum(per_post.votes) DESC, per_post.author_id
   LIMIT LEAST(GREATEST(COALESCE(p_limit, 20), 1), 100);
 END;
 $$;

@@ -31,13 +31,18 @@ export interface CastResult {
   post_votes_count: number;
 }
 
+/** One row of the leaderboard: a creator ranked by the votes their posts got. */
 export interface LeaderboardEntry {
   rank: number;
+  /** The post author who received the votes, not the people who cast them. */
   user_id: string;
   full_name: string;
   avatar_url: string | null;
   total_votes: number;
-  posts_backed: number;
+  /** How many of their posts received a vote. */
+  posts_count: number;
+  /** Their best-scoring post, for linking straight to it. */
+  top_post_id: string | null;
 }
 
 /** Kept in step with `voting_power_tiers`; used for the upgrade prompt. */
@@ -128,7 +133,7 @@ export async function fetchMyVotes(postIds: string[]): Promise<Record<string, nu
   }
 }
 
-/** Top voters in one category, or across all of them when category is null. */
+/** Creators ranked by the votes their posts received, per category. */
 export async function fetchLeaderboard(
   category: string | null,
   limit = 20,

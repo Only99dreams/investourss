@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Crown, Loader2, Medal, Trophy, Users } from "lucide-react";
+import { Crown, Loader2, Medal, Trophy } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,13 @@ interface CategoryLeaderboardProps {
 }
 
 /**
- * Top voters, one leaderboard per category.
+ * Creators ranked by the votes their posts received, one leaderboard per
+ * category.
+ *
+ * This deliberately ranks the people being voted FOR, not the people casting
+ * votes - a "most active voters" list would reward casting rather than winning.
+ * A creator's votes roll up across all their posts in the category, so several
+ * well-backed posts can beat one strong post.
  *
  * Only categories that actually have a vote are offered, so a community that
  * has not voted anywhere does not show a wall of empty rankings. Tapping a
@@ -84,7 +90,7 @@ export function CategoryLeaderboard({
       <div className="flex items-center justify-between gap-3 mb-3">
         <h3 className="font-semibold flex items-center gap-2">
           <Trophy className="w-4 h-4 text-amber-500" />
-          Vote Leaderboard
+          Most Voted
         </h3>
         {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
       </div>
@@ -122,8 +128,7 @@ export function CategoryLeaderboard({
           No votes yet{selected !== "all" ? ` in ${labelFor(selected)}` : ""}. Paid members cast the
           first one.
         </p>
-      ) : (
-        <ol className="space-y-1">
+      ) : (        <ol className="space-y-1">
           {(entries ?? []).map((e) => (
             <li
               key={e.user_id}
@@ -141,9 +146,8 @@ export function CategoryLeaderboard({
               </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{e.full_name}</p>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Users className="w-3 h-3" />
-                  backed {e.posts_backed} post{e.posts_backed === 1 ? "" : "s"}
+                <p className="text-xs text-muted-foreground">
+                  {e.posts_count} post{e.posts_count === 1 ? "" : "s"} earning votes
                 </p>
               </div>
               <Badge variant={e.rank === 1 ? "default" : "secondary"} className="shrink-0 tabular-nums">
