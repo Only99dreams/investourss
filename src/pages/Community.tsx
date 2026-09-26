@@ -28,7 +28,8 @@ import {
   Megaphone,
   Tag,
   Search,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -173,19 +174,15 @@ const Community = () => {
 
   // Set when a post had to be filed under a legacy enum value because
   // posts.category has not been converted to TEXT yet (migration
-  // 20260911000000). Persisted so the warning survives a reload.
-  const [needsCategoryMigration, setNeedsCategoryMigration] = useState(
-    () => {
-      try {
-        return localStorage.getItem("investours_category_migration_pending") === "1";
-      } catch {
-        return false;
-      }
-    },
-  );
+  // 20260911000000). Treated as a hint only - `categoryStillEnum` is the
+  // source of truth, so the banner disappears as soon as the database is
+  // fixed rather than lingering until the next successful post.
+  const [categoryStillEnum, setCategoryStillEnum] = useState(false);
+  const [needsCategoryMigration, setNeedsCategoryMigration] = useState(false);
 
   const markCategoryMigrationNeeded = useCallback((value: boolean) => {
     setNeedsCategoryMigration(value);
+    if (value) setCategoryStillEnum(true);
     try {
       if (value) localStorage.setItem("investours_category_migration_pending", "1");
       else localStorage.removeItem("investours_category_migration_pending");
@@ -221,6 +218,34 @@ const Community = () => {
       // fallback to defaults
     }
   };
+
+  /**
+   * Is posts.category still the old post_category enum?
+   *
+   * Filtering on a real admin category name is a cheap, read-only way to ask:
+   * Postgres binds the value to the column type before RLS or row filtering,
+   * so an enum column rejects 'funding_grants' with 22P02 while a TEXT column
+   * simply returns no rows. That makes the warning self-verifying instead of
+   * depending on someone posting again after the migration.
+   */
+  const checkCategoryColumn = useCallback(async () => {
+    try {
+      const probe =
+        categories.find((c) => c.name !== "all")?.name ?? "funding_grants";
+      const { error } = await supabase
+        .from("posts")
+        .select("id")
+        .eq("category", probe)
+        .limit(1);
+
+      const stillEnum = error?.code === "22P02" || error?.code === "23514";
+      setCategoryStillEnum(stillEnum);
+      if (!stillEnum) markCategoryMigrationNeeded(false);
+    } catch {
+      // Probe unavailable (offline, missing grants) - don't nag.
+      setCategoryStillEnum(false);
+    }
+  }, [categories, markCategoryMigrationNeeded]);
 
   const fetchPosts = async () => {
     try {
@@ -300,7 +325,10 @@ const Community = () => {
     fetchPosts();
     fetchStats();
     fetchCategories();
-    
+    // Verifies whether posts.category is still an enum, so the warning banner
+    // reflects the real database state rather than a remembered flag.
+    void checkCategoryColumn();
+
     const channel = supabase
       .channel('posts-realtime')
       .on('postgres_changes', {
@@ -329,6 +357,9 @@ const Community = () => {
       if (document.visibilityState === 'visible') {
         fetchCategories();
         fetchPosts();
+        // Re-check on focus: catches the migration being applied while the tab
+        // was in the background, so the banner clears without a hard reload.
+        void checkCategoryColumn();
       }
     };
     document.addEventListener('visibilitychange', onVisible);
@@ -890,25 +921,35 @@ const Community = () => {
               </div>
             </div>
 
-            {/* Category setup warning */}
-            {needsCategoryMigration && (
-              <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {/* Category setup warning. Driven by the live probe result, not by a
+                remembered flag, so it disappears as soon as the DB is fixed. */}
+            {categoryStillEnum && (
+              <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <p className="flex-1">
-                  Posts are being filed under <strong>Finance</strong> because the
-                  database still expects the old category type. Run migration{" "}
-                  <code className="font-mono">20260911000000_fix_posts_category_enum.sql</code>{" "}
-                  to restore your chosen categories.{" "}
-                  {isAdmin && "You can run it from Admin → Supabase SQL editor."}
+                  <strong>Confirmed:</strong> <code className="font-mono">posts.category</code> is
+                  still the old <code className="font-mono">post_category</code> enum, so new posts
+                  are being filed under <strong>Finance</strong>. Re-run{" "}
+                  <code className="font-mono">20260911000000_fix_posts_category_enum.sql</code>.
+                  {isAdmin && " It should be run from the Supabase SQL editor."}
                 </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => markCategoryMigrationNeeded(false)}
-                >
-                  Dismiss
-                </Button>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void checkCategoryColumn()}
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Re-check
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => markCategoryMigrationNeeded(false)}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
               </div>
             )}
 
