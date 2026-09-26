@@ -26,8 +26,10 @@
 --   counters use.
 --
 -- * A voter may put any number of votes on a post, up to their remaining
---   allowance, and may change that number afterwards. votes_total on a post is
---   the sum of amounts, so extra paid tiers translate into real weighting.
+--   allowance, and may add more later. A vote is FINAL: it cannot be withdrawn
+--   or reduced, so backing a post is a commitment rather than a revocable
+--   preference. votes_total on a post is the sum of amounts, so extra paid tiers
+--   translate into real weighting.
 --
 -- * Voting is SECURITY DEFINER and does every check in one place. "Remaining
 --   allowance > 0" cannot be expressed as a row-level policy, and a client-side
@@ -498,8 +500,8 @@ BEGIN
   -- lock cannot, because the first vote has no row to lock.
   PERFORM pg_advisory_xact_lock(hashtextextended(v_uid::text, 0));
 
-  IF COALESCE(p_amount, 0) < 0 THEN
-    RETURN QUERY SELECT FALSE, 'Vote amount cannot be negative.', 0, 0;
+  IF COALESCE(p_amount, 0) <= 0 THEN
+    RETURN QUERY SELECT FALSE, 'A vote cannot be withdrawn once cast.', 0, 0;
     RETURN;
   END IF;
 
@@ -528,12 +530,22 @@ BEGIN
     AND pv.user_id = v_uid
     AND pv.stage_id = v_power.stage_id;
 
-  -- Only an INCREASE needs remaining allowance. A user who has spent everything
-  -- must still be able to withdraw a vote or move it to another post, otherwise
-  -- a member on the entry tier is locked into their very first vote for the
-  -- whole stage.
-  IF p_amount > COALESCE(v_existing, 0)
-     AND p_amount - COALESCE(v_existing, 0) > v_power.votes_remaining THEN
+  -- Votes are FINAL. A member can add votes to a post they have already backed
+  -- (that is how a higher tier expresses more weight) but can never take them
+  -- back or reduce them. Without this, a vote is a revocable preference rather
+  -- than a commitment, and the leaderboard can be gamed by backing everything
+  -- and keeping only the winners.
+  IF p_amount < COALESCE(v_existing, 0) THEN
+    RETURN QUERY
+      SELECT FALSE,
+             'A vote cannot be reduced once cast.',
+             v_power.votes_remaining, COALESCE(v_post.votes_count, 0);
+    RETURN;
+  END IF;
+
+  -- Only the increase is charged, so backing a post again costs just the
+  -- difference rather than the whole amount.
+  IF p_amount - COALESCE(v_existing, 0) > v_power.votes_remaining THEN
     RETURN QUERY
       SELECT FALSE,
              'You have ' || v_power.votes_remaining || ' vote(s) left for this stage.',
@@ -541,16 +553,10 @@ BEGIN
     RETURN;
   END IF;
 
-  -- p_amount = 0 withdraws a vote; anything else sets the total on this post.
-  IF COALESCE(p_amount, 0) = 0 THEN
-    DELETE FROM public.post_votes
-    WHERE post_id = p_post_id AND user_id = v_uid AND stage_id = v_power.stage_id;
-  ELSE
-    INSERT INTO public.post_votes (post_id, user_id, stage_id, amount)
-    VALUES (p_post_id, v_uid, v_power.stage_id, p_amount)
-    ON CONFLICT (post_id, user_id, stage_id) DO UPDATE
-      SET amount = EXCLUDED.amount, updated_at = now();
-  END IF;
+  INSERT INTO public.post_votes (post_id, user_id, stage_id, amount)
+  VALUES (p_post_id, v_uid, v_power.stage_id, p_amount)
+  ON CONFLICT (post_id, user_id, stage_id) DO UPDATE
+    SET amount = EXCLUDED.amount, updated_at = now();
 
   SELECT COALESCE(sum(pv.amount), 0)::INTEGER INTO v_post_total
   FROM public.post_votes pv

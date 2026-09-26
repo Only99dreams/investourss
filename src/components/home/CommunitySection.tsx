@@ -239,6 +239,17 @@ const CommunitySection = () => {
       toast({ title: "Login Required", description: "Please sign in to vote.", variant: "destructive" });
       return;
     }
+    // A vote is final, so refuse a withdrawal or reduction before spending a
+    // request on something the database will reject anyway.
+    const alreadyCast = myVotes[postId] ?? 0;
+    if (amount < alreadyCast) {
+      toast({
+        title: "Your vote is final",
+        description: "A vote cannot be removed or reduced once cast.",
+        variant: "destructive",
+      });
+      return;
+    }
     setVotingPostId(postId);
     try {
       // Payment, self-voting, stage and remaining allowance are all re-checked
@@ -251,12 +262,7 @@ const CommunitySection = () => {
         return;
       }
 
-      setMyVotes((prev) => {
-        const next = { ...prev };
-        if (amount <= 0) delete next[postId];
-        else next[postId] = amount;
-        return next;
-      });
+      setMyVotes((prev) => ({ ...prev, [postId]: amount }));
       setPosts((prev) =>
         prev.map((p) => (p.id === postId ? { ...p, votes_count: result.post_votes_count } : p)),
       );

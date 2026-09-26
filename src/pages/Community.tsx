@@ -335,6 +335,18 @@ const Community = () => {
       toast({ title: "Login Required", description: "Please sign in to vote.", variant: "destructive" });
       return;
     }
+    // A vote is final. Refuse a withdrawal or reduction here rather than sending
+    // a request the database will reject; the server check still stands as the
+    // authority, this just avoids a pointless round trip and a harsher message.
+    const alreadyCast = myVotes[postId] ?? 0;
+    if (amount < alreadyCast) {
+      toast({
+        title: "Your vote is final",
+        description: "A vote cannot be removed or reduced once cast.",
+        variant: "destructive",
+      });
+      return;
+    }
     setVotingPostId(postId);
     try {
       // The database owns every rule here: payment, self-voting, the stage, and
@@ -349,12 +361,7 @@ const Community = () => {
         return;
       }
 
-      setMyVotes((prev) => {
-        const next = { ...prev };
-        if (amount <= 0) delete next[postId];
-        else next[postId] = amount;
-        return next;
-      });
+      setMyVotes((prev) => ({ ...prev, [postId]: amount }));
       setPosts((prev) =>
         prev.map((p) => (p.id === postId ? { ...p, votes_count: result.post_votes_count } : p)),
       );

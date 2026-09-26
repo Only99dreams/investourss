@@ -27,12 +27,14 @@ interface VoteButtonProps {
  * The vote control, sitting beside Share on every post.
  *
  * A paid user can put any number of their remaining votes on a post, up to
- * their tier, and can change or withdraw that number. A user who cannot vote
- * still sees the count - hiding it would look like the feature is missing - but
- * tapping it explains what voting requires instead of silently doing nothing.
+ * their tier, and can add more later. A vote is final: it cannot be withdrawn
+ * or reduced, so the options offered never include anything below what is
+ * already on the post. A user who cannot vote still sees the count - hiding it
+ * would look like the feature is missing - but tapping it explains what voting
+ * requires instead of silently doing nothing.
  *
  * Every dead end offers the way out: no plan opens the subscribe/credit modal,
- * and an exhausted allowance offers a top-up, because "you cannot vote" with
+ * and an exhausted allowance offers an upgrade, because "you cannot vote" with
  * no next step is the one outcome worth avoiding.
  */
 export function VoteButton({
@@ -51,6 +53,11 @@ export function VoteButton({
   const canVote = Boolean(power) && !isOwnPost;
   const maxOnThisPost = power ? power.votes_remaining + myVote : 0;
   const remaining = power?.votes_remaining ?? 0;
+
+  // Only amounts at or above what is already on this post are offered. A vote is
+  // final, so a member who has backed a post with 3 sees 3..max rather than
+  // 1..max, which would let them reduce it.
+  const amounts = Array.from({ length: maxOnThisPost }, (_, i) => myVote + 1 + i);
 
   // The tier above the one they hold, if there is one. Voting power is a
   // property of the tier, so an exhausted allowance is fixed by moving up a tier
@@ -172,10 +179,10 @@ export function VoteButton({
         ) : (
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground">
-              Votes on this post
+              {myVote > 0 ? "Add more votes" : "Votes on this post"}
             </Label>
             <div className="flex flex-wrap gap-1.5">
-              {Array.from({ length: maxOnThisPost }, (_, i) => i + 1).map((n) => (
+              {amounts.map((n) => (
                 <Button
                   key={n}
                   size="sm"
@@ -192,20 +199,11 @@ export function VoteButton({
                 </Button>
               ))}
             </div>
-            {myVote > 0 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="w-full h-8 text-xs"
-                disabled={busy}
-                onClick={() => {
-                  onVote(0);
-                  setOpen(false);
-                }}
-              >
-                Remove my vote
-              </Button>
-            )}
+            <p className="text-xs text-muted-foreground">
+              {myVote > 0
+                ? `You have backed this with ${myVote}. Votes are final and cannot be removed.`
+                : "Your vote is final once cast."}
+            </p>
           </div>
         )}
       </PopoverContent>
