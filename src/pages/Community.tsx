@@ -63,6 +63,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
 import { postShareText, isAiwcCategory } from "@/lib/share";
+import { parseVideoLink, attachmentThumbnail } from "@/lib/video";
 import { LinkifiedText } from "@/lib/LinkifiedText";
 
 const sendNotification = (payload: Record<string, unknown>) => {
@@ -176,6 +177,8 @@ const Community = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [videoLink, setVideoLink] = useState("");
+  const [linkPreview, setLinkPreview] = useState<string | null>(null);
   const [videoThumbnails, setVideoThumbnails] = useState<Record<string, string>>({});
   const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
@@ -439,6 +442,9 @@ const Community = () => {
   useEffect(() => {
     posts.forEach((post) => {
       if (post.attachment_type === "video" && post.attachment_url && !videoThumbnails[post.id]) {
+        // Link-based videos already have a poster derived from their URL, so
+        // there is nothing to grab from the browser here.
+        if (parseVideoLink(post.attachment_url)?.thumbnailUrl) return;
         generateVideoThumbnail(post.attachment_url).then((thumb) => {
           if (thumb) {
             setVideoThumbnails((prev) => ({ ...prev, [post.id]: thumb }));
@@ -493,12 +499,30 @@ const Community = () => {
     }
 
     setIsSubmitting(true);
-    
+
     try {
       let attachmentUrl = null;
       let attachmentType = null;
 
-      if (selectedFile) {
+      // A pasted video link wins over an uploaded file: it is what the
+      // creator asked for, and a poster frame can still be derived from it.
+      const linkedVideo = videoLink.trim() ? parseVideoLink(videoLink.trim()) : null;
+      const linkRejected = Boolean(videoLink.trim()) && !linkedVideo;
+
+      if (linkRejected) {
+        toast({
+          title: "Unrecognised video link",
+          description: "Paste a YouTube, Vimeo or direct video-file link (https://...).",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (linkedVideo) {
+        attachmentUrl = linkedVideo.url;
+        attachmentType = 'video';
+      } else if (selectedFile) {
         try {
           const fileExt = selectedFile.name.split('.').pop();
           const filePath = `${user.id}/post-attachments/${Date.now()}.${fileExt}`;
@@ -591,6 +615,7 @@ const Community = () => {
       setNewPostCategory(usedCategory);
       setSelectedFile(null);
       setFilePreview(null);
+      setVideoLink("");
       setIsCreateOpen(false);
       fetchPosts();
     } catch (error) {
@@ -925,9 +950,58 @@ const Community = () => {
                           <Textarea id="content" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} placeholder="What's on your mind?" className="min-h-[150px]" />
                         </div>
                         <div>
-                          <Label htmlFor="file">Attachment (Optional)</Label>
+                          <Label htmlFor="video-link">
+                            Video link <span className="font-normal text-muted-foreground">(optional)</span>
+                          </Label>
+                          <p className="text-xs text-muted-foreground mb-1">
+                            YouTube, Vimeo or a direct video file URL. Takes priority over the upload below.
+                          </p>
+                          <Input
+                            id="video-link"
+                            type="url"
+                            inputMode="url"
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            value={videoLink}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setVideoLink(value);
+                              // A link and an upload are mutually exclusive, and
+                              // the poster frame is derived from the URL.
+                              setLinkPreview(parseVideoLink(value.trim())?.thumbnailUrl ?? null);
+                              if (value.trim()) {
+                                setSelectedFile(null);
+                                setFilePreview(null);
+                              }
+                            }}
+                            disabled={isSubmitting}
+                          />
+                          {videoLink.trim() && !parseVideoLink(videoLink.trim()) && (
+                            <p className="mt-1 text-xs text-destructive">
+                              That does not look like a video link yet.
+                            </p>
+                          )}
+                          {linkPreview && (
+                            <div className="relative mt-2 rounded-lg overflow-hidden border">
+                              <img
+                                src={linkPreview}
+                                alt="Video preview"
+                                className="w-full max-h-48 object-cover"
+                                onError={() => setLinkPreview(null)}
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
+                                  <Play className="w-6 h-6 text-foreground ml-0.5" />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="file">
+                            Attachment <span className="font-normal text-muted-foreground">(optional)</span>
+                          </Label>
                           <p className="text-xs text-muted-foreground mb-1">Images max 3MB, Videos max 5MB</p>
-                          <Input id="file" type="file" accept="image/*,video/*,.pdf" onChange={handleFileSelect} disabled={isSubmitting} />
+                          <Input id="file" type="file" accept="image/*,video/*,.pdf" onChange={handleFileSelect} disabled={isSubmitting || Boolean(videoLink.trim())} />
                           {selectedFile && (
                             <div className="mt-2">
                               {filePreview && (
@@ -1139,33 +1213,76 @@ const Community = () => {
                           </div>
                         )}
 
-                        {post.attachment_url && post.attachment_type === 'video' && (
-                          <div className="mb-4 rounded-lg overflow-hidden bg-black relative">
-                            {videoThumbnails[post.id] && !playingVideos.has(post.id) && (
-                              <div
-                                className="relative cursor-pointer"
-                                onClick={() => setPlayingVideos(prev => new Set([...prev, post.id]))}
-                              >
-                                <img
-                                  src={videoThumbnails[post.id]}
-                                  alt="Video thumbnail"
-                                  className="w-full object-cover max-h-96"
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
-                                  <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center hover:scale-110 transition-transform">
-                                    <Play className="w-8 h-8 text-foreground ml-1" />
+                        {post.attachment_url && post.attachment_type === 'video' && (() => {
+                          // A pasted link renders as an embedded player behind its
+                          // poster frame; an uploaded file uses a <video> element.
+                          const linked = parseVideoLink(post.attachment_url);
+                          const poster = linked?.thumbnailUrl ?? videoThumbnails[post.id];
+                          const isPlaying = playingVideos.has(post.id);
+
+                          if (linked && linked.provider !== 'file') {
+                            return (
+                              <div className="mb-4 aspect-video w-full overflow-hidden rounded-lg bg-black">
+                                {isPlaying ? (
+                                  <iframe
+                                    src={linked.embedUrl}
+                                    title="Embedded video"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                    className="h-full w-full border-0"
+                                  />
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPlayingVideos(prev => new Set([...prev, post.id]))}
+                                    className="group relative block h-full w-full"
+                                  >
+                                    {poster && (
+                                      <img
+                                        src={poster}
+                                        alt="Video thumbnail"
+                                        className="h-full w-full object-cover"
+                                      />
+                                    )}
+                                    <span className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/40">
+                                      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 transition-transform group-hover:scale-110">
+                                        <Play className="ml-1 h-7 w-7 text-foreground" />
+                                      </span>
+                                    </span>
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="mb-4 rounded-lg overflow-hidden bg-black relative">
+                              {poster && !isPlaying && (
+                                <div
+                                  className="relative cursor-pointer"
+                                  onClick={() => setPlayingVideos(prev => new Set([...prev, post.id]))}
+                                >
+                                  <img
+                                    src={poster}
+                                    alt="Video thumbnail"
+                                    className="w-full object-cover max-h-96"
+                                  />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
+                                    <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center hover:scale-110 transition-transform">
+                                      <Play className="w-8 h-8 text-foreground ml-1" />
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            )}
-                            <video
-                              src={post.attachment_url}
-                              controls
-                              autoPlay={playingVideos.has(post.id)}
-                              className={`w-full max-h-96 ${!playingVideos.has(post.id) && videoThumbnails[post.id] ? 'hidden' : ''}`}
-                            />
-                          </div>
-                        )}
+                              )}
+                              <video
+                                src={post.attachment_url}
+                                controls
+                                autoPlay={isPlaying}
+                                className={`w-full max-h-96 ${!isPlaying && poster ? 'hidden' : ''}`}
+                              />
+                            </div>
+                          );
+                        })()}
 
                         {post.attachment_url && post.attachment_type === 'document' && (
                           <div className="mb-4 p-3 bg-secondary rounded-lg flex items-center gap-2">
@@ -1227,24 +1344,26 @@ const Community = () => {
                                 </DialogHeader>
                                 {(() => {
                                   const sharePost = posts.find((p) => p.id === post.id);
-                                  if (sharePost?.attachment_url && sharePost.attachment_type === "image") {
-                                    return (
-                                      <div className="rounded-lg overflow-hidden mb-2 border">
-                                        <img src={sharePost.attachment_url} alt="Post" className="w-full max-h-32 object-cover" />
-                                      </div>
-                                    );
-                                  }
-                                  if (sharePost?.attachment_url && sharePost.attachment_type === "video" && videoThumbnails[sharePost.id]) {
-                                    return (
-                                      <div className="relative rounded-lg overflow-hidden mb-2 border">
-                                        <img src={videoThumbnails[sharePost.id]} alt="Video" className="w-full max-h-32 object-cover" />
+                                  if (!sharePost) return null;
+                                  // Image posts use their own picture. Video posts
+                                  // use a poster derived from the link, or the frame
+                                  // grabbed in-browser for an uploaded file.
+                                  const isVideo = sharePost.attachment_type === "video";
+                                  const preview = attachmentThumbnail(
+                                    sharePost.attachment_url,
+                                    sharePost.attachment_type,
+                                  ) ?? (isVideo ? videoThumbnails[sharePost.id] ?? null : null);
+                                  if (!preview) return null;
+                                  return (
+                                    <div className="relative rounded-lg overflow-hidden mb-2 border">
+                                      <img src={preview} alt={isVideo ? "Video" : "Post"} className="w-full max-h-32 object-cover" />
+                                      {isVideo && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                                           <Play className="w-6 h-6 text-white" />
                                         </div>
-                                      </div>
-                                    );
-                                  }
-                                  return null;
+                                      )}
+                                    </div>
+                                  );
                                 })()}
                                 <div className="grid grid-cols-2 gap-3 py-4">
                                   {typeof navigator !== "undefined" && "share" in navigator && (

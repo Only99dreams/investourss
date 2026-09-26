@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn, generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
 import { postShareText } from "@/lib/share";
+import { parseVideoLink } from "@/lib/video";
 import { LinkifiedText } from "@/lib/LinkifiedText";
 
 interface Post {
@@ -98,6 +99,8 @@ const CommunitySection = () => {
   useEffect(() => {
     posts.forEach((post) => {
       if (post.attachment_type === "video" && post.attachment_url && !videoThumbnails[post.id]) {
+        // Link-based videos already carry a poster derived from their URL.
+        if (parseVideoLink(post.attachment_url)?.thumbnailUrl) return;
         generateVideoThumbnail(post.attachment_url).then((thumb) => {
           if (thumb) {
             setVideoThumbnails((prev) => ({ ...prev, [post.id]: thumb }));
@@ -714,29 +717,68 @@ const CommunitySection = () => {
                               <img src={post.attachment_url} alt="Post" className="w-full object-cover max-h-64" />
                             </div>
                           )}
-                          {post.attachment_url && post.attachment_type === "video" && (
-                            <div className="mb-3 rounded-lg overflow-hidden bg-black relative">
-                              {videoThumbnails[post.id] && !playingVideos.has(post.id) && (
-                                <div
-                                  className="relative cursor-pointer"
-                                  onClick={() => setPlayingVideos(prev => new Set([...prev, post.id]))}
-                                >
-                                  <img src={videoThumbnails[post.id]} alt="Video" className="w-full object-cover max-h-64" />
-                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
-                                    <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center hover:scale-110 transition-transform">
-                                      <Play className="w-6 h-6 text-foreground ml-0.5" />
+                          {post.attachment_url && post.attachment_type === "video" && (() => {
+                            // Link-based videos embed behind their poster frame;
+                            // uploaded files keep the native <video> element.
+                            const linked = parseVideoLink(post.attachment_url);
+                            const poster = linked?.thumbnailUrl ?? videoThumbnails[post.id];
+                            const isPlaying = playingVideos.has(post.id);
+
+                            if (linked && linked.provider !== "file") {
+                              return (
+                                <div className="mb-3 aspect-video w-full overflow-hidden rounded-lg bg-black">
+                                  {isPlaying ? (
+                                    <iframe
+                                      src={linked.embedUrl}
+                                      title="Embedded video"
+                                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                      allowFullScreen
+                                      className="h-full w-full border-0"
+                                    />
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPlayingVideos(prev => new Set([...prev, post.id]))}
+                                      className="group relative block h-full w-full"
+                                    >
+                                      {poster && (
+                                        <img src={poster} alt="Video" className="h-full w-full object-cover" />
+                                      )}
+                                      <span className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/40">
+                                        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/90 transition-transform group-hover:scale-110">
+                                          <Play className="ml-0.5 h-6 w-6 text-foreground" />
+                                        </span>
+                                      </span>
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="mb-3 rounded-lg overflow-hidden bg-black relative">
+                                {poster && !isPlaying && (
+                                  <div
+                                    className="relative cursor-pointer"
+                                    onClick={() => setPlayingVideos(prev => new Set([...prev, post.id]))}
+                                  >
+                                    <img src={poster} alt="Video" className="w-full object-cover max-h-64" />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
+                                      <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center hover:scale-110 transition-transform">
+                                        <Play className="w-6 h-6 text-foreground ml-0.5" />
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
-                              <video
-                                src={post.attachment_url}
-                                controls
-                                autoPlay={playingVideos.has(post.id)}
-                                className={`w-full max-h-64 ${!playingVideos.has(post.id) && videoThumbnails[post.id] ? "hidden" : ""}`}
-                              />
-                            </div>
-                          )}
+                                )}
+                                <video
+                                  src={post.attachment_url}
+                                  controls
+                                  autoPlay={isPlaying}
+                                  className={`w-full max-h-64 ${!isPlaying && poster ? "hidden" : ""}`}
+                                />
+                              </div>
+                            );
+                          })()}
                           {post.attachment_url && post.attachment_type === "document" && (
                             <div className="mb-3 p-2 bg-muted rounded-lg flex items-center gap-2">
                               <FileText className="w-5 h-5 text-primary" />

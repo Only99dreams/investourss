@@ -80,10 +80,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : contentPreview
         ? `${contentPreview}${contentPreview.length >= 200 ? "..." : ""} — ${likesCount} likes, ${commentsCount} comments`
         : "Check out this opportunity on Investours";
+    // Poster frame for the preview. Images use their own picture; a video link
+    // yields a deterministic provider thumbnail (YouTube/Vimeo), which is the
+    // only kind that works here - the browser-generated frames used elsewhere
+    // are data URLs and are never persisted. Mirrors src/lib/video.ts, which
+    // this function cannot import because Vercel bundles it separately.
+    const attachmentUrl = post.attachment_url || null;
+    let posterFromVideo: string | null = null;
+    if (post.attachment_type === "video" && attachmentUrl) {
+      try {
+        const parsed = new URL(attachmentUrl);
+        const host = parsed.hostname.toLowerCase();
+        const isYoutube =
+          host === "youtu.be" ||
+          host.endsWith("youtube.com") ||
+          host.endsWith("youtube-nocookie.com");
+        if (isYoutube) {
+          const segments = parsed.pathname.split("/").filter(Boolean);
+          const id =
+            parsed.searchParams.get("v") ||
+            (host === "youtu.be" || host === "www.youtu.be"
+              ? segments[0]
+              : ["embed", "shorts", "live"].includes(segments[0])
+                ? segments[1]
+                : null);
+          if (id) posterFromVideo = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+        } else if (host.endsWith("vimeo.com")) {
+          const id = parsed.pathname.split("/").filter((s) => /^\d+$/.test(s)).pop();
+          if (id) posterFromVideo = `https://thumbnail.com/${id}.jpg`;
+        }
+      } catch {
+        posterFromVideo = null;
+      }
+    }
+
     const ogImage =
-      post.attachment_type === "image" && post.attachment_url
-        ? post.attachment_url
-        : DEFAULT_IMAGE;
+      (post.attachment_type === "image" && attachmentUrl) ||
+      posterFromVideo ||
+      DEFAULT_IMAGE;
+    const ogImageAlt = ogImage !== DEFAULT_IMAGE
+      ? `Media from ${authorName}'s post on Investours`
+      : "Investours - AI Financial Auditor";
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -95,8 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="og:title" content="${escapeHtml(ogTitle)}" />
   <meta property="og:description" content="${escapeHtml(ogDescription)}" />
   <meta property="og:image" content="${escapeHtml(ogImage)}" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="${escapeHtml(ogImageAlt)}" />
   <meta property="og:url" content="${escapeHtml(communityUrl)}" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="Investours" />
