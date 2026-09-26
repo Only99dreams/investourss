@@ -81,10 +81,10 @@ import {
   castVote,
   fetchMyVotes,
   fetchVotingPower,
-  VOTING_TIERS,
   type VotingPower,
 } from "@/lib/voting";
 import { VoteButton } from "@/components/community/VoteButton";
+import { VoteUpgradeDialog } from "@/components/community/VoteUpgradeDialog";
 import { CategoryLeaderboard } from "@/components/community/CategoryLeaderboard";
 
 const sendNotification = (payload: Record<string, unknown>) => {
@@ -170,6 +170,7 @@ const Community = () => {
   const [votingPower, setVotingPower] = useState<VotingPower | null>(null);
   const [myVotes, setMyVotes] = useState<Record<string, number>>({});
   const [votingPostId, setVotingPostId] = useState<string | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>({});
   const [newCommentMap, setNewCommentMap] = useState<Record<string, string>>({});
@@ -372,15 +373,9 @@ const Community = () => {
     }
   };
 
-  const requirePaymentForVoting = () => {
-    toast({
-      title: "Voting is for paid members",
-      description: VOTING_TIERS.filter((t) => t.source === "subscription")
-        .map((t) => `${t.label}: ${t.votes_per_stage}`)
-        .join("  ·  ") + " vote(s) per stage",
-      variant: "destructive",
-    });
-  };
+  // A member without a subscription or credit pack is offered the two ways to
+  // become one, rather than being told they cannot vote and left there.
+  const requirePaymentForVoting = () => setUpgradeOpen(true);
 
   useEffect(() => {
     fetchPosts();
@@ -1516,6 +1511,9 @@ const Community = () => {
                 ))
               )}
             </div>
+
+            {/* Shown when a member without a plan tries to vote */}
+            <VoteUpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} />
 
             {/* Sidebar */}
             <div className="space-y-6">

@@ -19,10 +19,10 @@ import {
   castVote,
   fetchMyVotes,
   fetchVotingPower,
-  VOTING_TIERS,
   type VotingPower,
 } from "@/lib/voting";
 import { VoteButton } from "@/components/community/VoteButton";
+import { VoteUpgradeDialog } from "@/components/community/VoteUpgradeDialog";
 import {
   DEFAULT_CATEGORIES,
   LEGACY_ENUM_CATEGORIES,
@@ -94,6 +94,7 @@ const CommunitySection = () => {
   const [votingPower, setVotingPower] = useState<VotingPower | null>(null);
   const [myVotes, setMyVotes] = useState<Record<string, number>>({});
   const [votingPostId, setVotingPostId] = useState<string | null>(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const { toast } = useToast();
 
   /**
@@ -274,16 +275,9 @@ const CommunitySection = () => {
     }
   };
 
-  const requirePaymentForVoting = () => {
-    toast({
-      title: "Voting is for paid members",
-      description:
-        VOTING_TIERS.filter((t) => t.source === "subscription")
-          .map((t) => `${t.label}: ${t.votes_per_stage}`)
-          .join("  ·  ") + " vote(s) per stage",
-      variant: "destructive",
-    });
-  };
+  // A member without a subscription or credit pack is offered the two ways to
+  // become one, rather than being told they cannot vote and left there.
+  const requirePaymentForVoting = () => setUpgradeOpen(true);
 
   const fetchUserLikes = async () => {
     if (!user) return;
@@ -654,6 +648,9 @@ const CommunitySection = () => {
   return (
     <section className="py-16 bg-secondary/30">
         <div className="container mx-auto px-4">
+
+        {/* Shown when a member without a plan tries to vote */}
+        <VoteUpgradeDialog open={upgradeOpen} onOpenChange={setUpgradeOpen} />
 
         {/* Evidence of Activity & Impact */}
         <div className="mb-16">
