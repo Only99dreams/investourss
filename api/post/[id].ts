@@ -30,7 +30,6 @@ const SUPABASE_KEY =
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   "";
 const SITE_URL = (process.env.SITE_URL || "https://investours.app").replace(/\/$/, "");
-const DEFAULT_IMAGE = `${SITE_URL}/logo.png`;
 
 /** Link-preview crawlers. Served the metadata with no redirect to follow. */
 const CRAWLER_UA =
@@ -181,11 +180,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const appUrl = `${SITE_URL}/community?post=${encodeURIComponent(post.id)}`;
 
   // Verified variant: an uploaded video's stored frame is only used if it
-  // really exists, otherwise the site default stands in.
-  const preview = await resolvePostPreviewImage(post, DEFAULT_IMAGE, post.author_name);
+  // really exists. A post with no usable media resolves to no image at all, and
+  // then no image tag is emitted - see the tag blocks below.
+  const preview = await resolvePostPreviewImage(post, post.author_name);
   const meta = buildPostMetadata(post, {
     canonicalUrl,
-    defaultImage: DEFAULT_IMAGE,
     // The resolved preview, not a fresh derivation: an uploaded video's stored
     // frame is a candidate until a HEAD confirms it, and using the unresolved
     // value would put a 404 URL in og:image.
@@ -197,14 +196,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = (post.content ?? "").trim();
 
   // A crawler must not be redirected, or it would follow the redirect to the SPA
-  // shell and re-read index.html - which advertises the logo. That is the reason
-  // a correct og:image kept rendering as the logo.
+  // shell and re-read index.html - which advertises the site logo. That is the
+  // reason a correct og:image kept rendering as the logo.
   const forward = !isCrawler(String(req.headers["user-agent"] ?? ""));
 
+  // Declared before the tag blocks that use it. A const arrow function is in the
+  // temporal dead zone until its declaration is evaluated, so referencing it
+  // above crashes the moment an image actually exists.
   const dims = (w: number | null, h: number | null) =>
     w && h
       ? `\n  <meta property="og:image:width" content="${w}" />\n  <meta property="og:image:height" content="${h}" />`
       : "";
+
+  // Only advertise an image the post actually owns. Emitting the site logo here
+  // claimed every text-only post had a picture, which misrepresents it, so a post
+  // with no media is shared as text and the image tags are omitted entirely.
+  const imageTags = meta.image
+    ? `
+  <meta property="og:image" content="${escapeHtml(meta.image)}" />
+  <meta property="og:image:secure_url" content="${escapeHtml(meta.image)}" />
+  <meta property="og:image:alt" content="${escapeHtml(meta.imageAlt)}" />${dims(preview.width, preview.height)}`
+    : "";
+  const twitterImageTags = meta.image
+    ? `
+  <meta name="twitter:image" content="${escapeHtml(meta.image)}" />
+  <meta name="twitter:image:alt" content="${escapeHtml(meta.imageAlt)}" />`
+    : "";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -219,10 +236,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="og:type" content="${meta.ogType}" />
   <meta property="og:title" content="${escapeHtml(meta.title)}" />
   <meta property="og:description" content="${escapeHtml(meta.description)}" />
-  <meta property="og:url" content="${escapeHtml(meta.canonicalUrl)}" />
-  <meta property="og:image" content="${escapeHtml(meta.image)}" />
-  <meta property="og:image:secure_url" content="${escapeHtml(meta.image)}" />
-  <meta property="og:image:alt" content="${escapeHtml(meta.imageAlt)}" />${dims(preview.width, preview.height)}
+  <meta property="og:url" content="${escapeHtml(meta.canonicalUrl)}" />${imageTags}
   <meta property="og:locale" content="en_NG" />${
     published ? `\n  <meta property="article:published_time" content="${escapeHtml(published)}" />` : ""
   }
@@ -231,9 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta name="twitter:site" content="@investours" />
   <meta name="twitter:creator" content="@investours" />
   <meta name="twitter:title" content="${escapeHtml(meta.title)}" />
-  <meta name="twitter:description" content="${escapeHtml(meta.description)}" />
-  <meta name="twitter:image" content="${escapeHtml(meta.image)}" />
-  <meta name="twitter:image:alt" content="${escapeHtml(meta.imageAlt)}" />
+  <meta name="twitter:description" content="${escapeHtml(meta.description)}" />${twitterImageTags}
 
   <link rel="icon" type="image/png" href="${escapeHtml(`${SITE_URL}/favicon.png`)}" />
   <script type="application/ld+json">${escapeJsonLd(
@@ -243,7 +255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       headline: meta.title,
       articleBody: body || undefined,
       url: meta.canonicalUrl,
-      image: [meta.image],
+      image: meta.image ? [meta.image] : undefined,
       datePublished: published ?? undefined,
       author: author ? { "@type": "Person", name: author } : undefined,
       interactionStatistic: [
@@ -268,7 +280,7 @@ ${forward ? `  <meta http-equiv="refresh" content="0;url=${escapeHtml(appUrl)}" 
     <article style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:1.5rem">
       ${author ? `<p style="margin:0 0 .5rem;font-weight:600">${escapeHtml(author)}</p>` : ""}
       ${body ? `<div style="white-space:pre-wrap;font-size:1.05rem;line-height:1.6">${escapeHtml(body)}</div>` : ""}
-      ${body ? `<div style="margin-top:1.25rem">${renderMedia(post, preview.kind === "default" ? null : preview.image)}</div>` : renderMedia(post, preview.kind === "default" ? null : preview.image)}
+      ${renderMedia(post, preview.image)}
       <p style="margin:1.5rem 0 0;font-size:.875rem;color:#64748b">
         ${post.likes_count ?? 0} likes &middot; ${post.comments_count ?? 0} comments
       </p>

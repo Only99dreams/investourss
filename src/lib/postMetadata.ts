@@ -34,11 +34,19 @@ export interface ShareablePost {
   comments_count?: number | null;
 }
 
-export type PreviewKind = "image" | "video-poster" | "default";
+export type PreviewKind = "image" | "video-poster" | "none";
 
 export interface PostPreview {
-  /** Absolute HTTPS URL, or the default when the post has no usable media. */
-  image: string;
+  /**
+   * Absolute HTTPS URL for the post's own media, or null when it has none.
+   *
+   * Null is deliberate. Falling back to the site logo meant every text-only post
+   * was shared with a picture that is not part of the post, which misrepresents
+   * it - a logo implies an image that does not exist. Platforms render a clean
+   * title-and-description preview with no og:image at all, which is the honest
+   * representation of a post with no media.
+   */
+  image: string | null;
   kind: PreviewKind;
   /** True when `image` is a candidate that still needs confirming with a HEAD. */
   needsVerification: boolean;
@@ -59,26 +67,23 @@ export interface PostMetadata {
   /** Set only when the post's own media is a playable video. */
   videoUrl: string | null;
   videoMimeType: string | null;
-  /** True when nothing on the post resolved, so the site default is in use. */
+  /**
+   * True when nothing on the post resolved, so no image should be advertised.
+   */
   usesDefaultImage: boolean;
   isCompetitionEntry: boolean;
 }
 
-/**
- * Real dimensions of the site default, read from the file.
- *
- * These were previously asserted as 1200x630, which is not what the file is.
- * A wrong og:image:width/height is worse than none: platforms size the card from
- * it and end up cropping or letterboxing unpredictably.
- */
-export const DEFAULT_IMAGE_WIDTH = 621;
-export const DEFAULT_IMAGE_HEIGHT = 402;
-
 /** YouTube's hqdefault poster, which is the only variant guaranteed to exist. */
 const YOUTUBE_POSTER = { width: 480, height: 360 };
 
-/** A captured video frame inherits the video's dimensions, unknown here. */
-const CAPTURED_FRAME = { width: 1280, height: 720 };
+/**
+ * A captured video frame inherits the video's own dimensions, which are not
+ * knowable from the URL. Asserting a plausible 1280x720 is a guess, and a wrong
+ * og:image:width/height is worse than none because platforms size the card from
+ * it and crop unpredictably - so the frame's dimensions are deliberately omitted.
+ */
+const CAPTURED_FRAME = { width: null as number | null, height: null as number | null };
 
 const VIDEO_MIME: Record<string, string> = {
   mp4: "video/mp4",
@@ -112,10 +117,13 @@ function truncate(text: string, max: number): string {
  * Order matters and is the whole point of this function:
  *   1. an uploaded image is the post itself
  *   2. a video *link* yields the provider's poster (YouTube, Vimeo)
- *   3. an uploaded video yields the frame stored beside it, but only if that
- *      frame actually exists - older posts predate frame capture, and emitting
- *      a URL that 404s produces a broken preview
- *   4. otherwise the site default, so og:image is never empty
+ *   3. an uploaded video yields the frame stored beside it, flagged for
+ *      verification - older posts predate frame capture, and emitting a URL that
+ *      404s produces a broken preview
+ *   4. otherwise nothing, and no og:image is advertised at all
+ *
+ * On (4): a post with no media is shared as text. That is what the post is, and
+ * a preview showing the site logo would claim it has a picture when it does not.
  *
  * The schema has a single `attachment_url`, so a post has at most one piece of
  * media. Multiple images per post are not currently representable; when that is
@@ -123,7 +131,6 @@ function truncate(text: string, max: number): string {
  */
 export function derivePostPreview(
   post: ShareablePost | null | undefined,
-  defaultImage: string,
   authorName?: string | null,
 ): PostPreview {
   const url = post?.attachment_url ?? null;
@@ -174,12 +181,12 @@ export function derivePostPreview(
   }
 
   return {
-    image: defaultImage,
-    kind: "default",
+    image: null,
+    kind: "none",
     needsVerification: false,
-    width: DEFAULT_IMAGE_WIDTH,
-    height: DEFAULT_IMAGE_HEIGHT,
-    alt: "Investours - AI Financial Auditor",
+    width: null,
+    height: null,
+    alt,
   };
 }
 
@@ -208,29 +215,24 @@ const FRAME_CACHE_MS = 10 * 60 * 1000;
 /**
  * The preview image, with any stored video frame verified to exist.
  *
- * A frame that has not been generated yet falls back to the site default rather
- * than a URL that would render as a broken image.
+ * A frame that has not been generated yet yields no image at all rather than a
+ * URL that would render broken, and rather than a logo that is not the post's.
  */
 export async function resolvePostPreviewImage(
   post: ShareablePost | null | undefined,
-  defaultImage: string,
   authorName?: string | null,
 ): Promise<PostPreview> {
-  const preview = derivePostPreview(post, defaultImage, authorName);
-  if (!preview.needsVerification) return preview;
+  const preview = derivePostPreview(post, authorName);
+  if (!preview.needsVerification || !preview.image) return preview;
 
   const cached = framePresence.get(preview.image);
   if (cached && Date.now() - cached.at < FRAME_CACHE_MS) {
-    return cached.exists
-      ? preview
-      : { ...derivePostPreview(null, defaultImage, authorName), needsVerification: false };
+    return cached.exists ? preview : derivePostPreview(null, authorName);
   }
 
   const exists = await objectExists(preview.image);
   framePresence.set(preview.image, { at: Date.now(), exists });
-  if (exists) return preview;
-
-  return { ...derivePostPreview(null, defaultImage, authorName), needsVerification: false };
+  return exists ? preview : derivePostPreview(null, authorName);
 }
 
 /**
@@ -244,7 +246,6 @@ export function buildPostMetadata(
   post: ShareablePost,
   options: {
     canonicalUrl: string;
-    defaultImage: string;
     siteName?: string;
     /** Replaces the generated description, for entries that need specific copy. */
     descriptionOverride?: string | null;
@@ -278,7 +279,7 @@ export function buildPostMetadata(
   const headline = body ? truncate(body, 70) : "A post on Investours";
   const title = author ? `${headline} - ${author} on ${siteName}` : `${headline} - ${siteName}`;
 
-  const preview = options.preview ?? derivePostPreview(post, options.defaultImage, author);
+  const preview = options.preview ?? derivePostPreview(post, author);
 
   return {
     title,
@@ -295,7 +296,8 @@ export function buildPostMetadata(
       post.attachment_type === "video" ? (post.attachment_url ?? null) : null,
     videoMimeType:
       post.attachment_type === "video" ? videoMimeTypeFor(post.attachment_url) : null,
-    usesDefaultImage: preview.kind === "default",
+    // True when the post has no media, so no image is advertised at all.
+    usesDefaultImage: preview.kind === "none",
     isCompetitionEntry: isEntry,
   };
 }
