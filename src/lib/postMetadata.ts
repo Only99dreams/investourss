@@ -18,8 +18,8 @@
  * not assumed.
  */
 
-import { parseVideoLink, siblingThumbnailUrl, attachmentThumbnail } from "@/lib/video";
-import { isAiwcCategory, AIWC_OG_DESCRIPTION } from "@/lib/share";
+import { parseVideoLink, siblingThumbnailUrl, attachmentThumbnail } from "./video.js";
+import { isAiwcCategory, AIWC_OG_DESCRIPTION } from "./share.js";
 
 /** The subset of a post that sharing needs. */
 export interface ShareablePost {

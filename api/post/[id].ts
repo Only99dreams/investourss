@@ -3,7 +3,7 @@ import {
   buildPostMetadata,
   resolvePostPreviewImage,
   type ShareablePost,
-} from "../../src/lib/postMetadata";
+} from "../../src/lib/postMetadata.js";
 
 /**
  * The shareable page for a single post: /post/:id
