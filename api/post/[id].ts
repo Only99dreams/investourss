@@ -177,7 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!post) return noStore(404, "This post is not available.");
 
   const canonicalUrl = `${SITE_URL}/post/${encodeURIComponent(post.id)}`;
-  const appUrl = `${SITE_URL}/community?post=${encodeURIComponent(post.id)}`;
+  const appUrl = `${SITE_URL}/community?post=${encodeURIComponent(post.id)}&autoplay=1`;
 
   // Verified variant: an uploaded video's stored frame is only used if it
   // really exists. A post with no usable media resolves to no image at all, and
@@ -223,6 +223,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta name="twitter:image:alt" content="${escapeHtml(meta.imageAlt)}" />`
     : "";
 
+  // og:video tags let WhatsApp, Facebook and Telegram show a playable video
+  // card instead of a static image. Only emitted for direct video files:
+  // YouTube/Vimeo links are already embeddable via their own players and do
+  // not need (or benefit from) og:video on our page.
+  const isDirectVideoFile =
+    meta.videoUrl ? /\.(mp4|m4v|webm|ogv|mov)(\?|#|$)/i.test(meta.videoUrl) : false;
+  const videoTags =
+    meta.videoUrl && meta.videoMimeType && isDirectVideoFile
+      ? `
+  <meta property="og:video" content="${escapeHtml(meta.videoUrl)}" />
+  <meta property="og:video:secure_url" content="${escapeHtml(meta.videoUrl)}" />
+  <meta property="og:video:type" content="${escapeHtml(meta.videoMimeType)}" />
+  <meta property="og:video:width" content="1280" />
+  <meta property="og:video:height" content="720" />`
+      : "";
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -236,7 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="og:type" content="${meta.ogType}" />
   <meta property="og:title" content="${escapeHtml(meta.title)}" />
   <meta property="og:description" content="${escapeHtml(meta.description)}" />
-  <meta property="og:url" content="${escapeHtml(meta.canonicalUrl)}" />${imageTags}
+  <meta property="og:url" content="${escapeHtml(meta.canonicalUrl)}" />${imageTags}${videoTags}
   <meta property="og:locale" content="en_NG" />${
     published ? `\n  <meta property="article:published_time" content="${escapeHtml(published)}" />` : ""
   }

@@ -137,7 +137,7 @@ const CommunitySection = () => {
     if (postId && posts.length > 0) {
       const post = posts.find((p) => p.id === postId);
       if (post) {
-        const shareUrl = `${window.location.origin}/community?post=${postId}`;
+        const shareUrl = buildShareUrl(postId);
         updateShareOGTags({
           title: `${post.profiles?.full_name || "Investours Member"} shared a post`,
           description: post.content.substring(0, 200),
@@ -587,15 +587,11 @@ const CommunitySection = () => {
   };
 
   const handleShare = async (postId: string) => {
-    const referralCode = profile?.referral_code || "";
-    // Cache-busted so a platform that cached an older preview fetches the
-    // current one; the in-app pageUrl below stays stable.
-    const shareUrl = buildShareUrl(postId, referralCode || null);
-    const pageUrl = `${window.location.origin}/community?post=${postId}${referralCode ? `&ref=${referralCode}` : ""}`;
+    const shareUrl = buildShareUrl(postId);
     const post = posts.find((p) => p.id === postId);
     // AIWC competition entries carry the full pitch; other posts keep the
     // short "check this out" summary.
-    const shareText = postShareText(post, pageUrl);
+    const shareText = postShareText(post, shareUrl);
 
     try {
       if (navigator.share && navigator.canShare?.({ text: shareText })) {

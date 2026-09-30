@@ -450,7 +450,7 @@ const Community = () => {
     if (postId && posts.length > 0) {
       const post = posts.find((p) => p.id === postId);
       if (post) {
-        const shareUrl = `${window.location.origin}/community?post=${postId}`;
+        const shareUrl = buildShareUrl(postId);
         updateShareOGTags({
           title: `${post.author?.full_name || "Investours Member"} shared a post`,
           description: post.content.substring(0, 200),
@@ -773,18 +773,13 @@ const Community = () => {
 
   const handleShare = async (postId: string, platform: string) => {
     const post = posts.find(p => p.id === postId);
-    const ref = profile?.referral_code ? `&ref=${profile.referral_code}` : "";
-    // shareUrl hits the OG-image endpoint for rich previews, with a cache-busting
-    // token so a platform that cached an older preview fetches the current one.
-    // pageUrl is the plain in-app destination and stays stable.
-    const shareUrl = buildShareUrl(postId, profile?.referral_code);
-    const pageUrl = `${window.location.origin}/community?post=${postId}${ref}`;
+    const shareUrl = buildShareUrl(postId);
     // AIWC competition entries carry the full pitch; other posts keep the
     // short "check this out" summary. The label is checked too, so an entry is
     // recognised whichever way the admin named the category.
     const isAiwc =
       isAiwcCategory(post?.category) || isAiwcCategory(getCategoryLabel(post?.category));
-    const shareText = postShareText(post, pageUrl, getCategoryLabel(post?.category));
+    const shareText = postShareText(post, shareUrl, getCategoryLabel(post?.category));
 
     try {
       // Record the share before opening the window: a popup blocker must not
@@ -841,7 +836,7 @@ const Community = () => {
         default:
           // A competition entry has to leave with the pitch, so copy the whole
           // message rather than a bare URL. Other posts stay link-only.
-          await copyToClipboard(isAiwc ? shareText : pageUrl);
+          await copyToClipboard(isAiwc ? shareText : shareUrl);
           toast({
             title: "Copied!",
             description: isAiwc
