@@ -162,7 +162,7 @@ const AuditorMonitoring = () => {
             Continuous Monitoring
           </h1>
           <p className="text-muted-foreground max-w-2xl">
-            Monitoring never consumes audit credits. Subscribers get weekly reports; audit-pack
+            Monitoring never consumes platform credits. Subscribers get weekly reports; platform-pack
             users get monthly summaries of financial health checks, new leakages, spending alerts and
             recovery opportunities.
           </p>
@@ -177,7 +177,7 @@ const AuditorMonitoring = () => {
                 <p className="text-xs text-muted-foreground">
                   {hasSubscription
                     ? "Financial health checks, new leakages, spending alerts & recovery opportunities every week."
-                    : "A monthly summary while using audit credits. Upgrade for weekly reports."}
+                    : "A monthly summary while using platform credits. Upgrade for weekly reports."}
                 </p>
               </div>
             </CardContent>

@@ -17,6 +17,7 @@ export interface VotingPower {
   stage_id: string;
   stage_name: string;
   stage_number: number;
+  stage_category: string | null;
   source: "subscription" | "credit_pack";
   source_label: string;
   votes_per_stage: number;
@@ -56,9 +57,9 @@ export const VOTING_TIERS: {
   { source: "subscription", plan_key: "quarterly", label: "Quarterly", votes_per_stage: 2 },
   { source: "subscription", plan_key: "biennial", label: "Bi-Annual", votes_per_stage: 3 },
   { source: "subscription", plan_key: "annual", label: "Annual", votes_per_stage: 4 },
-  { source: "credit_pack", plan_key: "starter", label: "Starter", votes_per_stage: 1 },
-  { source: "credit_pack", plan_key: "standard", label: "Standard", votes_per_stage: 2 },
-  { source: "credit_pack", plan_key: "annual", label: "Annual Pack", votes_per_stage: 3 },
+  { source: "credit_pack", plan_key: "starter", label: "Starter Credit Pack", votes_per_stage: 1 },
+  { source: "credit_pack", plan_key: "standard", label: "Standard Credit Pack", votes_per_stage: 2 },
+  { source: "credit_pack", plan_key: "annual", label: "Annual Credit Pack", votes_per_stage: 3 },
 ];
 
 /**
@@ -73,10 +74,11 @@ export const VOTING_TIERS: {
  * analytics and any CDN. Preview caches are refreshed by sharing a different
  * post, not by mutating the URL.
  */
-export function buildShareUrl(postId: string, _ref?: string | null): string {
+export function buildShareUrl(postId: string, ref?: string | null): string {
   const origin =
     typeof window !== "undefined" ? window.location.origin : "https://investours.app";
-  return `${origin}/post/${encodeURIComponent(postId)}`;
+  const refParam = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  return `${origin}/post/${encodeURIComponent(postId)}${refParam}`;
 }
 
 export const formatVotes = (n: number) =>
@@ -97,8 +99,8 @@ function firstRow<T>(data: T[] | T | null | undefined): T | null {
   return Array.isArray(data) ? (data[0] ?? null) : data;
 }
 
-export async function fetchVotingPower(): Promise<VotingPower | null> {
-  const { data, error } = await supabase.rpc("get_voting_power");
+export async function fetchVotingPower(category?: string): Promise<VotingPower | null> {
+  const { data, error } = await supabase.rpc("get_voting_power", { p_category: category ?? null });
   if (error) {
     // The migration has not been applied yet. Callers treat this as "cannot
     // vote" and the UI hides the button rather than offering a broken one.
@@ -108,22 +110,23 @@ export async function fetchVotingPower(): Promise<VotingPower | null> {
   return firstRow<VotingPower>(data);
 }
 
-export async function fetchVotingStage(): Promise<{ name: string; number: number } | null> {
+export async function fetchVotingStage(category?: string): Promise<{ name: string; number: number; category: string | null } | null> {
   try {
-    const { data, error } = await supabase.rpc("get_current_voting_stage");
+    const { data, error } = await supabase.rpc("get_current_voting_stage", { p_category: category ?? null });
     if (error) return null;
-    const row = firstRow<{ stage_name: string; stage_number: number }>(data);
-    return row ? { name: row.stage_name, number: row.stage_number } : null;
+    const row = firstRow<{ stage_name: string; stage_number: number; stage_category: string | null }>(data);
+    return row ? { name: row.stage_name, number: row.stage_number, category: row.stage_category } : null;
   } catch {
     return null;
   }
 }
 
 /** Cast, change or withdraw this user's vote on one post. */
-export async function castVote(postId: string, amount: number): Promise<CastResult> {
+export async function castVote(postId: string, amount: number, category?: string): Promise<CastResult> {
   const { data, error } = await supabase.rpc("cast_post_vote", {
     p_post_id: postId,
     p_amount: amount,
+    p_category: category ?? null,
   });
   if (error) {
     return { ok: false, message: error.message, votes_remaining: 0, post_votes_count: 0 };
@@ -139,10 +142,10 @@ export async function castVote(postId: string, amount: number): Promise<CastResu
 }
 
 /** What the signed-in user has already put on each of these posts. */
-export async function fetchMyVotes(postIds: string[]): Promise<Record<string, number>> {
+export async function fetchMyVotes(postIds: string[], category?: string): Promise<Record<string, number>> {
   if (postIds.length === 0) return {};
   try {
-    const { data, error } = await supabase.rpc("get_my_votes", { p_post_ids: postIds });
+    const { data, error } = await supabase.rpc("get_my_votes", { p_post_ids: postIds, p_category: category ?? null });
     if (error) return {};
     const rows = (data ?? []) as { post_id: string; amount: number }[];
     return Object.fromEntries(rows.map((r) => [r.post_id, r.amount]));

@@ -31,7 +31,10 @@ import {
   AlertTriangle,
   RefreshCw,
   Leaf,
-  TrendingUp
+  TrendingUp,
+  Vote,
+  Clock,
+  Instagram
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -62,7 +65,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
-import { postShareText, isAiwcCategory } from "@/lib/share";
+import { postShareText, isAiwcCategory, buildReferralShareUrl } from "@/lib/share";
+import { normalizeReferralCode } from "@/lib/referral";
 import { parseVideoLink, attachmentThumbnail } from "@/lib/video";
 import { attachThumbnailToUpload, backfillVideoThumbnail, storedThumbnailFor } from "@/lib/videoThumbnail";
 import {
@@ -82,11 +86,13 @@ import {
   castVote,
   fetchMyVotes,
   fetchVotingPower,
+  fetchVotingStage,
   type VotingPower,
 } from "@/lib/voting";
 import { VoteButton } from "@/components/community/VoteButton";
 import { VoteCheckoutDialog } from "@/components/community/VoteCheckoutDialog";
 import { CategoryLeaderboard } from "@/components/community/CategoryLeaderboard";
+import { CommunityAuthDialog } from "@/components/community/CommunityAuthDialog";
 
 const sendNotification = (payload: Record<string, unknown>) => {
   supabase.functions.invoke('send-notification', { body: payload }).catch(() => {});
@@ -130,6 +136,7 @@ interface Post {
     full_name: string | null;
     avatar_url: string | null;
     country: string | null;
+    referral_code: string | null;
   };
   user_liked?: boolean;
 }
@@ -172,12 +179,20 @@ const Community = () => {
   const [myVotes, setMyVotes] = useState<Record<string, number>>({});
   const [votingPostId, setVotingPostId] = useState<string | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [currentStage, setCurrentStage] = useState<{ name: string; number: number; category: string | null } | null>(null);
+  const [closedStages, setClosedStages] = useState<{ stage_id: string; stage_name: string; stage_number: number; stage_category: string | null; opens_at: string | null; closes_at: string | null; total_votes: number; total_posts_voted: number }[]>([]);
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>({});
   const [newCommentMap, setNewCommentMap] = useState<Record<string, string>>({});
   const [sharePostId, setSharePostId] = useState<string | null>(null);
   const [changeCategoryPostId, setChangeCategoryPostId] = useState<string | null>(null);
   const [newCategoryValue, setNewCategoryValue] = useState<string>("");
+  // Inline auth for logged-out visitors: a shared post's like/comment/vote
+  // opens the real login/signup form here, then the action resumes.
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authDialogMode, setAuthDialogMode] = useState<"login" | "signup">("login");
+  // The post whose shared referral code applies to this visit, if any.
+  const [sharedReferralCode, setSharedReferralCode] = useState<string | null>(null);
   const [communityStats, setCommunityStats] = useState({
     totalMembers: 0,
     totalPosts: 0,
@@ -264,7 +279,7 @@ const Community = () => {
       const authorIds = [...new Set(postsData.map(p => p.author_id))];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, full_name, avatar_url, country')
+        .select('id, full_name, avatar_url, country, referral_code')
         .in('id', authorIds);
 
       let userLikes: string[] = [];
@@ -287,7 +302,7 @@ const Community = () => {
       // Only ask which posts this user has backed once the ids are known, so
       // the vote buttons render in the correct state on first paint.
       if (user) {
-        setMyVotes(await fetchMyVotes(postsData.map(p => p.id)));
+        setMyVotes(await fetchMyVotes(postsData.map(p => p.id), activeCategory !== "all" ? activeCategory : undefined));
       } else {
         setMyVotes({});
       }
@@ -328,15 +343,24 @@ const Community = () => {
       setVotingPower(null);
       return;
     }
-    setVotingPower(await fetchVotingPower());
-  }, [user]);
+    setVotingPower(await fetchVotingPower(activeCategory !== "all" ? activeCategory : undefined));
+  }, [user, activeCategory]);
+
+  const fetchStageData = useCallback(async () => {
+    const category = activeCategory !== "all" ? activeCategory : undefined;
+    const [stage, closed] = await Promise.all([
+      fetchVotingStage(category),
+      supabase.rpc("get_closed_stages", { p_category: category ?? null }).then(({ data }) => data ?? []),
+    ]);
+    setCurrentStage(stage);
+    setClosedStages(closed as typeof closedStages);
+  }, [activeCategory]);
 
   const handleVote = async (postId: string, amount: number) => {
     if (!user) {
       toast({ title: "Login Required", description: "Please sign in to vote.", variant: "destructive" });
       return;
-    }
-    // A vote is final. Refuse a withdrawal or reduction here rather than sending
+    }    // A vote is final. Refuse a withdrawal or reduction here rather than sending
     // a request the database will reject; the server check still stands as the
     // authority, this just avoids a pointless round trip and a harsher message.
     const alreadyCast = myVotes[postId] ?? 0;
@@ -353,7 +377,7 @@ const Community = () => {
       // The database owns every rule here: payment, self-voting, the stage, and
       // the remaining allowance. Its refusal reason is what gets shown, rather
       // than a client-side guess that could be wrong.
-      const result = await castVote(postId, amount);
+      const result = await castVote(postId, amount, activeCategory !== "all" ? activeCategory : undefined);
 
       if (!result.ok) {
         toast({ title: "Vote not counted", description: result.message, variant: "destructive" });
@@ -392,6 +416,72 @@ const Community = () => {
     await fetchPosts();
   };
 
+  /**
+   * The action a logged-out visitor was attempting when the auth dialog opened.
+   * A descriptor is stored rather than a closure: a closure created during the
+   * logged-out render would capture `user = null` and bail out when replayed.
+   * The effect below runs on the fresh render, where `user` is set.
+   */
+  const pendingAction = useRef<
+    | { kind: "like"; postId: string; liked: boolean }
+    | { kind: "comment"; postId: string }
+    | { kind: "vote"; postId: string; amount: number }
+    | { kind: "subscribe" }
+    | null
+  >(null);
+  const [authJustCompleted, setAuthJustCompleted] = useState(false);
+
+  /**
+   * Open the in-place login/signup form instead of bouncing to /auth, then run
+   * the action after a session is established. `referralCode` is the post
+   * owner's code so a registration here still credits them.
+   */
+  const requireAuth = (
+    action: NonNullable<typeof pendingAction.current>,
+    referralCode?: string | null,
+  ) => {
+    pendingAction.current = action;
+    const code = normalizeReferralCode(referralCode);
+    if (code) setSharedReferralCode(code);
+    // A shared-post link almost always means a new visitor, so lead with the
+    // signup form (prefilled referral) and let existing members switch tabs.
+    setAuthDialogMode(code || sharedReferralCode ? "signup" : "login");
+    setAuthDialogOpen(true);
+  };
+
+  const handleAuthenticated = () => {
+    setAuthDialogOpen(false);
+    // Replay is deferred to the effect below so it runs after useAuth has
+    // published the new user, not while `user` is still null.
+    setAuthJustCompleted(true);
+  };
+
+  // Replay the pending action only once the new session is in place, so a vote
+  // or checkout opens with the correct `user` and fresh handler closures.
+  useEffect(() => {
+    if (!authJustCompleted || !user) return;
+    setAuthJustCompleted(false);
+    const action = pendingAction.current;
+    pendingAction.current = null;
+    if (!action) return;
+    switch (action.kind) {
+      case "like":
+        void handleLike(action.postId, action.liked);
+        break;
+      case "comment":
+        setSelectedPost(action.postId);
+        void fetchComments(action.postId);
+        break;
+      case "vote":
+        void handleVote(action.postId, action.amount);
+        break;
+      case "subscribe":
+        setUpgradeOpen(true);
+        break;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authJustCompleted, user]);
+
   useEffect(() => {
     fetchPosts();
     fetchStats();
@@ -400,6 +490,7 @@ const Community = () => {
     // reflects the real database state rather than a remembered flag.
     void checkCategoryColumn();
     void fetchVoting();
+    void fetchStageData();
 
     const channel = supabase
       .channel('posts-realtime')
@@ -450,6 +541,13 @@ const Community = () => {
     if (postId && posts.length > 0) {
       const post = posts.find((p) => p.id === postId);
       if (post) {
+        // A shared link carries the owner's referral code. Prefer it, falling
+        // back to the owner's stored code, so an in-place registration credits
+        // the person whose post brought the visitor here.
+        const urlRef = normalizeReferralCode(searchParams.get("ref"));
+        const ownerRef = normalizeReferralCode(post.author?.referral_code);
+        if (urlRef || ownerRef) setSharedReferralCode(urlRef || ownerRef);
+
         const shareUrl = buildShareUrl(postId);
         updateShareOGTags({
           title: `${post.author?.full_name || "Investours Member"} shared a post`,
@@ -773,7 +871,8 @@ const Community = () => {
 
   const handleShare = async (postId: string, platform: string) => {
     const post = posts.find(p => p.id === postId);
-    const shareUrl = buildShareUrl(postId);
+    const referralCode = post?.author?.referral_code;
+    const shareUrl = buildReferralShareUrl(postId, referralCode);
     // AIWC competition entries carry the full pitch; other posts keep the
     // short "check this out" summary. The label is checked too, so an entry is
     // recognised whichever way the admin named the category.
@@ -819,6 +918,15 @@ const Community = () => {
           break;
         case 'whatsapp':
           window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, 'whatsapp-share');
+          break;
+        case 'instagram':
+          // Instagram has no web share endpoint; copy the link and open Instagram
+          await copyToClipboard(shareText);
+          window.open('https://www.instagram.com/', '_blank');
+          toast({
+            title: "Copied for Instagram",
+            description: "Paste it into your Instagram story or post.",
+          });
           break;
         case 'email':
           window.location.href = `mailto:?subject=Check this out from Investours&body=${encodeURIComponent(shareText)}`;
@@ -1160,6 +1268,90 @@ const Community = () => {
                 );
               })}
             </div>
+
+            {/* Current Stage Banner - visible at the front */}
+            {currentStage && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6"
+              >
+                <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Vote className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Current Voting Stage</p>
+                          <p className="text-lg font-bold text-foreground">
+                            {currentStage.name}
+                            {currentStage.category && (
+                              <span className="text-sm font-normal text-muted-foreground ml-2">
+                                · {currentStage.category.replace(/_/g, " ")}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="default" className="text-xs">Stage {currentStage.number}</Badge>
+                        {votingPower && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {votingPower.votes_remaining} vote{votingPower.votes_remaining !== 1 ? "s" : ""} remaining
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Closed Votes History */}
+            {closedStages.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6"
+              >
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      Closed Votes History
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="space-y-2">
+                      {closedStages.map((stage) => (
+                        <div
+                          key={stage.stage_id}
+                          className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/30"
+                        >
+                          <div>
+                            <p className="text-sm font-medium">{stage.stage_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Stage {stage.stage_number}
+                              {stage.stage_category && (
+                                <span className="ml-1">· {stage.stage_category.replace(/_/g, " ")}</span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <Badge variant="secondary" className="text-xs">Closed</Badge>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {stage.total_votes} vote{stage.total_votes !== 1 ? "s" : ""} · {stage.total_posts_voted} post{stage.total_posts_voted !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
           </motion.div>
 
           {/* Posts Grid.
@@ -1374,7 +1566,7 @@ const Community = () => {
                           <div className="flex items-center gap-4 text-sm">
                             <button 
                               onClick={() => {
-                                if (!user) { toast({ title: "Login Required", description: "Please sign up or login to love posts.", action: undefined }); return; }
+                                if (!user) { requireAuth({ kind: "like", postId: post.id, liked: post.user_liked || false }, post.author?.referral_code); return; }
                                 handleLike(post.id, post.user_liked || false);
                               }}
                               className={`flex items-center gap-1 transition-colors ${
@@ -1386,7 +1578,7 @@ const Community = () => {
                             </button>
                             <button 
                               onClick={() => {
-                                if (!user) { toast({ title: "Login Required", description: "Please sign up or login to comment.", action: undefined }); return; }
+                                if (!user) { requireAuth({ kind: "comment", postId: post.id }, post.author?.referral_code); return; }
                                 setSelectedPost(selectedPost === post.id ? null : post.id);
                                 if (selectedPost !== post.id) fetchComments(post.id);
                               }}
@@ -1403,8 +1595,22 @@ const Community = () => {
                               power={votingPower}
                               isOwnPost={user?.id === post.author_id}
                               busy={votingPostId === post.id}
-                              onVote={(amount) => handleVote(post.id, amount)}
-                              onRequirePayment={requirePaymentForVoting}
+                              onVote={(amount) => {
+                                if (!user) {
+                                  requireAuth({ kind: "vote", postId: post.id, amount }, post.author?.referral_code);
+                                  return;
+                                }
+                                handleVote(post.id, amount);
+                              }}
+                              onRequirePayment={() => {
+                                // Logged out: register/sign in first, then the
+                                // paid-voting checkout opens in place.
+                                if (!user) {
+                                  requireAuth({ kind: "subscribe" }, post.author?.referral_code);
+                                  return;
+                                }
+                                requirePaymentForVoting();
+                              }}
                               onNeedMoreVotes={needMoreVotes}
                             />
                             
@@ -1459,6 +1665,9 @@ const Community = () => {
                                   </Button>
                                   <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'twitter')}>
                                     <Twitter className="w-5 h-5" /><span>Twitter</span>
+                                  </Button>
+                                  <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'instagram')}>
+                                    <Instagram className="w-5 h-5" /><span>Instagram</span>
                                   </Button>
                                   <Button variant="outline" className="flex items-center justify-center gap-2" onClick={() => handleShare(post.id, 'linkedin')}>
                                     <Linkedin className="w-5 h-5" /><span>LinkedIn</span>
@@ -1546,6 +1755,15 @@ const Community = () => {
               open={upgradeOpen}
               onOpenChange={setUpgradeOpen}
               onPurchased={() => void onVotingPurchased()}
+            />
+
+            {/* Sign in / register in place, then resume the pending action. */}
+            <CommunityAuthDialog
+              open={authDialogOpen}
+              onOpenChange={setAuthDialogOpen}
+              initialMode={authDialogMode}
+              referralCode={sharedReferralCode}
+              onAuthenticated={handleAuthenticated}
             />
 
             {/* Sidebar: everything below the feed on desktop, and below the

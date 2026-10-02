@@ -206,7 +206,7 @@ export function ReferralsSection() {
     { label: "People Referred", value: referredCount, icon: UserPlus },
     { label: "Total Clicks", value: stats?.total_clicks || 0, icon: MousePointer },
     { label: "Active Subscribers", value: activeSubscribers, icon: Crown },
-    { label: "Audit Credit Users", value: activeAuditUsers, icon: UserCheck },
+    { label: "Platform Credit Users", value: activeAuditUsers, icon: UserCheck },
   ];
 
   return (

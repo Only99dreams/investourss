@@ -40,7 +40,7 @@ interface Module {
   video_url: string | null;
   category: string | null;
   subcategory: string | null;
-  tier_required: "free" | "premium" | "exclusive";
+  tier_required: "free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b";
   is_published: boolean;
   order_index: number;
   created_at: string;
@@ -59,7 +59,7 @@ const EducationTab = () => {
   const [videoUrl, setVideoUrl] = useState("");
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
-  const [tierRequired, setTierRequired] = useState<"free" | "premium" | "exclusive">("free");
+  const [tierRequired, setTierRequired] = useState<"free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b">("free");
   const [isPublished, setIsPublished] = useState(true);
 
   useEffect(() => {
@@ -292,14 +292,17 @@ const EducationTab = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tier Required</Label>
-                  <Select value={tierRequired} onValueChange={(v: "free" | "premium" | "exclusive") => setTierRequired(v)}>
+                  <Select value={tierRequired} onValueChange={(v: "free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b") => setTierRequired(v)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="free">Free</SelectItem>
-                      <SelectItem value="premium">Premium</SelectItem>
-                      <SelectItem value="exclusive">Exclusive</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="biennial">Bi-annual</SelectItem>
+                      <SelectItem value="annual">Annual</SelectItem>
+                      <SelectItem value="b2b">B2B</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -411,9 +414,9 @@ const EducationTab = () => {
                     <TableCell>{module.category || "-"}</TableCell>
                     <TableCell>
                       <Badge variant={
-                        module.tier_required === "exclusive" ? "default" :
-                        module.tier_required === "premium" ? "secondary" :
-                        "outline"
+                        module.tier_required === "free" ? "outline" :
+                        module.tier_required === "monthly" ? "secondary" :
+                        "default"
                       }>
                         {module.tier_required}
                       </Badge>

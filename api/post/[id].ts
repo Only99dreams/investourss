@@ -147,6 +147,11 @@ function renderMedia(post: ShareablePost, poster: string | null): string {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const id = String(req.query.id ?? "").trim();
+  // A shared link carries the post owner's referral code. It is forwarded to the
+  // app URL so an unauthenticated visitor who signs up after voting is attributed
+  // to the owner, but deliberately kept OUT of the canonical URL: the canonical
+  // is one clean URL per post, while ?ref is per-share attribution.
+  const ref = String(req.query.ref ?? "").trim();
   const noStore = (status: number, message: string) => {
     res.setHeader("Cache-Control", "no-store");
     return res.status(status).send(
@@ -177,7 +182,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!post) return noStore(404, "This post is not available.");
 
   const canonicalUrl = `${SITE_URL}/post/${encodeURIComponent(post.id)}`;
-  const appUrl = `${SITE_URL}/community?post=${encodeURIComponent(post.id)}&autoplay=1`;
+  const appUrl =
+    `${SITE_URL}/community?post=${encodeURIComponent(post.id)}&autoplay=1` +
+    (ref ? `&ref=${encodeURIComponent(ref)}` : "");
 
   // Verified variant: an uploaded video's stored frame is only used if it
   // really exists. A post with no usable media resolves to no image at all, and

@@ -168,9 +168,9 @@ export function EducationSection() {
   const progressPercent = totalModules > 0 ? (completedCount / totalModules) * 100 : 0;
 
   const isModuleLocked = (module: Module) => {
-    // Check tier requirements
-    const tierOrder = ["free", "premium", "exclusive"];
-    const userTierIndex = tierOrder.indexOf(profile?.user_tier || "free");
+    // Check tier requirements - subscription categories
+    const tierOrder = ["free", "monthly", "quarterly", "biennial", "annual", "b2b"];
+    const userTierIndex = tierOrder.indexOf(profile?.subscription_type || "free");
     const requiredIndex = tierOrder.indexOf(module.tier_required);
     if (requiredIndex > userTierIndex) return true;
 
@@ -478,23 +478,34 @@ export function EducationSection() {
         onClick={() => handleStartModule(module)}
         >
           <CardHeader className="pb-3">
-            {module.thumbnail_url && (
-              <div className="aspect-video w-full rounded-lg overflow-hidden bg-muted mb-3">
-                <img
-                  src={module.thumbnail_url}
-                  alt={module.title}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
+            {(() => {
+              const thumb = getVideoThumbnail(module);
+              if (!thumb) return null;
+              return (
+                <div className="aspect-video w-full rounded-lg overflow-hidden bg-muted mb-3 relative group">
+                  <img
+                    src={thumb}
+                    alt={module.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  {module.video_url && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                      <div className="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
+                        <Play className="w-5 h-5 text-foreground ml-0.5" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div className="flex items-start justify-between">
               <Badge variant={
-                module.tier_required === "exclusive" ? "default" :
-                module.tier_required === "premium" ? "secondary" :
-                "outline"
+                module.tier_required === "free" ? "outline" :
+                module.tier_required === "monthly" ? "secondary" :
+                "default"
               }>
                 {module.tier_required.toUpperCase()}
               </Badge>

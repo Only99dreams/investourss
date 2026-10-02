@@ -198,7 +198,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
     if (access.credits_remaining > 0) {
       return {
         label: `${access.credits_remaining}`,
-        sub: `${access.credits_remaining} audit credit${access.credits_remaining === 1 ? "" : "s"} remaining.`,
+        sub: `${access.credits_remaining} platform credit${access.credits_remaining === 1 ? "" : "s"} remaining.`,
         button: "Get More Credits",
       };
     }
@@ -211,7 +211,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
     }
     return {
       label: "0",
-      sub: "No credits left — grab an Audit Credit Pack to keep auditing.",
+      sub: "No credits left — grab a Platform Credit Pack to keep auditing.",
       button: "Get More Credits",
     };
   }, [access]);
@@ -321,7 +321,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
         </motion.div>
       )}
 
-      {/* Audit Credits */}
+      {/* Platform Credits */}
       {!loading && (
         <div className="mb-8">
           <Card className="bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
@@ -331,7 +331,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
                   <Coins className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold">Audit Credits</p>
+                  <p className="text-sm font-semibold">Platform Credits</p>
                   <p className="text-lg font-bold text-primary leading-tight">{creditsInfo.label}</p>
                   <p className="text-xs text-muted-foreground">{creditsInfo.sub}</p>
                 </div>
@@ -529,7 +529,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
                 <div>
                   <p className="font-semibold">Keep your financial intelligence growing</p>
                   <p className="text-sm text-muted-foreground">
-                    Subscribe or grab an Audit Credit Pack to run unlimited / on-demand audits and unlock monitoring.
+                    Subscribe or grab a Platform Credit Pack to run unlimited / on-demand audits and unlock monitoring.
                   </p>
                 </div>
               </div>

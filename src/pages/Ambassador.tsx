@@ -31,7 +31,7 @@ const HowItWorksSteps = [
   {
     title: "Join the Ambassadors",
     description:
-      "Purchase an Audit Credit Pack (₦1,700) or Subscription (₦4,500) and gain access to Investours AI tools.",
+      "Purchase a Platform Credit Pack (₦1,700) or Subscription (₦4,500) and gain access to Investours AI tools.",
   },
   {
     title: "Teach Businesses & Individuals",
@@ -230,7 +230,7 @@ const AmbassadorApplyPage = () => {
                   ✅ An active Platform Subscription
                 </Badge>
                 <Badge variant="outline" className="text-base px-4 py-2">
-                  ✅ An active Audit Credit Pack
+                  ✅ An active Platform Credit Pack
                 </Badge>
               </div>
             </CardContent>
@@ -352,7 +352,7 @@ const AmbassadorApplyPage = () => {
                     ? "You're now an FHA member. Post in the FHA Chatroom below!"
                     : eligible
                       ? "You're eligible to activate your ambassador status."
-                      : "Maintain an active subscription or audit credits to qualify."}
+                      : "Maintain an active subscription or platform credits to qualify."}
                 </p>
               )}
             </CardContent>

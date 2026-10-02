@@ -21,7 +21,7 @@ import { Footer } from "@/components/ui/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { downloadDOCX, downloadPDF } from "@/lib/planExport";
+import { downloadPDF } from "@/lib/planExport";
 
 interface BusinessPlanForm {
   founderName: string;
@@ -263,6 +263,27 @@ const BusinessPlanGenerator = () => {
       if (score >= 0 && score <= 100) return score;
     }
     return 0;
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!generatedPlan) return;
+
+    // Premium users download for free; others pay 1 credit per download
+    if (!isPremium) {
+      const { data, error } = await supabase.rpc("consume_audit_credit");
+      if (error || !data?.success) {
+        toast({
+          title: "No Credits Available",
+          description: data?.message || "Upgrade to Premium or purchase a Platform Credit Pack to download.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Credit Used", description: "1 Platform Credit deducted for this download." });
+    }
+
+    trackEvent("attempted_download", { format: "pdf" });
+    downloadPDF(generatedPlan, form.businessName);
   };
 
   const handleSavePlan = async () => {
@@ -791,11 +812,8 @@ const BusinessPlanGenerator = () => {
                     {isSaving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : savePlanId ? <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
                     {savePlanId ? "Saved" : "Save Plan"}
                   </Button>
-                  <Button size="sm" variant="default" onClick={() => { trackEvent("attempted_download", { format: "pdf" }); downloadPDF(generatedPlan, form.businessName); }} disabled={!isPremium} title={!isPremium ? 'Upgrade to Premium to download PDF' : ''}>
-                    <Book className="w-3.5 h-3.5 mr-1.5" /> PDF {!isPremium && <Lock className="w-3 h-3 ml-1" />}
-                  </Button>
-                  <Button size="sm" variant="default" onClick={() => { trackEvent("attempted_download", { format: "docx" }); downloadDOCX(generatedPlan, form.businessName); }} disabled={!isPremium} title={!isPremium ? 'Upgrade to Premium to download DOCX' : ''}>
-                    <Download className="w-3.5 h-3.5 mr-1.5" /> DOCX {!isPremium && <Lock className="w-3 h-3 ml-1" />}
+                  <Button size="sm" variant="default" onClick={handleDownloadPDF} title={isPremium ? 'Download PDF' : 'Download PDF (1 Platform Credit)'}>
+                    <Book className="w-3.5 h-3.5 mr-1.5" /> PDF {!isPremium && <span className="text-xs ml-1">1 Credit</span>}
                   </Button>
                 </div>
               </CardContent>

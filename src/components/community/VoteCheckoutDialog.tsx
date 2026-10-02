@@ -137,7 +137,7 @@ export function VoteCheckoutDialog({
               "Your allowance refreshes at the start of every stage, and higher tiers get more votes. Pay here without leaving the community."}
             {view === "subscribe" && "Choose a plan, then complete payment below."}
             {view === "pack" &&
-              "Pay-as-you-go credits. Each pack also grants voting power for the stage."}
+              "Pay-as-you-go Platform Credits. Each pack also grants voting power for the stage. Prices exclude 7.5% VAT."}
           </DialogDescription>
         </DialogHeader>
 

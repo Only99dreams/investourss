@@ -44,7 +44,8 @@ const Vetting = () => {
   const [showQuickSurvey, setShowQuickSurvey] = useState(false);
   const [showDeepSurvey, setShowDeepSurvey] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const isPremium = profile?.user_tier === 'premium' || profile?.user_tier === 'exclusive';
   const navigate = useNavigate();
   const sessionId = useMemo(() => crypto.randomUUID(), []);
 
@@ -96,6 +97,20 @@ const Vetting = () => {
       });
       navigate('/auth?mode=login');
       return;
+    }
+
+    // Premium users get unlimited deep analysis; others pay 1 credit per analysis
+    if (!isPremium) {
+      const { data, error } = await supabase.rpc("consume_audit_credit");
+      if (error || !data?.success) {
+        toast({
+          title: "No Credits Available",
+          description: data?.message || "Upgrade to Premium or purchase a Platform Credit Pack to use deep analysis.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Credit Used", description: "1 Platform Credit deducted for this analysis." });
     }
 
     setIsAnalyzing(true);
@@ -303,6 +318,7 @@ const Vetting = () => {
                     </CardTitle>
                     <CardDescription>
                       Get comprehensive AI analysis of any investment opportunity.
+                      {!isPremium && " Uses 1 Platform Credit per analysis, or upgrade to Premium for unlimited access."}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

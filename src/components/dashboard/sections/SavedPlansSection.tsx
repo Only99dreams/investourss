@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Eye, Download, Trash2, Loader2, AlertCircle, BookOpen, Crown, Lock } from "lucide-react";
-import { downloadPDF, downloadDOCX } from "@/lib/planExport";
+import { downloadPDF } from "@/lib/planExport";
 import { cn } from "@/lib/utils";
 
 interface SavedPlan {
@@ -73,20 +73,21 @@ export function SavedPlansSection() {
     navigate("/business-plan", { state: { savedPlan: plan } });
   };
 
-  const handleDownloadPDF = (plan: SavedPlan) => {
+  const handleDownloadPDF = async (plan: SavedPlan) => {
+    // Premium users download for free; others pay 1 credit per download
     if (!isPremium) {
-      toast({ title: "Premium Feature", description: "Upgrade to Premium to download plans.", variant: "destructive" });
-      return;
+      const { data, error } = await supabase.rpc("consume_audit_credit");
+      if (error || !data?.success) {
+        toast({
+          title: "No Credits Available",
+          description: data?.message || "Upgrade to Premium or purchase a Platform Credit Pack to download.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "Credit Used", description: "1 Platform Credit deducted for this download." });
     }
     downloadPDF(plan.plan_content, plan.name);
-  };
-
-  const handleDownloadDOCX = (plan: SavedPlan) => {
-    if (!isPremium) {
-      toast({ title: "Premium Feature", description: "Upgrade to Premium to download plans.", variant: "destructive" });
-      return;
-    }
-    downloadDOCX(plan.plan_content, plan.name);
   };
 
   const remainingSlots = FREE_SAVE_LIMIT - plans.length;
@@ -122,7 +123,7 @@ export function SavedPlansSection() {
                   }
                 </p>
                 <p className="text-sm text-amber-700 mt-1.5 italic">
-                  Unlock <Lock className="w-3 h-3 inline-block align-text-top" /> Download (PDF/DOC) with{" "}
+                  Unlock <Lock className="w-3 h-3 inline-block align-text-top" /> Download (PDF) with{" "}
                   <strong className="not-italic">₦4,500 Premium Plan for a Month</strong>
                 </p>
               </div>
@@ -189,16 +190,6 @@ export function SavedPlansSection() {
                       >
                         {!isPremium ? <Lock className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5 sm:mr-1" />}
                         <span className="hidden sm:inline">{isPremium ? "PDF" : ""}</span>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDownloadDOCX(plan)}
-                        disabled={!isPremium}
-                        title={!isPremium ? "Upgrade to Premium to download" : "Download DOCX"}
-                      >
-                        {!isPremium ? <Lock className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5 sm:mr-1" />}
-                        <span className="hidden sm:inline">{isPremium ? "DOCX" : ""}</span>
                       </Button>
                       <Button
                         size="sm"

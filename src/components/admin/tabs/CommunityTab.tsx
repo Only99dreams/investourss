@@ -45,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, MessageSquare, CheckCircle, Eye, EyeOff, Trash2, Plus, Tag, ArrowUp, ArrowDown, GripVertical, Vote } from "lucide-react";
+import { Loader2, MessageSquare, CheckCircle, Eye, EyeOff, Trash2, Plus, Tag, ArrowUp, ArrowDown, GripVertical, Vote, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -76,6 +76,7 @@ interface VotingStage {
   name: string;
   stage_number: number;
   is_current: boolean;
+  category: string | null;
   opens_at: string | null;
   closes_at: string | null;
 }
@@ -183,7 +184,10 @@ const CommunityTab = () => {
   const [newCategoryColor, setNewCategoryColor] = useState("bg-gray-100 text-gray-800");
   const [stages, setStages] = useState<VotingStage[]>([]);
   const [newStageName, setNewStageName] = useState("");
+  const [newStageCategory, setNewStageCategory] = useState("");
   const [advancingStage, setAdvancingStage] = useState(false);
+  const [changeCategoryPostId, setChangeCategoryPostId] = useState<string | null>(null);
+  const [newCategoryValue, setNewCategoryValue] = useState("");
   const { toast } = useToast();
   const { user, roles, profile } = useAuth();
 
@@ -223,13 +227,17 @@ const CommunityTab = () => {
     }
     setAdvancingStage(true);
     try {
-      const { error } = await supabase.rpc("set_voting_stage", { p_name: name });
+      const { error } = await supabase.rpc("set_voting_stage", {
+        p_name: name,
+        p_category: newStageCategory || null,
+      });
       if (error) throw error;
       toast({
         title: `${name} is now open`,
         description: "Everyone's voting allowance has been refreshed for this stage.",
       });
       setNewStageName("");
+      setNewStageCategory("");
       await fetchStages();
     } catch (error) {
       console.error("Failed to advance stage:", error);
@@ -328,6 +336,18 @@ const CommunityTab = () => {
     } catch (error) {
       console.error("Error deleting post:", error);
       toast({ title: "Error", description: "Failed to delete post", variant: "destructive" });
+    }
+  };
+
+  const handleChangeCategory = async (postId: string, category: string) => {
+    try {
+      const { error } = await supabase.from("posts").update({ category }).eq("id", postId);
+      if (error) throw error;
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, category } : p));
+      toast({ title: "Category Updated" });
+      setChangeCategoryPostId(null);
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to update category.", variant: "destructive" });
     }
   };
 
@@ -469,7 +489,10 @@ const CommunityTab = () => {
                 >
                   <div>
                     <p className="text-sm font-medium">{s.name}</p>
-                    <p className="text-xs text-muted-foreground">Stage {s.stage_number}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Stage {s.stage_number}
+                      {s.category && <span className="ml-1 text-primary">· {s.category.replace(/_/g, " ")}</span>}
+                    </p>
                   </div>
                   {s.is_current ? (
                     <Badge>Open now</Badge>
@@ -490,6 +513,20 @@ const CommunityTab = () => {
                 placeholder="e.g. Stage 2"
                 disabled={advancingStage}
               />
+            </div>
+            <div className="w-40">
+              <Label className="sr-only">Category (optional)</Label>
+              <Select value={newStageCategory} onValueChange={setNewStageCategory}>
+                <SelectTrigger><SelectValue placeholder="All categories" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All categories</SelectItem>
+                  {categories
+                    .filter(c => c.name !== 'all')
+                    .map(cat => (
+                      <SelectItem key={cat.name} value={cat.name}>{cat.label}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
             <Button onClick={advanceStage} disabled={advancingStage || !newStageName.trim()}>
               {advancingStage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
@@ -659,7 +696,30 @@ const CommunityTab = () => {
                             <span className="text-xs text-muted-foreground">{post.author?.email}</span>
                           </TableCell>
                           <TableCell className="max-w-xs truncate">{post.content}</TableCell>
-                          <TableCell className="capitalize">{post.category?.replace("_", " ")}</TableCell>
+                          <TableCell className="capitalize">
+                            {changeCategoryPostId === post.id ? (
+                              <div className="flex items-center gap-1">
+                                <Select value={newCategoryValue || post.category} onValueChange={setNewCategoryValue}>
+                                  <SelectTrigger className="h-7 text-xs w-28 max-w-[9rem] min-w-0"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {categories.filter(c => c.name !== 'all').map(cat => (
+                                      <SelectItem key={cat.name} value={cat.name}>{cat.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button size="sm" className="h-7 px-2 text-xs" onClick={() => handleChangeCategory(post.id, newCategoryValue || post.category)}>Save</Button>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setChangeCategoryPostId(null)}>✕</Button>
+                              </div>
+                            ) : (
+                              <span
+                                className="cursor-pointer hover:text-primary"
+                                onClick={() => { setChangeCategoryPostId(post.id); setNewCategoryValue(post.category); }}
+                                title="Click to change category"
+                              >
+                                {post.category?.replace("_", " ")}
+                              </span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
                               {post.is_approved ? (

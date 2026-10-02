@@ -121,7 +121,7 @@ const AuditPacksTab = () => {
       <Card>
         <CardHeader className="pb-4">
           <CardTitle className="text-lg md:text-xl flex items-center gap-2">
-            <Package className="w-5 h-5" /> Audit Credit Packs
+            <Package className="w-5 h-5" /> Platform Credit Packs
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 md:px-6">
@@ -243,7 +243,7 @@ const AuditPacksTab = () => {
           <div className="grid gap-4 md:grid-cols-2 mt-4">
             <div>
               <Label>Description</Label>
-              <Input value={draft.description ?? ""} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="2 Audit Credits · Valid 30 Days" />
+              <Input value={draft.description ?? ""} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="2 Platform Credits · Valid 30 Days" />
             </div>
             <div className="flex items-end">
               <div className="flex items-center gap-2 mb-2">

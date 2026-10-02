@@ -163,7 +163,7 @@ export function FHAPortfolioSection() {
 
   const cards: PortfolioCardConfig[] = [
     {
-      title: "Active Audit Credit Pack Users",
+      title: "Active Platform Credit Pack Users",
       subtitle: "Individuals",
       icon: Package,
       accent: "bg-primary/10 text-primary",
@@ -171,7 +171,7 @@ export function FHAPortfolioSection() {
       data: packs.individuals,
     },
     {
-      title: "Active Audit Credit Pack Users",
+      title: "Active Platform Credit Pack Users",
       subtitle: "Businesses",
       icon: Building2,
       accent: "bg-accent/10 text-accent",

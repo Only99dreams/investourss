@@ -5,6 +5,7 @@ import { usePaystackPayment } from "react-paystack";
 import {
   CreditCard, Check, ArrowRight, Loader2, Coins, Clock, Info, Sparkles, Banknote, Copy, CheckCircle2, RefreshCw,
 } from "lucide-react";
+// Note: Banknote, Copy, CheckCircle2, RefreshCw are still used in the pending order payment card
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -29,17 +30,14 @@ interface CreditPack {
   sort_order: number;
 }
 
-interface PackOrder {
-  id: string;
-  pack_id: string;
-  pack_name: string;
-  credits: number;
-  amount: number;
-  vat_amount?: number;
-  reference: string;
-  status: string;
-  created_at: string;
-}
+/** Display name for each pack, regardless of what the database calls it. */
+const packDisplayName = (name: string): string => {
+  const lower = name.toLowerCase();
+  if (lower.includes("starter")) return "Starter Pack";
+  if (lower.includes("standard")) return "Standard Pack";
+  if (lower.includes("annual")) return "Annual Pack";
+  return name;
+};
 
 interface PaystackTransaction {
   reference?: string;
@@ -51,7 +49,6 @@ const AuditorPacks = () => {
   const { toast } = useToast();
 
   const [packs, setPacks] = useState<CreditPack[]>([]);
-  const [orders, setOrders] = useState<PackOrder[]>([]);
   const [access, setAccess] = useState<AuditAccess>(DEFAULT_ACCESS);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
@@ -62,20 +59,14 @@ const AuditorPacks = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const [packsRes, ordersRes, accessRes] = await Promise.all([
+      const [packsRes, accessRes] = await Promise.all([
         supabase.from("audit_credit_packs").select("id,name,description,credits,price,validity_days,sort_order").order("sort_order"),
-        supabase
-          .from("user_credit_packs")
-          .select("id,pack_name,credits,amount,reference,status,created_at")
-          .order("created_at", { ascending: false }),
         supabase.rpc("get_audit_access"),
       ]);
       if (packsRes.error) throw packsRes.error;
-      if (ordersRes.error) throw ordersRes.error;
       if (accessRes.error) throw accessRes.error;
 
       setPacks((packsRes.data ?? []) as CreditPack[]);
-      setOrders((ordersRes.data ?? []) as PackOrder[]);
       const a = Array.isArray(accessRes.data) ? accessRes.data[0] : accessRes.data;
       setAccess(a as AuditAccess);
     } catch (err) {
@@ -165,7 +156,7 @@ const AuditorPacks = () => {
       if (error) throw new Error(error.message);
 
       setActivationFailed(false);
-      toast({ title: "Audit Credits Activated!", description: "Your audit credits have been added to your account." });
+      toast({ title: "Platform Credits Activated!", description: "Your platform credits have been added to your account." });
       setPendingOrder(null);
       await loadData();
     } catch (err) {
@@ -189,7 +180,7 @@ const AuditorPacks = () => {
         if (ok) {
           setActivationFailed(false);
           toast({
-            title: "Audit Credits Activated!",
+            title: "Platform Credits Activated!",
             description: "Payment confirmed — your credits were activated automatically.",
           });
           setPendingOrder(null);
@@ -263,12 +254,12 @@ const AuditorPacks = () => {
           <Badge variant="outline" className="mb-3">
             <Coins className="w-3 h-3 mr-1" />
             {access.subscription_active
-              ? "Active subscription — audits unlimited"
+              ? "Active subscription — unlimited"
               : `${access.credits_remaining} credits available`}
           </Badge>
-          <h1 className="text-3xl md:text-4xl font-bold mb-3">Audit Credit Packs</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-3">Platform Credit Packs</h1>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Pay-as-you-go credits for on-demand AI financial audits. Manual audits consume one
+            Pay-as-you-go credits for on-demand AI financial checks. Manual checks consume one
             credit each — automatic monitoring never consumes credits.
           </p>
         </motion.div>
@@ -293,8 +284,8 @@ const AuditorPacks = () => {
                     </div>
                   )}
                   <CardHeader className="text-center">
-                    <CardTitle>{pack.name}</CardTitle>
-                    <CardDescription>{pack.description}</CardDescription>
+                    <CardTitle>{packDisplayName(pack.name)}</CardTitle>
+                    <CardDescription>{pack.description?.replace(/Audit/gi, "Platform")}</CardDescription>
                     <div className="mt-2">
                       <span className="text-3xl font-bold">₦{pack.price.toLocaleString()}</span>
                       <span className="text-muted-foreground text-sm"> one-time</span>
@@ -304,7 +295,7 @@ const AuditorPacks = () => {
                   <CardContent className="flex flex-col flex-1">
                     <ul className="space-y-2 text-sm flex-1 mb-4">
                       <li className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-green-500" /> {pack.credits} Audit Credits
+                        <Check className="w-4 h-4 text-green-500" /> {pack.credits} Credits
                       </li>
                       <li className="flex items-center gap-2">
                         <Clock className="w-4 h-4 text-primary" /> Valid {pack.validity_days} Days
@@ -324,7 +315,7 @@ const AuditorPacks = () => {
                       className="w-full mt-auto"
                     >
                       {purchasing === pack.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                      {purchasing === pack.id ? "Preparing…" : `Buy ${pack.name}`}
+                      {purchasing === pack.id ? "Preparing…" : `Buy ${packDisplayName(pack.name)}`}
                     </Button>
                   </CardContent>
                 </Card>
@@ -431,30 +422,7 @@ const AuditorPacks = () => {
           </Card>
         )}
 
-        {/* Orders list */}
-        {orders.length > 0 && (
-          <Card className="mb-10">
-            <CardHeader>
-              <CardTitle className="text-base">Your Pack Orders</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {orders.map((o) => (
-                <div key={o.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border bg-card/40">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{o.pack_name} · {o.credits} credits</p>
-                    <p className="text-xs text-muted-foreground font-mono truncate">{o.reference}</p>
-                  </div>
-                  <div className="text-left sm:text-right shrink-0">
-                    <p className="text-sm font-semibold">₦{o.amount.toLocaleString()}</p>
-                    <Badge variant={o.status === "active" ? "default" : o.status === "pending" ? "outline" : "secondary"} className="text-xs capitalize">
-                      {o.status}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+
 
         <div className="text-center">
           <p className="text-sm text-muted-foreground mb-2">Prefer unlimited access?</p>
@@ -464,7 +432,7 @@ const AuditorPacks = () => {
             </Link>
           </Button>
           <p className="text-xs text-muted-foreground mt-3">
-            Unlimited audits · Weekly monitoring · Financial Health Timeline · Unlimited reports · Priority support
+            Unlimited checks · Weekly monitoring · Financial Health Timeline · Unlimited reports · Priority support
           </p>
         </div>
       </main>

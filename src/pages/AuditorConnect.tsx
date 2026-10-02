@@ -327,7 +327,7 @@ const AuditorConnect = () => {
         clearInterval(stepTimer);
         toast({
           title: "Free audit used",
-          description: "Upgrade or grab an Audit Credit Pack to run another audit.",
+          description: "Upgrade or grab a Platform Credit Pack to run another audit.",
           variant: "destructive",
         });
         navigate("/auditor/packs");

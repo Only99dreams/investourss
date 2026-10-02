@@ -160,7 +160,7 @@ export function ContinuousReportingSection() {
             </div>
           </div>
           <Badge variant="outline" className="w-fit self-start sm:self-auto">
-            Never consumes audit credits
+            Never consumes platform credits
           </Badge>
         </div>
       </section>
@@ -174,7 +174,7 @@ export function ContinuousReportingSection() {
               <p className="text-xs text-muted-foreground">
                 {hasSubscription
                   ? "Financial health checks, new leakages, spending alerts & recovery opportunities every week."
-                  : "Monthly summaries while on audit credits. Upgrade for weekly."}
+                  : "Monthly summaries while on platform credits. Upgrade for weekly."}
               </p>
             </div>
           </CardContent>

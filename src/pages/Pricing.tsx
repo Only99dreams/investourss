@@ -1,10 +1,12 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { 
   Check, 
   ArrowRight,
   Mail,
-  Building2
+  Building2,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +14,23 @@ import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import { cn } from "@/lib/utils";
 import { Footer } from "@/components/ui/Footer";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { usePaystackPayment } from "react-paystack";
+import { useToast } from "@/hooks/use-toast";
+
+const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
+const VAT_RATE = 0.075;
+
+interface CreditPack {
+  id: string;
+  name: string;
+  description: string | null;
+  credits: number;
+  price: number;
+  validity_days: number;
+  sort_order: number;
+}
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -28,6 +47,88 @@ const staggerContainer = {
 };
 
 const Pricing = () => {
+  const { user, profile } = useAuth();
+  const { toast } = useToast();
+  const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
+  const [packsLoading, setPacksLoading] = useState(true);
+  const [b2bProcessing, setB2bProcessing] = useState(false);
+
+  useEffect(() => {
+    const fetchPacks = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("audit_credit_packs")
+          .select("id,name,description,credits,price,validity_days,sort_order")
+          .order("sort_order");
+        if (error) throw error;
+        setCreditPacks((data ?? []) as CreditPack[]);
+      } catch (err) {
+        console.error("Failed to fetch credit packs:", err);
+      } finally {
+        setPacksLoading(false);
+      }
+    };
+    fetchPacks();
+  }, []);
+
+  // ── B2B Paystack ───────────────────────────────────────────────────────────
+  const paystackHookConfig = {
+    publicKey: PAYSTACK_PUBLIC_KEY,
+    email: profile?.email ?? user?.email ?? "",
+    currency: "NGN" as const,
+  };
+  const initializePayment = usePaystackPayment(paystackHookConfig);
+
+  const handleB2BPayment = () => {
+    if (!user) {
+      toast({ title: "Login Required", description: "Please log in to continue.", variant: "destructive" });
+      return;
+    }
+    setB2bProcessing(true);
+    const reference = `INV-B2B-${user.id.slice(0, 8)}-${Date.now()}`;
+    const amount = 360000;
+    const vatAmount = Math.round(amount * VAT_RATE);
+    const totalWithVat = amount + vatAmount;
+    const amountKobo = Math.round(totalWithVat * 100);
+
+    initializePayment({
+      config: {
+        reference,
+        amount: amountKobo,
+        metadata: {
+          payment_type: "subscription",
+          user_id: user.id,
+          plan_type: "b2b_quarterly",
+          custom_fields: [
+            { display_name: "Plan", variable_name: "plan_type", value: "b2b_quarterly" },
+            { display_name: "User ID", variable_name: "user_id", value: user.id },
+          ],
+        },
+      },
+      onSuccess: async (transaction) => {
+        try {
+          const { error } = await supabase.rpc("activate_paystack_subscription", {
+            p_user_id: user.id,
+            p_reference: transaction.reference ?? reference,
+            p_plan_type: "b2b_quarterly",
+            p_amount_kobo: amountKobo,
+            p_promo_code_id: null,
+          });
+          if (error) throw error;
+          toast({ title: "B2B Subscription Activated!", description: "Your B2B plan is now active." });
+        } catch (err) {
+          toast({ title: "Activation Pending", description: "Payment received. We're confirming automatically…", variant: "destructive" });
+        } finally {
+          setB2bProcessing(false);
+        }
+      },
+      onClose: () => {
+        setB2bProcessing(false);
+        toast({ title: "Payment Cancelled", description: "You closed the payment window." });
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -72,7 +173,7 @@ const Pricing = () => {
               Individual & Business Plans
             </h2>
             <p className="text-muted-foreground">
-              Use Audit Credit Packs (pay-as-you-go) for on-demand AI audits and scam checks,
+              Use Platform Credit Packs (pay-as-you-go) for on-demand AI audits and scam checks,
               or upgrade to Premium for unlimited access to all tools, mentorship, and opportunities.
             </p>
           </motion.div>
@@ -84,76 +185,70 @@ const Pricing = () => {
             viewport={{ once: true }}
             className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto"
           >
-            {/* Audit Credit Packs */}
+            {/* Platform Credit Packs */}
             <motion.div variants={fadeInUp}>
               <Card variant="elevated" className="h-full border-2 border-border/50">
                 <CardHeader className="text-center pb-4">
-                  <CardTitle className="text-2xl font-bold">Audit Credit Packs</CardTitle>
+                  <CardTitle className="text-2xl font-bold">Platform Credit Packs</CardTitle>
                   <CardDescription className="text-base">
                     Pay-as-you-go credits for on-demand AI financial audits and scam checks.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
-                    {/* Starter */}
-                    <div className="bg-primary/10 rounded-lg p-4 border border-primary/20">
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm font-medium">Starter</span>
-                        <div className="text-right">
-                          <span className="text-xl font-bold text-foreground">₦1,700</span>
-                          <span className="text-sm text-muted-foreground"> one-time</span>
-                        </div>
+                    {packsLoading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
                       </div>
-                      <div className="text-xs text-muted-foreground mb-3">
-                        2 Audit Credits · Valid 30 Days
-                      </div>
-                      <Link to="/auditor/packs">
-                        <Button variant="default" className="w-full" size="sm">
-                          Get Credit Pack
-                        </Button>
-                      </Link>
-                    </div>
-
-                    {/* Standard */}
-                    <div className="bg-accent/10 rounded-lg p-4 border-2 border-accent/30 relative">
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm font-medium">Standard</span>
-                        <div className="text-right">
-                          <span className="text-xl font-bold text-foreground">₦6,800</span>
-                          <span className="text-sm text-muted-foreground"> one-time</span>
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-3">
-                        8 Audit Credits · Valid 90 Days
-                      </div>
-                      <Link to="/auditor/packs">
-                        <Button variant="accent" className="w-full" size="sm">
-                          Get Credit Pack
-                        </Button>
-                      </Link>
-                    </div>
-
-                    {/* Annual Pack */}
-                    <div className="bg-investours-gold/10 rounded-lg p-4 border-2 border-investours-gold/30 relative">
-                      <Badge className="absolute -top-2 -right-2 bg-investours-gold text-foreground">
-                        Best Value
-                      </Badge>
-                      <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm font-medium">Annual Pack</span>
-                        <div className="text-right">
-                          <span className="text-xl font-bold text-foreground">₦6,800</span>
-                          <span className="text-sm text-muted-foreground"> one-time</span>
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-3">
-                        32 Audit Credits · Valid 360 Days
-                      </div>
-                      <Link to="/auditor/packs">
-                        <Button variant="default" className="w-full bg-investours-gold hover:bg-investours-gold/90 text-foreground" size="sm">
-                          Get Credit Pack
-                        </Button>
-                      </Link>
-                    </div>
+                    ) : (
+                      creditPacks.map((pack, i) => {
+                        const isAnnual = pack.name.toLowerCase().includes("annual");
+                        const isStandard = pack.name.toLowerCase().includes("standard");
+                        return (
+                          <div
+                            key={pack.id}
+                            className={`rounded-lg p-4 border-2 relative ${
+                              isAnnual
+                                ? "bg-investours-gold/10 border-investours-gold/30"
+                                : isStandard
+                                ? "bg-accent/10 border-accent/30"
+                                : "bg-primary/10 border-primary/20"
+                            }`}
+                          >
+                            {isAnnual && (
+                              <Badge className="absolute -top-2 -right-2 bg-investours-gold text-foreground">
+                                Best Value
+                              </Badge>
+                            )}
+                            <div className="flex items-baseline justify-between mb-2">
+                              <span className="text-sm font-medium">
+                                {pack.name.toLowerCase().includes("starter")
+                                  ? "Starter Credit Pack"
+                                  : pack.name.toLowerCase().includes("standard")
+                                  ? "Standard Credit Pack"
+                                  : "Annual Credit Pack"}
+                              </span>
+                              <div className="text-right">
+                                <span className="text-xl font-bold text-foreground">₦{pack.price.toLocaleString()}</span>
+                                <span className="text-sm text-muted-foreground"> one-time</span>
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground mb-3">
+                              {pack.credits} Platform Credits · Valid {pack.validity_days} Days
+                            </div>
+                            <Link to="/auditor/packs">
+                              <Button
+                                variant={isAnnual ? "default" : isStandard ? "accent" : "default"}
+                                className={`w-full ${isAnnual ? "bg-investours-gold hover:bg-investours-gold/90 text-foreground" : ""}`}
+                                size="sm"
+                              >
+                                Get Credit Pack
+                              </Button>
+                            </Link>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
 
                   <ul className="space-y-2 pt-2">
@@ -208,6 +303,9 @@ const Pricing = () => {
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
+                      <div className="text-xs text-muted-foreground mb-3">
+                        1 vote per stage
+                      </div>
                       <Link to="/subscribe?plan=premium-monthly">
                         <Button variant="default" className="w-full" size="sm">
                           Upgrade Now
@@ -226,6 +324,9 @@ const Pricing = () => {
                           <span className="text-sm text-muted-foreground"> / 3 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground mb-3">
+                        2 votes per stage
                       </div>
                       <Link to="/subscribe?plan=premium-quarterly">
                         <Button variant="accent" className="w-full" size="sm">
@@ -246,6 +347,9 @@ const Pricing = () => {
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
+                      <div className="text-xs text-muted-foreground mb-3">
+                        3 votes per stage
+                      </div>
                       <Link to="/subscribe?plan=premium-biennial">
                         <Button variant="accent" className="w-full" size="sm">
                           Upgrade Now
@@ -264,6 +368,9 @@ const Pricing = () => {
                           <span className="text-sm text-muted-foreground"> / year</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground mb-3">
+                        4 votes per stage
                       </div>
                       <Link to="/subscribe?plan=premium-annual">
                         <Button variant="default" className="w-full bg-investours-gold hover:bg-investours-gold/90 text-foreground" size="sm">
@@ -284,17 +391,28 @@ const Pricing = () => {
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
-                      <Link to="/subscribe?plan=b2b-quarterly">
-                        <Button variant="default" className="w-full" size="sm">
-                          Upgrade Now
-                        </Button>
-                      </Link>
+                      <Button
+                        variant="default"
+                        className="w-full"
+                        size="sm"
+                        onClick={handleB2BPayment}
+                        disabled={b2bProcessing}
+                      >
+                        {b2bProcessing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Processing…
+                          </>
+                        ) : (
+                          "Upgrade Now"
+                        )}
+                      </Button>
                     </div>
                   </div>
 
                   {/* Features */}
                   <div className="border-t border-border pt-4">
-                    <p className="text-sm font-semibold mb-3">All Audit Credit Pack features, plus:</p>
+                    <p className="text-sm font-semibold mb-3">All Platform Credit Pack features, plus:</p>
                     <ul className="space-y-2">
                       <li className="flex items-start gap-2">
                         <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
@@ -302,7 +420,7 @@ const Pricing = () => {
                       </li>
                       <li className="flex items-start gap-2">
                         <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                        <span className="text-sm">Download Business Plans (PDF &amp; DOC)</span>
+                        <span className="text-sm">Download Business Plans (PDF)</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />

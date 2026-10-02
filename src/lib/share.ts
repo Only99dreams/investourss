@@ -86,6 +86,21 @@ export function postShareText(
   return `Check out this post from Investours Opportunity Hub: "${preview}"\n\n${pageUrl}`;
 }
 
+/**
+ * Build a share URL that carries the post owner's referral code.
+ * If the recipient is not signed up, they'll be redirected to signup
+ * with the referral code preserved.
+ */
+export function buildReferralShareUrl(
+  postId: string,
+  referralCode: string | null | undefined,
+): string {
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "https://investours.app";
+  const refParam = referralCode ? `?ref=${encodeURIComponent(referralCode)}` : "";
+  return `${origin}/post/${encodeURIComponent(postId)}${refParam}`;
+}
+
 /** Link-preview description for a post. */
 export function postOgDescription(
   post: { category?: string | null; content?: string | null } | undefined | null,

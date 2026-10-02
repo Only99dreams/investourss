@@ -40,7 +40,7 @@ interface CreditPackCheckoutProps {
 }
 
 /**
- * Buys an audit credit pack without leaving the page.
+ * Buys a platform credit pack without leaving the page.
  *
  * Mirrors the flow on AuditorPacks so there is one behaviour, not two: reserve
  * an order, charge the card through Paystack, then activate. The client's
@@ -239,18 +239,21 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 text-sm font-semibold">
                     <Coins className="w-4 h-4 text-primary" />
-                    {pack.name}
+                    {pack.name.replace(/Audit/gi, "Platform")}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {pack.credits} credits &middot; valid {pack.validity_days} days
                   </p>
                   {pack.description && (
-                    <p className="mt-1 text-xs text-muted-foreground">{pack.description}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{pack.description.replace(/Audit/gi, "Platform")}</p>
                   )}
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold">
                     ₦{Number(pack.price).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    + ₦{Math.round(pack.price * VAT_RATE).toLocaleString()} VAT (7.5%)
                   </p>
                   {votes > 0 && (
                     <Badge variant="secondary" className="mt-1">
@@ -269,7 +272,7 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
                 ) : (
                   <CheckCircle2 className="w-4 h-4 mr-2" />
                 )}
-                {purchasing === pack.id ? "Opening payment…" : `Buy ${pack.name}`}
+                {purchasing === pack.id ? "Opening payment…" : `Buy ${pack.name.replace(/Audit/gi, "Platform")}`}
               </Button>
             </div>
           );

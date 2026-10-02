@@ -481,7 +481,7 @@ const FHAChatroom = () => {
                   Become a Financial Health Ambassador
                 </CardTitle>
                 <CardDescription>
-                  Maintain an active subscription or an audit credit pack to access the FHA Chatroom.
+                  Maintain an active subscription or a platform credit pack to access the FHA Chatroom.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -784,7 +784,7 @@ const FHAChatroom = () => {
                 <div className="space-y-3 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <Shield className="w-4 h-4 text-primary" />
-                    <span>Active subscription or Audit Credits required</span>
+                    <span>Active subscription or Platform Credits required</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-primary" />

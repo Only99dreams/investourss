@@ -189,7 +189,7 @@ const AuditorLanding = () => {
                       <Link to="/subscribe">Subscribe</Link>
                     </Button>
                     <Button asChild size="sm" variant="outline" className="w-full whitespace-normal">
-                      <Link to="/auditor/packs">Or buy Audit Credits from ₦1,700</Link>
+                      <Link to="/auditor/packs">Or buy Platform Credits from ₦1,700</Link>
                     </Button>
                   </div>
                 </div>
