@@ -11,3 +11,8 @@ verify_jwt = false
 
 [functions."mail-oauth"]
 verify_jwt = false
+
+# Payment activation is server-verified: the caller's JWT is required so the
+# function can confirm the Paystack charge belongs to them.
+[functions."verify-payment"]
+verify_jwt = true

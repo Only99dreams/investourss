@@ -107,12 +107,10 @@ const Pricing = () => {
       },
       onSuccess: async (transaction) => {
         try {
-          const { error } = await supabase.rpc("activate_paystack_subscription", {
-            p_user_id: user.id,
-            p_reference: transaction.reference ?? reference,
-            p_plan_type: "b2b_quarterly",
-            p_amount_kobo: amountKobo,
-            p_promo_code_id: null,
+          // Activation is server-verified: the edge function confirms the
+          // charge with Paystack and reads the plan from the recorded metadata.
+          const { error } = await supabase.functions.invoke("verify-payment", {
+            body: { reference: transaction.reference ?? reference },
           });
           if (error) throw error;
           toast({ title: "B2B Subscription Activated!", description: "Your B2B plan is now active." });

@@ -144,14 +144,14 @@ const AuditorPacks = () => {
     return false;
   };
 
-  const activatePack = async (reference: string, amountKobo: number) => {
+  const activatePack = async (reference: string, _amountKobo: number) => {
     if (!user) return;
     setActivating(true);
     try {
-      const { error } = await supabase.rpc("activate_audit_pack_payment", {
-        p_user_id: user.id,
-        p_reference: reference,
-        p_amount_kobo: amountKobo,
+      // Service-role only RPC is reached through this verified function, which
+      // confirms the charge with Paystack before granting credits.
+      const { error } = await supabase.functions.invoke("verify-payment", {
+        body: { reference },
       });
       if (error) throw new Error(error.message);
 

@@ -102,14 +102,15 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
   }, []);
 
   const activate = useCallback(
-    async (reference: string, amountKobo: number) => {
+    async (reference: string, _amountKobo: number) => {
       if (!user) return;
       setActivating(true);
       try {
-        const { error } = await supabase.rpc("activate_audit_pack_payment", {
-          p_user_id: user.id,
-          p_reference: reference,
-          p_amount_kobo: amountKobo,
+        // Activation is service-role only; the edge function verifies the
+        // charge with Paystack first, so a fabricated reference cannot mint
+        // free credits or free voting power.
+        const { error } = await supabase.functions.invoke("verify-payment", {
+          body: { reference },
         });
         if (error) throw new Error(error.message);
 

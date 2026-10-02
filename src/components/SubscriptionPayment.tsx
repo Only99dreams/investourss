@@ -153,12 +153,11 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
       if (!user) return;
       setActivating(true);
       try {
-        const { data, error } = await supabase.rpc('activate_paystack_subscription', {
-          p_user_id: user.id,
-          p_reference: reference,
-          p_plan_type: planType,
-          p_amount_kobo: pricing.finalTotalKobo,
-          p_promo_code_id: appliedPromo?.promo_code_id ?? null,
+        // Activation is service-role only; this edge function verifies the
+        // charge with Paystack before granting premium, so a fabricated
+        // reference cannot buy free access (or free voting power).
+        const { error } = await supabase.functions.invoke("verify-payment", {
+          body: { reference },
         });
 
         if (error) throw error;
@@ -210,7 +209,7 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
         setActivating(false);
       }
     },
-    [user, planType, pricing.finalTotalKobo, appliedPromo, currentPlan.name, onSuccess, refreshProfile, toast, waitForActivation]
+    [user, currentPlan.name, onSuccess, refreshProfile, toast, waitForActivation]
   );
 
   // ── Free subscription (100% promo) ───────────────────────────────────────
