@@ -170,6 +170,59 @@ export async function fetchLeaderboard(
   return (data ?? []) as LeaderboardEntry[];
 }
 
+/** A voting stage that has ended, for the admin closed-votes view. */
+export interface ClosedStage {
+  stage_id: string;
+  stage_name: string;
+  stage_number: number;
+  stage_category: string | null;
+  opens_at: string | null;
+  closes_at: string | null;
+  total_votes: number;
+  total_posts_voted: number;
+}
+
+/** Every closed stage, newest first. Empty when the RPC/migration is absent. */
+export async function fetchClosedStages(category?: string): Promise<ClosedStage[]> {
+  try {
+    const { data, error } = await supabase.rpc("get_closed_stages", {
+      p_category: category ?? null,
+    });
+    if (error) {
+      console.warn("Closed stages unavailable:", error.message);
+      return [];
+    }
+    return (data ?? []) as ClosedStage[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Final standings for one closed stage. Admin-only server-side, so a failure
+ * (including a non-admin caller) resolves to an empty board rather than an
+ * error the UI would have to special-case.
+ */
+export async function fetchStageLeaderboard(
+  stageId: string,
+  limit = 50,
+): Promise<LeaderboardEntry[]> {
+  try {
+    const { data, error } = await supabase.rpc("get_stage_leaderboard", {
+      p_stage_id: stageId,
+      p_limit: limit,
+    });
+    if (error) {
+      console.warn("Stage leaderboard unavailable:", error.message);
+      return [];
+    }
+    return (data ?? []) as LeaderboardEntry[];
+  } catch {
+    return [];
+  }
+}
+
+
 /** Categories that have at least one vote, so empty leaderboards stay hidden. */
 export async function fetchVotedCategories(): Promise<{ category: string; total_votes: number }[]> {
   try {

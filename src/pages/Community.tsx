@@ -33,7 +33,6 @@ import {
   Leaf,
   TrendingUp,
   Vote,
-  Clock,
   Instagram
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -180,7 +179,6 @@ const Community = () => {
   const [votingPostId, setVotingPostId] = useState<string | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [currentStage, setCurrentStage] = useState<{ name: string; number: number; category: string | null } | null>(null);
-  const [closedStages, setClosedStages] = useState<{ stage_id: string; stage_name: string; stage_number: number; stage_category: string | null; opens_at: string | null; closes_at: string | null; total_votes: number; total_posts_voted: number }[]>([]);
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>({});
   const [newCommentMap, setNewCommentMap] = useState<Record<string, string>>({});
@@ -348,12 +346,7 @@ const Community = () => {
 
   const fetchStageData = useCallback(async () => {
     const category = activeCategory !== "all" ? activeCategory : undefined;
-    const [stage, closed] = await Promise.all([
-      fetchVotingStage(category),
-      supabase.rpc("get_closed_stages", { p_category: category ?? null }).then(({ data }) => data ?? []),
-    ]);
-    setCurrentStage(stage);
-    setClosedStages(closed as typeof closedStages);
+    setCurrentStage(await fetchVotingStage(category));
   }, [activeCategory]);
 
   const handleVote = async (postId: string, amount: number) => {
@@ -1303,50 +1296,6 @@ const Community = () => {
                           </p>
                         )}
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-
-            {/* Closed Votes History */}
-            {closedStages.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-6"
-              >
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-muted-foreground" />
-                      Closed Votes History
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-2">
-                      {closedStages.map((stage) => (
-                        <div
-                          key={stage.stage_id}
-                          className="flex items-center justify-between rounded-lg border px-3 py-2 bg-muted/30"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">{stage.stage_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Stage {stage.stage_number}
-                              {stage.stage_category && (
-                                <span className="ml-1">· {stage.stage_category.replace(/_/g, " ")}</span>
-                              )}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <Badge variant="secondary" className="text-xs">Closed</Badge>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {stage.total_votes} vote{stage.total_votes !== 1 ? "s" : ""} · {stage.total_posts_voted} post{stage.total_posts_voted !== 1 ? "s" : ""}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
                     </div>
                   </CardContent>
                 </Card>

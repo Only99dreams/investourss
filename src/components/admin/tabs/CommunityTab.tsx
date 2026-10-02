@@ -48,6 +48,7 @@ import {
 import { Loader2, MessageSquare, CheckCircle, Eye, EyeOff, Trash2, Plus, Tag, ArrowUp, ArrowDown, GripVertical, Vote, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { ClosedVotesPanel } from "@/components/admin/ClosedVotesPanel";
 
 const ICON_OPTIONS = ["Banknote", "Briefcase", "Handshake", "Rocket", "GraduationCap", "Calendar", "Megaphone", "Tag"];
 const COLOR_OPTIONS = [
@@ -539,6 +540,10 @@ const CommunityTab = () => {
           </p>
         </CardContent>
       </Card>
+
+      {/* Closed-stage results. Moved off the user-facing community page; the
+          backing RPC is admin-only, so this is gated to admins here too. */}
+      {isAdmin && <ClosedVotesPanel />}
 
       {/* Category Management */}
       <Card>
