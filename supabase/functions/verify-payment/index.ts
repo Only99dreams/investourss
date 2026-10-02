@@ -63,12 +63,15 @@ serve(async (req) => {
   if (!reference) return json({ error: "reference is required" }, 400);
 
   // Identify the caller. The client passes its session token automatically via
-  // functions.invoke, so this is who is making the claim.
+  // functions.invoke; verify_jwt ensures a valid token is present, and this
+  // resolves who it belongs to.
   const authHeader = req.headers.get("Authorization") ?? "";
-  const callerClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: userData, error: userError } = await callerClient.auth.getUser();
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    return json({ error: "Sign in to complete this payment." }, 401);
+  }
+  const callerClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") ?? "");
+  const { data: userData, error: userError } = await callerClient.auth.getUser(token);
   if (userError || !userData?.user) {
     return json({ error: "Sign in to complete this payment." }, 401);
   }
