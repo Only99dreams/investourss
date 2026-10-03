@@ -176,3 +176,40 @@ $$;
 
 REVOKE ALL ON FUNCTION public.update_competition(UUID, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.update_competition(UUID, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ, INTEGER) TO authenticated, service_role;
+
+-- ------------------------------------------------------------------
+-- 4. Keep the leaderboard visible for every running competition
+-- ------------------------------------------------------------------
+-- get_voted_categories only listed categories that had at least one vote.
+-- Right after a new stage opens the scoreboard is zero, so it returned
+-- nothing and hid the leaderboard entirely. Include every category with a
+-- currently open competition, even at zero votes.
+CREATE OR REPLACE FUNCTION public.get_voted_categories()
+RETURNS TABLE (category TEXT, total_votes INTEGER)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH voted AS (
+    SELECT p.category, sum(pv.amount)::INTEGER AS total
+    FROM public.post_votes pv
+    JOIN public.posts p ON p.id = pv.post_id
+    JOIN public.get_current_voting_stage(p.category) s ON s.stage_id = pv.stage_id
+    WHERE p.is_approved AND NOT p.is_hidden
+    GROUP BY p.category
+  ),
+  open_cats AS (
+    SELECT DISTINCT category
+    FROM public.voting_stages
+    WHERE is_current AND category IS NOT NULL
+  )
+  SELECT o.category, COALESCE(v.total, 0)::INTEGER
+  FROM open_cats o
+  LEFT JOIN voted v ON v.category = o.category
+  ORDER BY COALESCE(v.total, 0) DESC, o.category;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_voted_categories() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_voted_categories() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_voted_categories() TO anon;
