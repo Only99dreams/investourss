@@ -1403,20 +1403,27 @@ const Community = () => {
                 the same time, so list them all. The one already featured in
                 the Current Voting Stage banner below is skipped so it does
                 not appear twice on the page. */}
-            {openCompetitions.length > 0 && (
+            {openCompetitions.filter((comp) =>
+              activeCategory === "all"
+                ? true
+                : comp.category === activeCategory &&
+                  !(currentStage && comp.id === currentStage.id),
+            ).length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mb-6 space-y-3"
               >
                 {openCompetitions
-                  .filter(
-                    (comp) =>
-                      // The featured banner shows this stage's competition, so
-                      // leave it out of the list. Match by id first (a legacy
-                      // global stage has no category to compare), then by the
-                      // active category as a fallback.
-                      !(currentStage && activeCategory !== "all" && (comp.id === currentStage.id || comp.category === activeCategory)),
+                  .filter((comp) =>
+                    // Once a category is selected, only that category's
+                    // competitions are listed; the one already featured in
+                    // the Current Voting Stage banner is excluded so it
+                    // doesn't show twice. "All Posts" lists everything.
+                    activeCategory === "all"
+                      ? true
+                      : comp.category === activeCategory &&
+                        !(currentStage && comp.id === currentStage.id),
                   )
                   .map((comp) => (
                   <Card key={comp.id} className="border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5">
@@ -1453,8 +1460,12 @@ const Community = () => {
               </motion.div>
             )}
 
-            {/* Current Stage Banner - visible at the front */}
-            {currentStage && activeCategory !== "all" && (
+            {/* Current Stage Banner - only for a category's own competition.
+                The get_current_voting_stage RPC can fall back to a legacy
+                global stage for a category that has no current one; without
+                the category match check, that same stage banner would appear
+                under every filter. */}
+            {currentStage && activeCategory !== "all" && currentStage.category === activeCategory && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}

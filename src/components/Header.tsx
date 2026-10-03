@@ -285,28 +285,6 @@ const Header = () => {
             >
               Pricing
             </Link>
-            <div className="border-t border-border my-2" />
-            <Link 
-              to="/learning" 
-              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Learning
-            </Link>
-            <Link 
-              to="/vetting" 
-              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Scam Detector
-            </Link>
-            <Link 
-              to="/investing" 
-              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Safe Offers
-            </Link>
             {user && isAdmin && (
               <Link 
                 to="/admin" 
