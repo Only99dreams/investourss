@@ -71,6 +71,18 @@ BEGIN
   VALUES (p_name, p_category, v_number, TRUE, p_opens_at, p_closes_at)
   RETURNING id INTO v_id;
 
+  -- A new stage starts a fresh scoreboard: votes cast under the old stage
+  -- stay tied to that stage, but the live counters for this category's posts
+  -- reset to zero. Other categories are untouched.
+  UPDATE public.posts p
+  SET votes_count = COALESCE((
+        SELECT sum(pv.amount)::INTEGER
+        FROM public.post_votes pv
+        JOIN public.get_current_voting_stage(p.category) s ON s.stage_id = pv.stage_id
+        WHERE pv.post_id = p.id
+      ), 0)
+  WHERE p.category = p_category;
+
   RETURN v_id;
 END;
 $$;
