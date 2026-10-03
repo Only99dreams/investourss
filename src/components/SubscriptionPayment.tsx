@@ -303,6 +303,7 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
                     'Unlimited AI Business Plan Generator',
                     'Unlimited AI Financial Tutor access',
                     'Unlimited Scam Detector access',
+                    'AI Financial Auditor',
                     'Premium educational content',
                     'Priority support',
                   ].map((f) => (

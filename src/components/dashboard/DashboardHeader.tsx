@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { Coins } from "lucide-react";
 
 interface DashboardHeaderProps {
   title: string;
@@ -16,6 +17,43 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
   const { profile, user } = useAuth();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [payg, setPayg] = useState<{ label: string; credits: number } | null>(null);
+
+  // Pay-as-you-go status shown beside the user's current-plan pill: which
+  // pack tier they hold and how many credits remain.
+  useEffect(() => {
+    const uid = user?.id ?? profile?.id;
+    if (!uid) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("user_credit_packs")
+        .select("pack_name, credits_remaining, expires_at")
+        .eq("user_id", uid)
+        .eq("status", "active");
+      if (cancelled) return;
+      const now = Date.now();
+      const active = (data ?? []).filter(
+        (p: { expires_at: string | null }) => !p.expires_at || new Date(p.expires_at).getTime() > now,
+      );
+      const credits = active.reduce(
+        (sum: number, p: { credits_remaining: number | null }) => sum + (p.credits_remaining ?? 0),
+        0,
+      );
+      const best = [...active].sort(
+        (a: { credits_remaining: number | null }, b: { credits_remaining: number | null }) =>
+          (b.credits_remaining ?? 0) - (a.credits_remaining ?? 0),
+      )[0] as { pack_name?: string } | undefined;
+      setPayg(
+        active.length > 0
+          ? { label: best?.pack_name ?? "Pay-as-you-go", credits }
+          : { label: "No active pack", credits: 0 },
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, profile?.id]);
 
   useEffect(() => {
     const fetchUnreadCount = async () => {
@@ -122,7 +160,7 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
 
           <div className={cn(
             "px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1",
-            profile?.user_tier === "premium" ? 
+            profile?.user_tier === "premium" ?
               profile?.subscription_type === "annual" ? "bg-investours-gold/20 text-investours-gold" :
               profile?.subscription_type === "biennial" ? "bg-accent/20 text-accent" :
               profile?.subscription_type === "quarterly" ? "bg-primary/20 text-primary" :
@@ -137,6 +175,17 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
               </span>
             )}
           </div>
+
+          {payg && (
+            <div
+              className="px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 bg-gold/10 text-gold"
+              title={`Pay-as-you-go: ${payg.label}`}
+            >
+              <Coins className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">{payg.label} · </span>
+              {payg.credits} cr
+            </div>
+          )}
         </div>
       </div>
     </header>

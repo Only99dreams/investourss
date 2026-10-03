@@ -62,9 +62,72 @@ const EducationTab = () => {
   const [tierRequired, setTierRequired] = useState<"free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b">("free");
   const [isPublished, setIsPublished] = useState(true);
 
+  // Categories are managed in the CMS rather than hard-coded: admins can
+  // add new ones from this dialog and delete ones they no longer use.
+  const [categoryOptions, setCategoryOptions] = useState<{ id: string; name: string }[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryBusy, setCategoryBusy] = useState(false);
+
   useEffect(() => {
     fetchModules();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    const { data, error } = await supabase
+      .from("content_categories")
+      .select("id, name")
+      .order("name");
+
+    if (error) {
+      // The table is unreachable on this environment; fall back to the
+      // historical defaults so module uploads still work.
+      setCategoryOptions(
+        ["Investment Basics", "Financial Literacy", "Climate Finance", "Risk Management", "Scam Prevention", "SDG Investing", "Platform Guide"]
+          .map((name, i) => ({ id: `fallback-${i}`, name })),
+      );
+      return;
+    }
+    setCategoryOptions((data ?? []) as { id: string; name: string }[]);
+  };
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    if (categoryOptions.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+      toast.error("That category already exists");
+      return;
+    }
+    setCategoryBusy(true);
+    const { error } = await supabase.from("content_categories").insert({ name });
+    setCategoryBusy(false);
+    if (error) {
+      toast.error("Failed to add category");
+      return;
+    }
+    setNewCategoryName("");
+    setCategory(name);
+    toast.success("Category added");
+    fetchCategories();
+  };
+
+  const handleDeleteCategory = async (cat: { id: string; name: string }) => {
+    if (cat.id.startsWith("fallback-")) {
+      toast.error("Categories cannot be deleted while offline");
+      return;
+    }
+    if (!confirm(`Delete the category "${cat.name}"?`)) return;
+    setCategoryBusy(true);
+    const { error } = await supabase.from("content_categories").delete().eq("id", cat.id);
+    setCategoryBusy(false);
+    if (error) {
+      toast.error("Failed to delete category");
+      return;
+    }
+    if (category === cat.name) setCategory("");
+    toast.success("Category deleted");
+    fetchCategories();
+  };
 
   const fetchModules = async () => {
     const { data, error } = await supabase
@@ -182,16 +245,6 @@ const EducationTab = () => {
     fetchModules();
   };
 
-  const categories = [
-    "Investment Basics",
-    "Financial Literacy",
-    "Climate Finance",
-    "Risk Management",
-    "Scam Prevention",
-    "SDG Investing",
-    "Platform Guide",
-  ];
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -269,13 +322,48 @@ const EducationTab = () => {
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
+                      {categoryOptions.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.name}>
+                          {cat.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {/* Add / delete categories without leaving the upload form */}
+                  <div className="flex gap-2 pt-1">
+                    <Input
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="New category name"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleAddCategory();
+                        }
+                      }}
+                    />
+                    <Button type="button" size="sm" variant="outline" disabled={categoryBusy || !newCategoryName.trim()} onClick={() => void handleAddCategory()}>
+                      Add
+                    </Button>
+                  </div>
+                  {categoryOptions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {categoryOptions.map((cat) => (
+                        <Badge key={cat.id} variant="secondary" className="gap-1 py-1">
+                          {cat.name}
+                          <button
+                            type="button"
+                            className="ml-1 text-muted-foreground hover:text-destructive"
+                            aria-label={`Delete category ${cat.name}`}
+                            disabled={categoryBusy}
+                            onClick={() => void handleDeleteCategory(cat)}
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">

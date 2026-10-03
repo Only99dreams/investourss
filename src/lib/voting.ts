@@ -110,12 +110,12 @@ export async function fetchVotingPower(category?: string): Promise<VotingPower |
   return firstRow<VotingPower>(data);
 }
 
-export async function fetchVotingStage(category?: string): Promise<{ name: string; number: number; category: string | null } | null> {
+export async function fetchVotingStage(category?: string): Promise<{ id: string; name: string; number: number; category: string | null } | null> {
   try {
     const { data, error } = await supabase.rpc("get_current_voting_stage", { p_category: category ?? null });
     if (error) return null;
-    const row = firstRow<{ stage_name: string; stage_number: number; stage_category: string | null }>(data);
-    return row ? { name: row.stage_name, number: row.stage_number, category: row.stage_category } : null;
+    const row = firstRow<{ stage_id: string; stage_name: string; stage_number: number; stage_category: string | null }>(data);
+    return row ? { id: row.stage_id, name: row.stage_name, number: row.stage_number, category: row.stage_category } : null;
   } catch {
     return null;
   }

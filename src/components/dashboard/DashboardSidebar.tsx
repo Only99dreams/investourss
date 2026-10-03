@@ -1,6 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   User, Wallet, GraduationCap, TrendingUp, FileText, Users, 
   Settings, Bell, MessageSquare, AlertCircle, Share2, Trophy,
@@ -33,6 +35,36 @@ export function DashboardSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, signOut, isAdmin } = useAuth();
+  const [payg, setPayg] = useState<{ label: string; credits: number } | null>(null);
+
+  // Pay-as-you-go status: which credit pack tier the member holds and how
+  // many credits remain, surfaced next to their current plan.
+  useEffect(() => {
+    if (!profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("user_credit_packs")
+        .select("pack_name, credits_remaining, status, expires_at")
+        .eq("user_id", profile.id)
+        .eq("status", "active");
+      if (cancelled) return;
+      const now = Date.now();
+      const active = (data ?? []).filter(
+        (p) => !p.expires_at || new Date(p.expires_at).getTime() > now,
+      );
+      if (active.length === 0) {
+        setPayg(null);
+        return;
+      }
+      const best = [...active].sort((a, b) => (b.credits_remaining ?? 0) - (a.credits_remaining ?? 0))[0];
+      const credits = active.reduce((sum, p) => sum + (p.credits_remaining ?? 0), 0);
+      setPayg({ label: best.pack_name, credits });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -63,6 +95,14 @@ export function DashboardSidebar() {
             )}>
               {profile?.user_tier?.toUpperCase() || "FREE"}
             </span>
+            {payg && (
+              <div className="mt-2 text-xs text-muted-foreground">
+                <p>
+                  Pay-as-you-go: <span className="font-medium text-foreground">{payg.label}</span>
+                </p>
+                <p>{payg.credits} credit{payg.credits === 1 ? "" : "s"} available</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -92,6 +132,16 @@ export function DashboardSidebar() {
           );
         })}
         
+        {/* Mobile-only sign out inside the menu list; the sheet has no room at
+            the footer that is not also a nav scroll away. */}
+        <button
+          onClick={handleSignOut}
+          className="md:hidden flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          <LogOut className="w-4 h-4 shrink-0" />
+          Log Out
+        </button>
+
         {/* Admin Panel - Only visible to admin users */}
         {isAdmin && (
           <Link
@@ -109,7 +159,7 @@ export function DashboardSidebar() {
         )}
       </nav>
 
-      <div className="p-2 border-t border-border shrink-0">
+      <div className="p-2 border-t border-border shrink-0 hidden md:block">
         <button
           onClick={handleSignOut}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive w-full transition-colors"

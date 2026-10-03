@@ -175,6 +175,7 @@ const Community = () => {
   const posterChecks = useRef<Set<string>>(new Set());
   const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
   const [votingPower, setVotingPower] = useState<VotingPower | null>(null);
+  const [globalPower, setGlobalPower] = useState<VotingPower | null>(null);
   // Voting power and my-vote state per post category, because each category is
   // its own competition and several can run at once. A single `votingPower`
   // (keyed to the feed filter) would misreport the button for every post whose
@@ -184,7 +185,7 @@ const Community = () => {
   const [myVotesByPost, setMyVotesByPost] = useState<Record<string, number>>({});
   const [votingPostId, setVotingPostId] = useState<string | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [currentStage, setCurrentStage] = useState<{ name: string; number: number; category: string | null } | null>(null);
+  const [currentStage, setCurrentStage] = useState<{ id: string; name: string; number: number; category: string | null } | null>(null);
   // Every competition currently open, across all categories. Each category
   // can run one of its own at the same time, so the Community page shows
   // them all rather than a single global stage.
@@ -375,16 +376,19 @@ const Community = () => {
       setVotingPower(null);
       setPowerByCategory({});
       setStageOpenByCategory({});
+      setGlobalPower(null);
       return;
     }
     if (activeCategory !== "all") {
       const power = await fetchVotingPower(activeCategory);
       setVotingPower(power);
+      setGlobalPower(power);
       setPowerByCategory({ [activeCategory]: power });
       setStageOpenByCategory({ [activeCategory]: Boolean(await fetchVotingStage(activeCategory)) });
       return;
     }
     setVotingPower(null);
+    setGlobalPower(await fetchVotingPower());
     await loadCategoryVoting();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, activeCategory]);
@@ -434,7 +438,16 @@ const Community = () => {
       console.warn("Open competitions unavailable:", error.message);
       return;
     }
-    setOpenCompetitions(data ?? []);
+    // Collapse accidental duplicates (e.g. a leftover legacy global row or a
+    // repeated open) so one competition never renders twice.
+    const seen = new Set<string>();
+    const unique = (data ?? []).filter((c) => {
+      const key = `${c.id}|${c.category ?? ""}|${c.name.toLowerCase()}|${c.stage_number}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    setOpenCompetitions(unique);
   }, []);
 
   const handleVote = async (postId: string, amount: number) => {
@@ -488,6 +501,9 @@ const Community = () => {
             prev ? { ...prev, votes_remaining: result.votes_remaining } : prev,
           );
         }
+        setGlobalPower((prev) =>
+          prev ? { ...prev, votes_remaining: result.votes_remaining } : prev,
+        );
       }
     } catch (error) {
       console.error("Vote failed:", error);
@@ -1384,14 +1400,25 @@ const Community = () => {
             </div>
 
             {/* Running competitions - every category can have its own open at
-                the same time, so list them all. */}
+                the same time, so list them all. The one already featured in
+                the Current Voting Stage banner below is skipped so it does
+                not appear twice on the page. */}
             {openCompetitions.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mb-6 space-y-3"
               >
-                {openCompetitions.map((comp) => (
+                {openCompetitions
+                  .filter(
+                    (comp) =>
+                      // The featured banner shows this stage's competition, so
+                      // leave it out of the list. Match by id first (a legacy
+                      // global stage has no category to compare), then by the
+                      // active category as a fallback.
+                      !(currentStage && activeCategory !== "all" && (comp.id === currentStage.id || comp.category === activeCategory)),
+                  )
+                  .map((comp) => (
                   <Card key={comp.id} className="border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
@@ -1478,12 +1505,82 @@ const Community = () => {
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Vote Leaderboard - one ranking per category, hidden until
                 something has actually been voted on. */}
-            <div className="order-1 lg:col-start-3 lg:row-start-1">
+            <div className="order-1 space-y-6 lg:col-start-3 lg:row-start-1">
               <CategoryLeaderboard
                 categories={activeCategories.map((c) => ({ name: c.name, label: c.label }))}
                 activeCategory={activeCategory}
                 onSelectCategory={setActiveCategory}
               />
+
+              {/* Voting power - compact, sits under the leaderboard */}
+              {user && (
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Vote className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        {globalPower ? (
+                          <>
+                            <p className="text-sm font-semibold text-foreground">
+                              {globalPower.votes_remaining}/{globalPower.votes_per_stage} votes left
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {globalPower.source_label}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm font-semibold text-foreground">No voting power</p>
+                            <p className="text-xs text-muted-foreground">
+                              Subscribe or buy a platform credit pack to vote.
+                            </p>
+                          </>
+                        )}
+                      </div>
+                      {globalPower && globalPower.votes_remaining === 0 && (
+                        <Button size="sm" onClick={() => setUpgradeOpen(true)}>
+                          Upgrade
+                        </Button>
+                      )}
+                      {!globalPower && (
+                        <Button size="sm" variant="outline" onClick={() => setUpgradeOpen(true)}>
+                          Get votes
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Stats */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Stats
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Active Today</span>
+                    <span className="font-semibold">{communityStats.activeToday}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Posts</span>
+                    <span className="font-semibold">{communityStats.totalPosts}</span>
+                  </div>
+                  {votingPower && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Your votes this stage</span>
+                      <span className="font-semibold">
+                        {votingPower.votes_remaining}/{votingPower.votes_per_stage} left
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
 
             {/* Main Feed */}
@@ -1880,37 +1977,10 @@ const Community = () => {
               onAuthenticated={handleAuthenticated}
             />
 
-            {/* Sidebar: everything below the feed on desktop, and below the
-                leaderboard on mobile too. */}
+            {/* Sidebar: depending on viewport, below the leaderboard on mobile
+                and below the feed on desktop (Join CTA stays in the side
+                column). */}
             <div className="order-3 space-y-6 lg:col-start-3 lg:row-start-2">
-              {/* Stats */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5" />
-                    Stats
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Active Today</span>
-                    <span className="font-semibold">{communityStats.activeToday}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total Posts</span>
-                    <span className="font-semibold">{communityStats.totalPosts}</span>
-                  </div>
-                  {votingPower && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Your votes this stage</span>
-                      <span className="font-semibold">
-                        {votingPower.votes_remaining}/{votingPower.votes_per_stage} left
-                      </span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
               {/* Join CTA */}
               {!user && (
                 <Card>

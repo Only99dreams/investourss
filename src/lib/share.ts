@@ -22,7 +22,10 @@ export function isAiwcCategory(value?: string | null): boolean {
   if (!v) return false;
   if (v.includes("aiwc")) return true;
   const compact = v.replace(/[\s_.-]+/g, "");
-  return compact === "ideacompetition" || compact === "competition";
+  if (compact === "ideacompetition" || compact === "competition") return true;
+  // Any competition-named category (e.g. "NYSC FCT Competition",
+  // "UniAbuja Competition") carries the competition share copy.
+  return /\bcompetitions?\b/.test(v);
 }
 
 /**

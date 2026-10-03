@@ -245,7 +245,11 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {pack.credits} credits &middot; valid {pack.validity_days} days
                   </p>
-                  {pack.description && (
+                  {pack.description &&
+                    // Pack descriptions are often authored as "X Platform
+                    // Credits · Valid Y Days", which duplicates the structured
+                    // line below; skip that repeat.
+                    !(/credit/i.test(pack.description) && /valid/i.test(pack.description) && /\d/.test(pack.description)) && (
                     <p className="mt-1 text-xs text-muted-foreground">{pack.description.replace(/Audit/gi, "Platform")}</p>
                   )}
                 </div>

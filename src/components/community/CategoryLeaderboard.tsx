@@ -74,16 +74,18 @@ export function CategoryLeaderboard({
   // entirely out of the way rather than rendered empty.
   if (voted && voted.length === 0) return null;
 
-  const medal = (rank: number) =>
-    rank === 1 ? (
-      <Crown className="w-4 h-4 text-amber-500" />
-    ) : rank === 2 ? (
-      <Medal className="w-4 h-4 text-slate-400" />
-    ) : rank === 3 ? (
-      <Medal className="w-4 h-4 text-amber-700" />
-    ) : (
-      <span className="w-4 h-4 text-center text-xs text-muted-foreground tabular-nums">{rank}</span>
-    );
+  const medal = (rank: number) => (
+    <span className="flex items-center justify-center gap-1 tabular-nums">
+      {rank === 1 ? (
+        <Crown className="w-4 h-4 text-amber-500" />
+      ) : rank === 2 ? (
+        <Medal className="w-4 h-4 text-slate-400" />
+      ) : rank === 3 ? (
+        <Medal className="w-4 h-4 text-amber-700" />
+      ) : null}
+      <span className="text-xs text-muted-foreground">{rank}</span>
+    </span>
+  );
 
   return (
     <section className="rounded-xl border border-border bg-card p-4" aria-label="Vote leaderboard">
@@ -137,7 +139,7 @@ export function CategoryLeaderboard({
                 e.rank <= 3 && "bg-muted/50",
               )}
             >
-              <div className="flex w-4 justify-center shrink-0">{medal(e.rank)}</div>
+              <div className="flex w-8 justify-center shrink-0">{medal(e.rank)}</div>
               <Avatar className="w-8 h-8 shrink-0">
                 <AvatarImage src={e.avatar_url || undefined} />
                 <AvatarFallback className="text-xs">
