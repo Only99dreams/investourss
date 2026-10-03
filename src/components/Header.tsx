@@ -54,7 +54,7 @@ const Header = () => {
               alt="Investours" 
               className="w-10 h-10 md:w-12 md:h-12"
             />
-            <span className="text-xl font-bold text-purple-600">
+            <span className="text-xl font-bold text-purple-800">
               Investours
             </span>
           </Link>
