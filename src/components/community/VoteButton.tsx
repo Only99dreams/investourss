@@ -12,6 +12,12 @@ interface VoteButtonProps {
   /** What the signed-in user has on this post, 0 if none. */
   myVote: number;
   power: VotingPower | null;
+  /**
+   * Whether the post's own competition is currently open. Distinct from
+   * `power`: a stage can be open while the member is not paid (`power` null),
+   * and a stage can be closed entirely. Defaults to true.
+   */
+  stageOpen?: boolean;
   /** True when the signed-in user wrote this post. */
   isOwnPost: boolean;
   busy: boolean;
@@ -41,6 +47,7 @@ export function VoteButton({
   votesCount,
   myVote,
   power,
+  stageOpen = true,
   isOwnPost,
   busy,
   onVote,
@@ -92,6 +99,21 @@ export function VoteButton({
   if (isOwnPost) {
     return (
       <span className={cn(label, "opacity-70")} title="You cannot vote for your own post">
+        <Vote className="w-4 h-4" />
+        Vote
+        {count}
+      </span>
+    );
+  }
+
+  // The post's competition is not open, so there is nothing to vote in. Say so
+  // instead of offering a subscription: paying would not open it.
+  if (!stageOpen) {
+    return (
+      <span
+        className={cn(label, "cursor-default opacity-70")}
+        title="Voting is closed for this competition"
+      >
         <Vote className="w-4 h-4" />
         Vote
         {count}

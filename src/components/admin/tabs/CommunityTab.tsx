@@ -187,6 +187,14 @@ const CommunityTab = () => {
   const [newStageName, setNewStageName] = useState("");
   const [newStageCategory, setNewStageCategory] = useState("");
   const [advancingStage, setAdvancingStage] = useState(false);
+  const [editingStageId, setEditingStageId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editOpensAt, setEditOpensAt] = useState("");
+  const [editClosesAt, setEditClosesAt] = useState("");
+  const [editStageNumber, setEditStageNumber] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [newStageNumber, setNewStageNumber] = useState("");
   const [changeCategoryPostId, setChangeCategoryPostId] = useState<string | null>(null);
   const [newCategoryValue, setNewCategoryValue] = useState("");
   const { toast } = useToast();
@@ -204,7 +212,8 @@ const CommunityTab = () => {
   const fetchStages = async () => {
     const { data, error } = await supabase
       .from("voting_stages")
-      .select("id, name, stage_number, is_current, opens_at, closes_at")
+      .select("id, name, stage_number, is_current, category, opens_at, closes_at")
+      .order("category", { ascending: true, nullsFirst: false })
       .order("stage_number");
     if (error) {
       // Migration not applied yet; the card simply stays empty.
@@ -215,40 +224,129 @@ const CommunityTab = () => {
   };
 
   /**
-   * Open a new voting stage. The per-stage allowance is what "N votes per
-   * stage" means, so this is the only way to refresh anyone's allowance - and
-   * it is deliberately irreversible from here, since old votes stay on record
-   * for the previous stage.
+   * Open a competition for one category.
+   *
+   * A competition is a stage and it must belong to exactly one category.
+   * Opening one only supersedes that category's current competition, so
+   * different categories can each have a competition running at the same time.
+   * The per-stage allowance is refreshed for the members who vote in it.
    */
-  const advanceStage = async () => {
+  const openCompetition = async () => {
     const name = newStageName.trim();
     if (!name) {
-      toast({ title: "Name required", description: "Give the stage a name, e.g. 'Stage 2'.", variant: "destructive" });
+      toast({ title: "Name required", description: "Give the competition a name, e.g. 'AIWC Stage 2'.", variant: "destructive" });
+      return;
+    }
+    if (!newStageCategory) {
+      toast({
+        title: "Category required",
+        description: "A competition must belong to a category. Pick one to open.",
+        variant: "destructive",
+      });
       return;
     }
     setAdvancingStage(true);
     try {
-      const { error } = await supabase.rpc("set_voting_stage", {
+      const parsedStage = newStageNumber.trim() ? Number.parseInt(newStageNumber, 10) : null;
+      const { error } = await supabase.rpc("open_competition", {
         p_name: name,
-        p_category: newStageCategory || null,
+        p_category: newStageCategory,
+        p_stage_number: parsedStage && Number.isFinite(parsedStage) ? parsedStage : null,
       });
       if (error) throw error;
+      const label = categories.find((c) => c.name === newStageCategory)?.label ?? newStageCategory;
       toast({
         title: `${name} is now open`,
-        description: "Everyone's voting allowance has been refreshed for this stage.",
+        description: `The ${label} competition is live and members can vote in it.`,
       });
       setNewStageName("");
       setNewStageCategory("");
+      setNewStageNumber("");
       await fetchStages();
     } catch (error) {
-      console.error("Failed to advance stage:", error);
+      console.error("Failed to open competition:", error);
       toast({
-        title: "Could not open the stage",
+        title: "Could not open the competition",
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
       setAdvancingStage(false);
+    }
+  };
+
+  /** Fill the edit form from a competition and open it. */
+  const startEditStage = (stage: VotingStage) => {
+    setEditingStageId(stage.id);
+    setEditName(stage.name);
+    setEditCategory(stage.category ?? "");
+    // datetime-local wants "YYYY-MM-DDTHH:mm" without the timezone suffix.
+    setEditOpensAt(stage.opens_at ? stage.opens_at.slice(0, 16) : "");
+    setEditClosesAt(stage.closes_at ? stage.closes_at.slice(0, 16) : "");
+    setEditStageNumber(String(stage.stage_number));
+  };
+
+  const cancelEditStage = () => {
+    setEditingStageId(null);
+    setEditName("");
+    setEditCategory("");
+    setEditOpensAt("");
+    setEditClosesAt("");
+    setEditStageNumber("");
+  };
+
+  /** Save edits to one competition via the admin-only RPC. */
+  const saveEditStage = async (stage: VotingStage) => {
+    if (!editName.trim()) {
+      toast({ title: "Name required", variant: "destructive" });
+      return;
+    }
+    if (!editCategory) {
+      toast({ title: "Category required", description: "A competition must belong to a category.", variant: "destructive" });
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const parsedStage = editStageNumber.trim() ? Number.parseInt(editStageNumber, 10) : null;
+      const { error } = await supabase.rpc("update_competition", {
+        p_stage_id: stage.id,
+        p_name: editName.trim(),
+        p_category: editCategory,
+        p_opens_at: editOpensAt ? new Date(editOpensAt).toISOString() : null,
+        p_closes_at: editClosesAt ? new Date(editClosesAt).toISOString() : null,
+        p_stage_number: parsedStage && Number.isFinite(parsedStage) ? parsedStage : null,
+      });
+      if (error) throw error;
+      toast({ title: `${editName.trim()} updated` });
+      cancelEditStage();
+      await fetchStages();
+    } catch (error) {
+      console.error("Failed to update competition:", error);
+      toast({
+        title: "Could not update the competition",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  /** End one competition, leaving every other category's competition running. */
+  const closeCompetition = async (stage: VotingStage) => {
+    if (!confirm(`Close "${stage.name}"? Members will no longer be able to vote in it.`)) return;
+    try {
+      const { error } = await supabase.rpc("close_competition", { p_stage_id: stage.id });
+      if (error) throw error;
+      toast({ title: `${stage.name} closed`, description: "Results are now final." });
+      await fetchStages();
+    } catch (error) {
+      console.error("Failed to close competition:", error);
+      toast({
+        title: "Could not close the competition",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -469,80 +567,173 @@ const CommunityTab = () => {
 
   return (
     <div className="space-y-6">
-      {/* Voting Stages - the per-stage allowance is refreshed by opening a new one */}
+      {/* Competitions. A stage is a competition, each tied to one category, and
+          several categories can run theirs at the same time. */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Vote className="w-5 h-5" /> Voting Stage
+            <Vote className="w-5 h-5" /> Competitions
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {stages.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No stages yet. Open the first one to start accepting votes.
+              No competitions yet. Open one for a category to start accepting votes.
             </p>
           ) : (
             <div className="space-y-2">
-              {stages.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between rounded-lg border px-3 py-2"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{s.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Stage {s.stage_number}
-                      {s.category && <span className="ml-1 text-primary">· {s.category.replace(/_/g, " ")}</span>}
-                    </p>
+              {stages.map((s) => {
+                const label = s.category
+                  ? categories.find((c) => c.name === s.category)?.label ?? s.category.replace(/_/g, " ")
+                  : "All categories (legacy)";
+                return (
+                  <div key={s.id} className="rounded-lg border px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{s.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          <span className="text-primary">{label}</span>
+                          <span className="mx-1">·</span>
+                          Stage {s.stage_number}
+                          {s.closes_at && (
+                            <>
+                              <span className="mx-1">·</span>
+                              closes {new Date(s.closes_at).toLocaleDateString()}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {s.is_current ? (
+                          <>
+                            <Badge>Open now</Badge>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => void closeCompetition(s)}
+                            >
+                              Close
+                            </Button>
+                          </>
+                        ) : (
+                          <Badge variant="secondary">Closed</Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => (editingStageId === s.id ? cancelEditStage() : startEditStage(s))}
+                        >
+                          {editingStageId === s.id ? "Cancel" : "Edit"}
+                        </Button>
+                      </div>
+                    </div>
+                    {editingStageId === s.id && (
+                      <div className="mt-3 space-y-2 border-t pt-3">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <Label className="text-xs">Name</Label>
+                            <Input value={editName} onChange={(e) => setEditName(e.target.value)} disabled={savingEdit} />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Category</Label>
+                            <Select value={editCategory} onValueChange={setEditCategory}>
+                              <SelectTrigger><SelectValue placeholder="Choose a category" /></SelectTrigger>
+                              <SelectContent>
+                                {categories
+                                  .filter(c => c.name !== 'all' && c.is_active !== false)
+                                  .map(cat => (
+                                    <SelectItem key={cat.name} value={cat.name}>{cat.label}</SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Opens at</Label>
+                            <Input type="datetime-local" value={editOpensAt} onChange={(e) => setEditOpensAt(e.target.value)} disabled={savingEdit} />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Closes at</Label>
+                            <Input type="datetime-local" value={editClosesAt} onChange={(e) => setEditClosesAt(e.target.value)} disabled={savingEdit} />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Stage number</Label>
+                            <Input type="number" min={1} value={editStageNumber} onChange={(e) => setEditStageNumber(e.target.value)} disabled={savingEdit} />
+                          </div>
+                        </div>
+                        <Button size="sm" onClick={() => void saveEditStage(s)} disabled={savingEdit}>
+                          {savingEdit ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                          Save changes
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  {s.is_current ? (
-                    <Badge>Open now</Badge>
-                  ) : (
-                    <Badge variant="secondary">Closed</Badge>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <div className="flex-1">
-              <Label className="sr-only">New stage name</Label>
+              <Label htmlFor="competition-name" className="sr-only">Competition name</Label>
               <Input
+                id="competition-name"
                 value={newStageName}
                 onChange={(e) => setNewStageName(e.target.value)}
-                placeholder="e.g. Stage 2"
+                placeholder="e.g. AIWC Stage 2"
                 disabled={advancingStage}
               />
             </div>
-            <div className="w-40">
-              <Label className="sr-only">Category (optional)</Label>
+            <div className="w-full sm:w-52">
+              <Label htmlFor="competition-category" className="sr-only">Category</Label>
               <Select value={newStageCategory} onValueChange={setNewStageCategory}>
-                <SelectTrigger><SelectValue placeholder="All categories" /></SelectTrigger>
+                <SelectTrigger id="competition-category"><SelectValue placeholder="Choose a category" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All categories</SelectItem>
                   {categories
-                    .filter(c => c.name !== 'all')
+                    .filter(c => c.name !== 'all' && c.is_active !== false)
                     .map(cat => (
                       <SelectItem key={cat.name} value={cat.name}>{cat.label}</SelectItem>
                     ))}
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={advanceStage} disabled={advancingStage || !newStageName.trim()}>
-              {advancingStage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Open stage
+            <div className="w-full sm:w-28">
+              <Label htmlFor="competition-stage" className="sr-only">Stage number</Label>
+              <Input
+                id="competition-stage"
+                type="number"
+                min={1}
+                value={newStageNumber}
+                onChange={(e) => setNewStageNumber(e.target.value)}
+                placeholder={
+                  newStageCategory
+                    ? `Stage ${Math.max(0, ...stages.filter((s) => s.category === newStageCategory).map((s) => s.stage_number)) + 1}`
+                    : "Stage #"
+                }
+                disabled={advancingStage}
+              />
+            </div>
+            <Button
+              onClick={openCompetition}
+              disabled={advancingStage || !newStageName.trim() || !newStageCategory}
+            >
+              {advancingStage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              Open competition
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Opening a new stage gives every paid member a fresh voting allowance. Votes already
-            cast stay counted against the stage they were cast in.
+            Each competition belongs to one category, and every category can have its own
+            running at the same time. Opening one only replaces that category's previous
+            competition — it gives that category's paid members a fresh voting allowance and
+            leaves the others untouched. Votes already cast stay counted against the
+            competition they were cast in.
           </p>
         </CardContent>
       </Card>
 
-      {/* Closed-stage results. Moved off the user-facing community page; the
-          backing RPC is admin-only, so this is gated to admins here too. */}
+      {/* Closed-competition results. Moved off the user-facing community page;
+          the backing RPC is admin-only, so this is gated to admins here too. */}
       {isAdmin && <ClosedVotesPanel />}
 
       {/* Category Management */}

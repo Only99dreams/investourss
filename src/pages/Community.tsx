@@ -175,10 +175,27 @@ const Community = () => {
   const posterChecks = useRef<Set<string>>(new Set());
   const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
   const [votingPower, setVotingPower] = useState<VotingPower | null>(null);
-  const [myVotes, setMyVotes] = useState<Record<string, number>>({});
+  // Voting power and my-vote state per post category, because each category is
+  // its own competition and several can run at once. A single `votingPower`
+  // (keyed to the feed filter) would misreport the button for every post whose
+  // category differs from the current filter.
+  const [powerByCategory, setPowerByCategory] = useState<Record<string, VotingPower | null>>({});
+  const [stageOpenByCategory, setStageOpenByCategory] = useState<Record<string, boolean>>({});
+  const [myVotesByPost, setMyVotesByPost] = useState<Record<string, number>>({});
   const [votingPostId, setVotingPostId] = useState<string | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [currentStage, setCurrentStage] = useState<{ name: string; number: number; category: string | null } | null>(null);
+  // Every competition currently open, across all categories. Each category
+  // can run one of its own at the same time, so the Community page shows
+  // them all rather than a single global stage.
+  const [openCompetitions, setOpenCompetitions] = useState<Array<{
+    id: string;
+    name: string;
+    stage_number: number;
+    category: string | null;
+    opens_at: string | null;
+    closes_at: string | null;
+  }>>([]);
   const [selectedPost, setSelectedPost] = useState<string | null>(null);
   const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>({});
   const [newCommentMap, setNewCommentMap] = useState<Record<string, string>>({});
@@ -298,11 +315,28 @@ const Community = () => {
       setPosts(enrichedPosts);
 
       // Only ask which posts this user has backed once the ids are known, so
-      // the vote buttons render in the correct state on first paint.
+      // the vote buttons render in the correct state on first paint. Each
+      // category is its own competition, so votes are queried per category and
+      // merged into one post-keyed map.
       if (user) {
-        setMyVotes(await fetchMyVotes(postsData.map(p => p.id), activeCategory !== "all" ? activeCategory : undefined));
+        const byCategory = new Map<string, string[]>();
+        for (const p of postsData) {
+          const key = p.category || "";
+          const ids = byCategory.get(key) ?? [];
+          ids.push(p.id);
+          byCategory.set(key, ids);
+        }
+        const perCategory = await Promise.all(
+          [...byCategory.entries()].map(async ([category, ids]) => [
+            category,
+            await fetchMyVotes(ids, category || undefined),
+          ] as const),
+        );
+        setMyVotesByPost(
+          Object.assign({}, ...perCategory.map(([, votes]) => votes)),
+        );
       } else {
-        setMyVotes({});
+        setMyVotesByPost({});
       }
     } catch (error) {
       console.error('Error fetching posts:', error);
@@ -339,24 +373,82 @@ const Community = () => {
   const fetchVoting = useCallback(async () => {
     if (!user) {
       setVotingPower(null);
+      setPowerByCategory({});
+      setStageOpenByCategory({});
       return;
     }
-    setVotingPower(await fetchVotingPower(activeCategory !== "all" ? activeCategory : undefined));
+    if (activeCategory !== "all") {
+      const power = await fetchVotingPower(activeCategory);
+      setVotingPower(power);
+      setPowerByCategory({ [activeCategory]: power });
+      setStageOpenByCategory({ [activeCategory]: Boolean(await fetchVotingStage(activeCategory)) });
+      return;
+    }
+    setVotingPower(null);
+    await loadCategoryVoting();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, activeCategory]);
+
+  /**
+   * Load voting power for every category present in the feed.
+   *
+   * Each category is its own competition, so a single global `votingPower`
+   * would mislabel posts of other categories. For each category we also learn
+   * whether a stage is open, so "voting is closed here" can be told apart from
+   * "open, but the member is not paid". A category with no stage of its own
+   * falls back to a legacy global stage inside get_current_voting_stage.
+   */
+  const loadCategoryVoting = useCallback(async () => {
+    if (!user) {
+      setPowerByCategory({});
+      setStageOpenByCategory({});
+      return;
+    }
+    const cats = [...new Set(posts.map((p) => p.category).filter(Boolean))] as string[];
+    const stageEntries = await Promise.all(
+      cats.map(async (c) => [c, await fetchVotingStage(c)] as const),
+    );
+    setStageOpenByCategory(
+      Object.fromEntries(stageEntries.map(([c, s]) => [c, Boolean(s)])),
+    );
+    const openCats = stageEntries.filter(([, s]) => s).map(([c]) => c);
+    const powerEntries = await Promise.all(
+      openCats.map(async (c) => [c, await fetchVotingPower(c)] as const),
+    );
+    setPowerByCategory(Object.fromEntries(powerEntries));
+  }, [user, posts]);
 
   const fetchStageData = useCallback(async () => {
     const category = activeCategory !== "all" ? activeCategory : undefined;
     setCurrentStage(await fetchVotingStage(category));
   }, [activeCategory]);
 
+  const fetchOpenCompetitions = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("voting_stages")
+      .select("id, name, stage_number, category, opens_at, closes_at")
+      .eq("is_current", true)
+      .order("category", { ascending: true, nullsFirst: false })
+      .order("stage_number");
+    if (error) {
+      console.warn("Open competitions unavailable:", error.message);
+      return;
+    }
+    setOpenCompetitions(data ?? []);
+  }, []);
+
   const handleVote = async (postId: string, amount: number) => {
     if (!user) {
       toast({ title: "Login Required", description: "Please sign in to vote.", variant: "destructive" });
       return;
-    }    // A vote is final. Refuse a withdrawal or reduction here rather than sending
+    }
+    // The post's own category decides its competition; the feed filter may be
+    // "all" while several category competitions run at once.
+    const category = posts.find((p) => p.id === postId)?.category || undefined;
+    // A vote is final. Refuse a withdrawal or reduction here rather than sending
     // a request the database will reject; the server check still stands as the
     // authority, this just avoids a pointless round trip and a harsher message.
-    const alreadyCast = myVotes[postId] ?? 0;
+    const alreadyCast = myVotesByPost[postId] ?? 0;
     if (amount < alreadyCast) {
       toast({
         title: "Your vote is final",
@@ -370,7 +462,7 @@ const Community = () => {
       // The database owns every rule here: payment, self-voting, the stage, and
       // the remaining allowance. Its refusal reason is what gets shown, rather
       // than a client-side guess that could be wrong.
-      const result = await castVote(postId, amount, activeCategory !== "all" ? activeCategory : undefined);
+      const result = await castVote(postId, amount, category);
 
       if (!result.ok) {
         toast({ title: "Vote not counted", description: result.message, variant: "destructive" });
@@ -379,13 +471,24 @@ const Community = () => {
         return;
       }
 
-      setMyVotes((prev) => ({ ...prev, [postId]: amount }));
+      setMyVotesByPost((prev) => ({ ...prev, [postId]: amount }));
       setPosts((prev) =>
         prev.map((p) => (p.id === postId ? { ...p, votes_count: result.post_votes_count } : p)),
       );
-      setVotingPower((prev) =>
-        prev ? { ...prev, votes_remaining: result.votes_remaining } : prev,
-      );
+      // Reflect the new remaining allowance on the post's own competition.
+      if (category) {
+        setPowerByCategory((prev) => {
+          const power = prev[category];
+          return power
+            ? { ...prev, [category]: { ...power, votes_remaining: result.votes_remaining } }
+            : prev;
+        });
+        if (activeCategory !== "all") {
+          setVotingPower((prev) =>
+            prev ? { ...prev, votes_remaining: result.votes_remaining } : prev,
+          );
+        }
+      }
     } catch (error) {
       console.error("Vote failed:", error);
       toast({
@@ -484,6 +587,7 @@ const Community = () => {
     void checkCategoryColumn();
     void fetchVoting();
     void fetchStageData();
+    void fetchOpenCompetitions();
 
     const channel = supabase
       .channel('posts-realtime')
@@ -513,6 +617,7 @@ const Community = () => {
       if (document.visibilityState === 'visible') {
         fetchCategories();
         fetchPosts();
+        void fetchOpenCompetitions();
         // Re-check on focus: catches the migration being applied while the tab
         // was in the background, so the banner clears without a hard reload.
         void checkCategoryColumn();
@@ -528,6 +633,22 @@ const Community = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  // Refresh per-category voting power once the feed's categories are known.
+  // Guarded on the category set so a like/vote/comment (which refetches posts)
+  // does not re-issue every voting RPC.
+  const loadedCatsRef = useRef<string>("");
+  useEffect(() => {
+    if (!user) {
+      loadedCatsRef.current = "";
+      return;
+    }
+    const key = [...new Set(posts.map((p) => p.category).filter(Boolean))].sort().join("|");
+    if (!key || key === loadedCatsRef.current) return;
+    loadedCatsRef.current = key;
+    void loadCategoryVoting();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts, user]);
 
   useEffect(() => {
     const postId = searchParams.get("post");
@@ -1262,8 +1383,51 @@ const Community = () => {
               })}
             </div>
 
+            {/* Running competitions - every category can have its own open at
+                the same time, so list them all. */}
+            {openCompetitions.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 space-y-3"
+              >
+                {openCompetitions.map((comp) => (
+                  <Card key={comp.id} className="border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Vote className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Running competition</p>
+                            <p className="text-lg font-bold text-foreground">
+                              {comp.name}
+                              {comp.category && (
+                                <span className="text-sm font-normal text-muted-foreground ml-2">
+                                  · {comp.category.replace(/_/g, " ")}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant="default" className="text-xs">Stage {comp.stage_number}</Badge>
+                          {comp.closes_at && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              closes {new Date(comp.closes_at).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </motion.div>
+            )}
+
             {/* Current Stage Banner - visible at the front */}
-            {currentStage && (
+            {currentStage && activeCategory !== "all" && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1540,8 +1704,9 @@ const Community = () => {
                             {/* Vote Button - beside Share */}
                             <VoteButton
                               votesCount={post.votes_count || 0}
-                              myVote={myVotes[post.id] || 0}
-                              power={votingPower}
+                              myVote={myVotesByPost[post.id] || 0}
+                              power={post.category ? powerByCategory[post.category] ?? null : votingPower}
+                              stageOpen={post.category ? stageOpenByCategory[post.category] ?? true : true}
                               isOwnPost={user?.id === post.author_id}
                               busy={votingPostId === post.id}
                               onVote={(amount) => {
