@@ -115,6 +115,25 @@ BEGIN
   WHERE id = p_stage_id AND is_current
   RETURNING TRUE INTO v_found;
 
+  IF v_found THEN
+    -- A closed competition's votes disappear: its posts' counters reset and
+    -- the records themselves are removed, so nothing from it is voteable or
+    -- ranked any longer.
+    WITH removed AS (
+      DELETE FROM public.post_votes
+      WHERE stage_id = p_stage_id
+      RETURNING post_id
+    )
+    UPDATE public.posts p
+    SET votes_count = COALESCE((
+          SELECT sum(pv.amount)::INTEGER
+          FROM public.post_votes pv
+          JOIN public.get_current_voting_stage(p.category) s ON s.stage_id = pv.stage_id
+          WHERE pv.post_id = p.id
+        ), 0)
+    WHERE p.id IN (SELECT post_id FROM removed);
+  END IF;
+
   RETURN COALESCE(v_found, FALSE);
 END;
 $$;
