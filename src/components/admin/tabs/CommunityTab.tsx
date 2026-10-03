@@ -195,6 +195,8 @@ const CommunityTab = () => {
   const [editStageNumber, setEditStageNumber] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [newStageNumber, setNewStageNumber] = useState("");
+  const [newOpensAt, setNewOpensAt] = useState("");
+  const [newClosesAt, setNewClosesAt] = useState("");
   const [changeCategoryPostId, setChangeCategoryPostId] = useState<string | null>(null);
   const [newCategoryValue, setNewCategoryValue] = useState("");
   const { toast } = useToast();
@@ -252,6 +254,8 @@ const CommunityTab = () => {
         p_name: name,
         p_category: newStageCategory,
         p_stage_number: parsedStage && Number.isFinite(parsedStage) ? parsedStage : null,
+        p_opens_at: newOpensAt ? new Date(newOpensAt).toISOString() : null,
+        p_closes_at: newClosesAt ? new Date(newClosesAt).toISOString() : null,
       });
       if (error) throw error;
       const label = categories.find((c) => c.name === newStageCategory)?.label ?? newStageCategory;
@@ -262,6 +266,8 @@ const CommunityTab = () => {
       setNewStageName("");
       setNewStageCategory("");
       setNewStageNumber("");
+      setNewOpensAt("");
+      setNewClosesAt("");
       await fetchStages();
     } catch (error) {
       console.error("Failed to open competition:", error);
@@ -721,6 +727,28 @@ const CommunityTab = () => {
               {advancingStage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
               Open competition
             </Button>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex-1">
+              <Label htmlFor="competition-opens" className="text-xs">Opens at</Label>
+              <Input
+                id="competition-opens"
+                type="datetime-local"
+                value={newOpensAt}
+                onChange={(e) => setNewOpensAt(e.target.value)}
+                disabled={advancingStage}
+              />
+            </div>
+            <div className="flex-1">
+              <Label htmlFor="competition-closes" className="text-xs">Closes at</Label>
+              <Input
+                id="competition-closes"
+                type="datetime-local"
+                value={newClosesAt}
+                onChange={(e) => setNewClosesAt(e.target.value)}
+                disabled={advancingStage}
+              />
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             Each competition belongs to one category, and every category can have its own
