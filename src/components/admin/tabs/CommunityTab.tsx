@@ -601,6 +601,12 @@ const CommunityTab = () => {
                           <span className="text-primary">{label}</span>
                           <span className="mx-1">·</span>
                           Stage {s.stage_number}
+                          {s.opens_at && (
+                            <>
+                              <span className="mx-1">·</span>
+                              opens {new Date(s.opens_at).toLocaleDateString()}
+                            </>
+                          )}
                           {s.closes_at && (
                             <>
                               <span className="mx-1">·</span>
