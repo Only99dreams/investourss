@@ -726,13 +726,6 @@ const CommunityTab = () => {
                 disabled={advancingStage}
               />
             </div>
-            <Button
-              onClick={openCompetition}
-              disabled={advancingStage || !newStageName.trim() || !newStageCategory}
-            >
-              {advancingStage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-              Open competition
-            </Button>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="flex-1">
@@ -756,6 +749,14 @@ const CommunityTab = () => {
               />
             </div>
           </div>
+          <Button
+            onClick={openCompetition}
+            disabled={advancingStage || !newStageName.trim() || !newStageCategory}
+            className="w-full sm:w-auto"
+          >
+            {advancingStage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+            Open competition
+          </Button>
           <p className="text-xs text-muted-foreground">
             Each competition belongs to one category, and every category can have its own
             running at the same time. Opening one only replaces that category's previous
