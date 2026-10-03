@@ -21,18 +21,6 @@ interface Message {
   content: string;
 }
 
-const vettingKeywords = [
-  "scam", "fraud", "legitimate", "legit", "real", "fake", "trust", "safe to invest",
-  "is this company", "should i invest", "check this", "verify", "analyze investment",
-  "is it safe", "ponzi", "pyramid", "mlm", "returns guaranteed", "too good to be true",
-  "red flags", "warning signs", "due diligence"
-];
-
-const isVettingQuery = (query: string): boolean => {
-  const lowerQuery = query.toLowerCase();
-  return vettingKeywords.some(keyword => lowerQuery.includes(keyword));
-};
-
 const beginnerLabels = [
   "What is budgeting?",
   "How do I save money?",
@@ -71,11 +59,15 @@ const FinancialTutor = () => {
   const [input, setInput] = useState("");
   const [topQuery, setTopQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showVettingPrompt, setShowVettingPrompt] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user, profile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const hasPremiumSubscription = Boolean(
+    profile?.has_active_subscription ||
+      (profile?.subscription_expires_at &&
+        new Date(profile.subscription_expires_at) > new Date()),
+  );
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -222,17 +214,6 @@ const FinancialTutor = () => {
     const messageText = text || input.trim();
     if (!messageText) return;
 
-    if (isVettingQuery(messageText)) {
-      if (!user) {
-        setShowVettingPrompt(true);
-        setInput("");
-        return;
-      } else {
-        navigate(`/vetting?q=${encodeURIComponent(messageText)}`);
-        return;
-      }
-    }
-
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -331,11 +312,10 @@ const FinancialTutor = () => {
     const currentLevel = userLevel;
     if (!currentLevel || targetLevel === currentLevel) return;
 
-    // Check premium gating for intermediate and advanced
-    if ((targetLevel === "intermediate" || targetLevel === "advanced") && profile?.user_tier === "free") {
+    if ((targetLevel === "intermediate" || targetLevel === "advanced") && !hasPremiumSubscription) {
       toast({
-        title: "Premium Required",
-        description: "Upgrade to a Premium plan to access Intermediate and Advanced stages.",
+        title: "Premium Subscription Required",
+        description: "Upgrade to a Premium subscription to access Intermediate and Advanced stages.",
         variant: "destructive",
       });
       navigate("/subscribe");
@@ -425,6 +405,20 @@ const FinancialTutor = () => {
 
   const handleDownloadCertificate = async () => {
     if (!user || !userLevel) return;
+
+    // Certificates cost 1 platform credit unless the user is a subscriber.
+    if (!hasPremiumSubscription) {
+      const { data, error } = await supabase.rpc("consume_audit_credit", {});
+      if (error || !(data as { success?: boolean })?.success) {
+        toast({
+          title: "Subscription or credit required",
+          description:
+            "Downloading a certificate costs 1 platform credit, or is free with a Premium subscription.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
     const canvas = document.createElement("canvas");
     canvas.width = 1000;
@@ -609,11 +603,6 @@ const FinancialTutor = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/vetting" className="hidden md:inline-flex">
-              <Button variant="outline" size="sm">
-                AI Vetting
-              </Button>
-            </Link>
             {!user && (
               <Link to="/auth?mode=login">
                 <Button variant="outline" size="sm">
@@ -700,49 +689,49 @@ const FinancialTutor = () => {
                     {/* Intermediate Stage */}
                     <button
                       onClick={() => handleStageUpgrade("intermediate")}
-                      disabled={userLevel === "intermediate" || userLevel === "advanced" || profile?.user_tier === "free"}
+                      disabled={userLevel === "intermediate" || userLevel === "advanced" || !hasPremiumSubscription}
                       className={`flex items-center gap-1 text-xs rounded-full px-3 py-1 transition-colors ${
                         userLevel === "intermediate" || userLevel === "advanced"
                           ? "bg-emerald-500/20 text-emerald-600 cursor-default"
-                          : profile?.user_tier === "free"
+                          : !hasPremiumSubscription
                           ? "bg-background/50 text-muted-foreground cursor-not-allowed opacity-60"
                           : "bg-background/50 hover:bg-primary/20 text-muted-foreground hover:text-primary cursor-pointer"
                       }`}
-                      title={profile?.user_tier === "free" ? "Premium required" : "Upgrade to Intermediate"}
+                      title={!hasPremiumSubscription ? "Premium subscription required" : "Upgrade to Intermediate"}
                     >
                       {userLevel === "intermediate" || userLevel === "advanced" ? (
                         <CheckCircle className="w-3 h-3 text-emerald-500" />
-                      ) : profile?.user_tier === "free" ? (
+                      ) : !hasPremiumSubscription ? (
                         <Lock className="w-3 h-3" />
                       ) : (
                         <ArrowUp className="w-3 h-3" />
                       )}
                       <span>Intermediate</span>
-                      {profile?.user_tier === "free" && <Crown className="w-3 h-3 text-amber-500" />}
+                      {!hasPremiumSubscription && <Crown className="w-3 h-3 text-amber-500" />}
                     </button>
                     <span className="text-muted-foreground text-xs self-center">→</span>
                     {/* Advanced Stage */}
                     <button
                       onClick={() => handleStageUpgrade("advanced")}
-                      disabled={userLevel === "advanced" || profile?.user_tier === "free"}
+                      disabled={userLevel === "advanced" || !hasPremiumSubscription}
                       className={`flex items-center gap-1 text-xs rounded-full px-3 py-1 transition-colors ${
                         userLevel === "advanced"
                           ? "bg-emerald-500/20 text-emerald-600 cursor-default"
-                          : profile?.user_tier === "free"
+                          : !hasPremiumSubscription
                           ? "bg-background/50 text-muted-foreground cursor-not-allowed opacity-60"
                           : "bg-background/50 hover:bg-primary/20 text-muted-foreground hover:text-primary cursor-pointer"
                       }`}
-                      title={profile?.user_tier === "free" ? "Premium required" : "Upgrade to Advanced"}
+                      title={!hasPremiumSubscription ? "Premium subscription required" : "Upgrade to Advanced"}
                     >
                       {userLevel === "advanced" ? (
                         <CheckCircle className="w-3 h-3 text-emerald-500" />
-                      ) : profile?.user_tier === "free" ? (
+                      ) : !hasPremiumSubscription ? (
                         <Lock className="w-3 h-3" />
                       ) : (
                         <ArrowUp className="w-3 h-3" />
                       )}
                       <span>Advanced</span>
-                      {profile?.user_tier === "free" && <Crown className="w-3 h-3 text-amber-500" />}
+                      {!hasPremiumSubscription && <Crown className="w-3 h-3 text-amber-500" />}
                     </button>
                     {/* Reset Stage */}
                     <button
@@ -849,48 +838,6 @@ const FinancialTutor = () => {
           )}
         </ScrollArea>
 
-        {/* Vetting Prompt Modal */}
-        <AnimatePresence>
-          {showVettingPrompt && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setShowVettingPrompt(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.95 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.95 }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Card className="p-6 max-w-md">
-                  <div className="text-center">
-                    <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
-                      <LogIn className="w-8 h-8 text-accent" />
-                    </div>
-                    <h3 className="text-xl font-bold text-foreground mb-2">Login Required</h3>
-                    <p className="text-muted-foreground mb-6">
-                      To analyze investments and check for scams, please login to access our AI Vetting tool.
-                    </p>
-                    <div className="flex gap-3 justify-center">
-                      <Button variant="outline" onClick={() => setShowVettingPrompt(false)}>
-                        Cancel
-                      </Button>
-                      <Link to="/auth?mode=login">
-                        <Button variant="default">
-                          Login Now
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Input Area */}
         <div className="border-t border-border p-4 bg-card/50 backdrop-blur-sm">
           <div className="flex gap-2 max-w-3xl mx-auto">
@@ -911,8 +858,7 @@ const FinancialTutor = () => {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground text-center mt-2">
-            For investment analysis & scam detection, use our{" "}
-            <Link to="/vetting" className="text-primary hover:underline">AI Vetting tool</Link>
+            Ask about budgeting, saving, investing basics and more.
           </p>
         </div>
       </div>

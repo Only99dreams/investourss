@@ -240,7 +240,7 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 text-sm font-semibold">
                     <Coins className="w-4 h-4 text-primary" />
-                    {pack.name.replace(/Audit/gi, "Platform")}
+                    {pack.name.replace(/Audit/gi, "Credits")}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {pack.credits} credits &middot; valid {pack.validity_days} days
@@ -250,7 +250,7 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
                     // Credits · Valid Y Days", which duplicates the structured
                     // line below; skip that repeat.
                     !(/credit/i.test(pack.description) && /valid/i.test(pack.description) && /\d/.test(pack.description)) && (
-                    <p className="mt-1 text-xs text-muted-foreground">{pack.description.replace(/Audit/gi, "Platform")}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{pack.description.replace(/Audit/gi, "Credits")}</p>
                   )}
                 </div>
                 <div className="shrink-0 text-right">
@@ -277,7 +277,7 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
                 ) : (
                   <CheckCircle2 className="w-4 h-4 mr-2" />
                 )}
-                {purchasing === pack.id ? "Opening payment…" : `Buy ${pack.name.replace(/Audit/gi, "Platform")}`}
+                {purchasing === pack.id ? "Opening payment…" : `Buy ${pack.name.replace(/Audit/gi, "Credits")}`}
               </Button>
             </div>
           );

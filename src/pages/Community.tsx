@@ -1064,7 +1064,7 @@ const Community = () => {
         case 'native':
           // Mobile share sheet; must be called directly from the click handler.
           if (navigator.share) {
-            await navigator.share({ title: "Investours Opportunity Hub", text: shareText, url: shareUrl });
+            await navigator.share({ title: "Opportunity Hub", text: shareText, url: shareUrl });
           } else {
             await copyToClipboard(shareText);
             toast({ title: "Copied!", description: "Post and link copied to clipboard." });
@@ -1205,7 +1205,7 @@ const Community = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
-                  Investours Opportunity Hub
+                  Opportunity Hub
                 </h1>
                 <p className="text-muted-foreground">
                   Growth Community for Opportunities, Grants, Funding, Partnerships, Mentorship, Jobs & Gigs.

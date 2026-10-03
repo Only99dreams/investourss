@@ -138,6 +138,28 @@ export function VoteButton({
     );
   }
 
+  // Spent this stage's allowance: a tap pops up the buy-credits/upgrade
+  // checkout, never a dead-end control.
+  if (power.votes_remaining === 0) {
+    return (
+      <button
+        type="button"
+        onClick={onNeedMoreVotes}
+        className={cn(label, "cursor-pointer")}
+        title="Out of votes: buy credits or upgrade your plan"
+      >
+        <Vote className={cn("w-4 h-4", myVote > 0 && "fill-current")} />
+        Vote
+        {count}
+        {myVote > 0 && (
+          <span className="text-[10px] font-semibold px-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+            +{myVote}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

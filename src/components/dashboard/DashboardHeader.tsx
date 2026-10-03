@@ -97,8 +97,8 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
   }, [user]);
 
   return (
-    <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-      <div className="flex items-center justify-between h-full px-4 md:px-6">
+    <header className="min-h-20 md:min-h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="flex items-center justify-between gap-3 min-h-20 md:min-h-16 px-4 md:px-6 py-2 flex-wrap">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuClick}>
             <Menu className="w-5 h-5" />
@@ -111,7 +111,7 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-3">
+        <div className="flex items-center gap-1 sm:gap-3 flex-wrap justify-end">
           <div className="hidden md:block relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
