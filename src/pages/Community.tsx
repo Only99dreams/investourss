@@ -1018,6 +1018,15 @@ const Community = () => {
           .from('post_shares')
           .insert({ post_id: postId, user_id: user.id, platform });
         if (shareError) console.error('Failed to record share:', shareError);
+        else {
+          // Reflect the recorded share immediately; the DB trigger keeps
+          // posts.shares_count in sync for the next fetch.
+          setPosts((prev) =>
+            prev.map((p) =>
+              p.id === postId ? { ...p, shares_count: (p.shares_count ?? 0) + 1 } : p,
+            ),
+          );
+        }
       }
 
       switch (platform) {
@@ -1844,6 +1853,9 @@ const Community = () => {
                                 >
                                   <Share2 className="w-4 h-4" />
                                   Share
+                                  <span className="tabular-nums text-xs text-muted-foreground">
+                                    {post.shares_count ?? 0}
+                                  </span>
                                 </button>
                               </DialogTrigger>
                               <DialogContent className="sm:max-w-md">
