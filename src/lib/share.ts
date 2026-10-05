@@ -51,7 +51,7 @@ I’m pitching my idea for a chance to advance through the competition and compe
 
 🛡️ Investment Scam Detector
 
-Please support my idea, share it with others, and help me advance to the next stage!
+ *Please support my idea with your vote, share it with others, and help me advance to the next stage!* 
 
 🙏 Thank you for your support!`;
 
