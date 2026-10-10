@@ -50,10 +50,18 @@ const STATEMENT_PERIOD_MONTHS: { months: number; label: string }[] = [
 async function functionErrorMessage(err: unknown): Promise<string> {
   const e = err as { message?: string; context?: Response };
   if (e?.context) {
+    const status = e.context.status;
+    const errorCode = e.context.headers.get("sb-error-code");
     try {
       const body = await e.context.clone().json();
-      if (body?.error) return String(body.error);
+      const detail = body?.error || body?.message || body?.msg;
+      if (errorCode || detail) {
+        return [`Financial audit failed${errorCode ? ` (${errorCode})` : ` (HTTP ${status})`}.`, detail]
+          .filter(Boolean)
+          .join(" ");
+      }
     } catch { /* body wasn't JSON */ }
+    if (errorCode) return `Financial audit failed (${errorCode}, HTTP ${status}). Check the Edge Function logs.`;
   }
   return e?.message || "Request failed";
 }
