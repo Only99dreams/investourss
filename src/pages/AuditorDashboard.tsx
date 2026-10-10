@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import { Footer } from "@/components/ui/Footer";
 import { HealthScoreGauge } from "@/components/auditor/HealthScoreGauge";
+import { CreditReadinessAssessment } from "@/components/auditor/CreditReadinessAssessment";
 import { BlurredReport } from "@/components/auditor/BlurredReport";
 import { FinancialHealthGuidance, type FinancialHealthGuidanceProps } from "@/components/auditor/FinancialHealthGuidance";
 import { ContinuousReportingSection } from "@/components/dashboard/sections/ContinuousReportingSection";
@@ -25,6 +26,7 @@ import {
 } from "@/lib/auditor";
 import { cn } from "@/lib/utils";
 import { downloadAuditReport } from "@/lib/auditReport";
+import type { CreditReadinessInput } from "@/lib/creditReadiness";
 
 interface FinancialAudit {
   id: string;
@@ -152,6 +154,20 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
   );
 
   const viewingAudit = selectedAudit ?? latestAudit;
+  const creditReadinessInput: CreditReadinessInput | null = viewingAudit
+    ? {
+        periodStart: viewingAudit.audit_period_start,
+        periodEnd: viewingAudit.audit_period_end,
+        auditMonths: Number(viewingAudit.report_json?.auditMonths) || 1,
+        totalIncome: viewingAudit.total_income,
+        totalExpenses: viewingAudit.total_expenses,
+        incomeSources: (viewingAudit.report_json?.summary as { incomeSources?: { name: string; amount: number }[] } | undefined)?.incomeSources,
+        monthlyObservations: Array.isArray(viewingAudit.report_json?.monthlyObservations)
+          ? viewingAudit.report_json.monthlyObservations as CreditReadinessInput["monthlyObservations"]
+          : [],
+        transactionDataVerified: false,
+      }
+    : null;
 
   const stats = useMemo(() => {
     if (!viewingAudit) return null;
@@ -385,6 +401,10 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
           periodEnd={viewingAudit.audit_period_end}
           report={(viewingAudit.report_json ?? null) as FinancialHealthGuidanceProps["report"]}
         />
+      )}
+
+      {!loading && viewingAudit && !viewingAudit.is_locked && creditReadinessInput && (
+        <CreditReadinessAssessment input={creditReadinessInput} />
       )}
 
       {/* Continuous reporting (weekly / monthly monitoring) */}

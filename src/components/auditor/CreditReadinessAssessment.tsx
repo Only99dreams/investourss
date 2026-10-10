@@ -25,7 +25,7 @@ export function CreditReadinessAssessment({ input }: CreditReadinessAssessmentPr
   const tone = assessment.readinessBand === "Strong" ? "text-emerald-700 bg-emerald-50" : assessment.readinessBand === "Moderate" ? "text-amber-800 bg-amber-50" : assessment.readinessBand === "Needs Improvement" ? "text-rose-700 bg-rose-50" : "text-muted-foreground bg-muted";
 
   return (
-    <section className="mb-8 space-y-5" aria-labelledby="credit-readiness-title">
+    <section id="credit-readiness" className="mb-8 space-y-5" aria-labelledby="credit-readiness-title">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-primary">AI Financial Auditor Report</p>
         <h2 id="credit-readiness-title" className="mt-1 text-xl font-semibold">Credit Readiness Assessment</h2>

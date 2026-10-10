@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CreditReadinessAssessment } from "@/components/auditor/CreditReadinessAssessment";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { CreditReadinessInput } from "@/lib/creditReadiness";
 
 interface AssessmentAudit {
   id: string;
@@ -16,20 +17,6 @@ interface AssessmentAudit {
   total_expenses: number;
   created_at: string;
   report_json: Record<string, unknown> | null;
-}
-
-interface AuditTransaction {
-  date?: string;
-  amount?: number;
-  type?: "credit" | "debit";
-}
-
-interface StoredMonthlyObservation {
-  month: string;
-  income: number;
-  outflows: number;
-  source?: "calculated";
-  verification?: "unverified";
 }
 
 export function CreditReadinessPage() {
@@ -57,9 +44,7 @@ export function CreditReadinessPage() {
           : await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
 
         if (error) throw error;
-        if (cancelled) return;
-
-        setAudit((data as AssessmentAudit | null) ?? null);
+        if (!cancelled) setAudit((data as AssessmentAudit | null) ?? null);
       } catch (error) {
         console.error("Failed to load credit readiness data:", error);
         if (!cancelled) setHasError(true);
@@ -98,7 +83,7 @@ export function CreditReadinessPage() {
           <CardHeader>
             <FileSearch className="mb-1 h-7 w-7 text-primary" />
             <CardTitle>No financial audit yet</CardTitle>
-            <CardDescription>Run an audit to create a credit readiness assessment from your available financial records.</CardDescription>
+            <CardDescription>Run an audit to create a credit readiness assessment from your financial records.</CardDescription>
           </CardHeader>
           <CardContent><Button asChild><Link to="/auditor/connect">Start a financial audit</Link></Button></CardContent>
         </Card>
@@ -122,25 +107,10 @@ export function CreditReadinessPage() {
   }
 
   const report = audit.report_json ?? {};
+  const monthlyObservations = Array.isArray(report.monthlyObservations)
+    ? report.monthlyObservations as CreditReadinessInput["monthlyObservations"]
+    : [];
   const incomeSources = (report.summary as { incomeSources?: { name: string; amount: number }[] } | undefined)?.incomeSources;
-  const transactions = Array.isArray(report.transactions) ? report.transactions as AuditTransaction[] : [];
-  const storedObservations = Array.isArray(report.monthlyObservations)
-    ? report.monthlyObservations as StoredMonthlyObservation[]
-    : null;
-  const monthly = new Map<string, StoredMonthlyObservation>();
-  if (storedObservations) {
-    storedObservations.forEach((observation) => monthly.set(observation.month, observation));
-  } else {
-    for (const transaction of transactions) {
-      if (!transaction.date || !Number.isFinite(Number(transaction.amount)) || Number(transaction.amount) < 0) continue;
-      const month = transaction.date.slice(0, 7);
-      const observation = monthly.get(month) ?? { month, income: 0, outflows: 0 };
-      if (transaction.type === "credit") observation.income += Number(transaction.amount);
-      if (transaction.type === "debit") observation.outflows += Number(transaction.amount);
-      monthly.set(month, observation);
-    }
-  }
-  const auditMonths = Number(report.auditMonths) || 1;
 
   return (
     <main className="p-4 md:p-6">
@@ -149,12 +119,10 @@ export function CreditReadinessPage() {
           input={{
             periodStart: audit.audit_period_start,
             periodEnd: audit.audit_period_end,
-            auditMonths,
+            auditMonths: Number(report.auditMonths) || 1,
             totalIncome: audit.total_income,
             totalExpenses: audit.total_expenses,
-            monthlyObservations: [...monthly.values()]
-              .sort((a, b) => a.month.localeCompare(b.month))
-              .map((observation) => ({ ...observation, source: "calculated" as const, verification: "unverified" as const })),
+            monthlyObservations,
             incomeSources,
             transactionDataVerified: false,
           }}
