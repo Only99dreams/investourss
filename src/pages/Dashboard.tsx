@@ -16,6 +16,7 @@ import { NotificationsSection } from "@/components/dashboard/sections/Notificati
 import { LeaderboardSection } from "@/components/dashboard/sections/LeaderboardSection";
 import { SavedPlansSection } from "@/components/dashboard/sections/SavedPlansSection";
 import { AuditorDashboard } from "@/pages/AuditorDashboard";
+import { CreditReadinessPage } from "@/pages/CreditReadinessPage";
 import AuditHistoryPage from "@/pages/AuditHistoryPage";
 import { FHAPortfolioSection } from "@/components/dashboard/sections/FHAPortfolioSection";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -134,6 +135,12 @@ const Dashboard = () => {
             <>
               <DashboardHeader title="AI Financial Auditor" onMenuClick={() => setSidebarOpen(true)} />
               <AuditorDashboard embedded />
+            </>
+          } />
+          <Route path="/credit-readiness" element={
+            <>
+              <DashboardHeader title="Credit Readiness Assessment" onMenuClick={() => setSidebarOpen(true)} />
+              <CreditReadinessPage />
             </>
           } />
           <Route path="/audit-history" element={

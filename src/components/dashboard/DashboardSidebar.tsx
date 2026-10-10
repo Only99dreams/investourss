@@ -6,13 +6,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { 
   User, Wallet, GraduationCap, TrendingUp, FileText, Users, 
   Settings, Bell, MessageSquare, AlertCircle, Share2, Trophy,
-  Target, LogOut, Shield, Umbrella, Award, ScanSearch, PieChart, History
+  Target, LogOut, Shield, Umbrella, Award, ScanSearch, PieChart, History, ShieldCheck
 } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
 const sidebarItems = [
   { icon: GraduationCap, label: "Education", path: "/dashboard/education" },
   { icon: ScanSearch, label: "AI Auditor", path: "/dashboard/auditor", subtitle: "Latest Audit Report" },
+  { icon: ShieldCheck, label: "Credit Readiness", path: "/dashboard/credit-readiness", subtitle: "Borrowing Assessment" },
   { icon: History, label: "Audit History", path: "/dashboard/audit-history", subtitle: "Reports & PDFs" },
   { icon: FileText, label: "My Plans", path: "/dashboard/plans", subtitle: "Business Plans" },
   { icon: User, label: "Profile", path: "/dashboard/profile" },
@@ -113,7 +114,7 @@ export function DashboardSidebar() {
           return (
             <Link
               key={item.path}
-              to={item.path}
+              to={item.path === "/dashboard/credit-readiness" ? `${item.path}${location.search}` : item.path}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                 isActive 
