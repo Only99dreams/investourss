@@ -8,7 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:audit-rules": "node --experimental-strip-types --test supabase/functions/financial-audit/auditRules.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

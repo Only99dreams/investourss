@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { applyFinancialAuditRules, splitFinancialRecords } from "./auditRules.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,19 +27,14 @@ Extract every transaction you can find. Bank SMS alerts look like:
 Rules:
 1. Parse ALL transactions. For each: date (ISO yyyy-mm-dd), description (merchant/counterparty), amount (NGN), type ('credit' for money in, 'debit' for money out), and a category (salary, transfers, shopping, food, transport, utilities, subscriptions, airtime, atm_withdrawal, pos, bills, investment, entertainment, other).
 2. Extract every dated transaction present in the supplied records. Do not discard transactions based on today's date. The application will apply the selected 1, 3 or 6-month window relative to the latest dated transaction in these records. If dates are not present, include the available records and mark dates as unavailable.
-3. Compute:
-   - totalIncome: sum of credits
-   - totalExpenses: sum of debits
-   - cashFlow = totalIncome - totalExpenses
-   - savingsRate = (cashFlow / totalIncome * 100) clamped 0-100
-   - recoverableAmount: your estimate of money recoverable through refunds, bank overcharges, duplicated charges, failed POS double-debits, subscription over-billing, forgotten/missed reversals, and hidden charges (ATM fees, data fees, account maintenance, excess charges). Be conservative and evidence-based. recoverableAmount MUST be the exact sum of the "amount" values in the "recoverable" array.
-4. Detect LEAKAGES: recurring unnecessary costs, duplicate charges, bank charges/fees, dormant subscriptions, ATM/withdrawal fees, high transfer fees, POS double-charges.
-5. For every item in "recoverable", include "sourceAmount" (the full original transaction amount that caused the leakage) and "sourceType" ("debit" for money out) so the user can trace each recoverable back to the exact transaction in their statement.
-6. Score (0-100) the financial health using this rubric:
-   - 80-100: Excellent (positive cash flow, savings rate > 20%, no worrying leakages)
-   - 65-79: Good (positive cash flow, savings rate 10-20%, some minor leakages)
-   - 50-64: Needs Attention (thin or negative cash flow, leakages > 5% of expenses)
-   - 0-49: Critical (negative cash flow, heavy fees, dangerous leakages)
+3. Do not invent transactions, amounts, dates, fees, refunds, debt, or repayment history. Copy a transaction reference only if it is present in the source.
+4. Do not calculate totals, savings rate, recoverable amounts, recommendations, or scores. The application calculates these from normalized transactions.
+5. Return every transaction found in the provided records. Do not compare dates with today's date or omit older transactions; the application selects the requested period relative to the latest valid transaction date.
+6. Do not carry a prior date forward or substitute today's date when a transaction date is absent. Leave the transaction date unavailable.
+7. Include a transaction ID only when the exact source ID/reference is present. Repeated transactions must remain separate unless the exact same source ID occurs more than once.
+8. The application uses the following rules: amounts must be positive finite values; direction must be explicitly credit/debit; dated transactions outside the selected statement-relative period are excluded; undated transactions remain in period totals but not monthly trends; totals, summaries, score, and status are computed from the resulting ledger; fees alone are not recoverable without explicit claim evidence.
+
+6. Return the required JSON shape. Derived numeric fields may be zero and derived arrays may be empty; the application replaces them using the versioned audit rules.
 
 Respond with STRICT JSON only, no markdown, no commentary. Shape:
 {
@@ -55,7 +51,7 @@ Respond with STRICT JSON only, no markdown, no commentary. Shape:
     "incomeSources": [{"name": "...", "amount": <number>}],
     "topSpendingCategories": [{"name": "...", "amount": <number>}]
   },
-  "transactions": [{"date": "yyyy-mm-dd", "description": "...", "amount": <number>, "type": "credit|debit", "category": "..."}],
+  "transactions": [{"date": "yyyy-mm-dd or empty", "description": "...", "amount": <number>, "type": "credit|debit", "category": "...", "transactionId": "exact source ID or empty"}],
    "leakages": [{"description": "...", "amount": <number>, "category": "..."}],
    "recoverable": [{"description": "...", "amount": <number>, "category": "...", "transactionDate": "yyyy-mm-dd", "sourceAmount": <number>, "sourceType": "debit|credit"}],
   "recommendations": [{"title": "...", "description": "...", "category": "leakage|recovery|monitoring|spending"}],
@@ -65,7 +61,7 @@ Respond with STRICT JSON only, no markdown, no commentary. Shape:
 function buildUserPrompt(input: { text: string; sourceType: string; accountType: string; auditMonths?: number }): string {
   const months = input.auditMonths ?? DEFAULT_AUDIT_MONTHS;
   return `Selected audit duration: ${months} month${months === 1 ? "" : "s"}.
-Extract and analyze every transaction in the supplied records. Do not compare dates with today's date or omit older entries; the application will select the requested duration relative to the statement's latest transaction date.
+Extract every transaction present in this complete record chunk. Do not compare dates with today's date or omit older entries; the application selects the requested duration relative to the latest valid transaction date across all chunks. Copy source IDs exactly when present.
 
 Financial data source: ${input.sourceType}
 Account type: ${input.accountType || 'individual'}
@@ -83,35 +79,38 @@ interface ExtractedTransaction {
   description: string;
   amount: number;
   type: 'credit' | 'debit';
-  category?: string;
+  transactionId?: string;
+}
+
+function parseSourceDate(value: string): string | undefined {
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value);
+  const local = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(value);
+  const year = Number(iso?.[1] ?? local?.[3]);
+  const month = Number(iso?.[2] ?? local?.[2]);
+  const day = Number(iso?.[3] ?? local?.[1]);
+  if (!iso && !local) return undefined;
+  const fullYear = year < 100 ? 2000 + year : year;
+  const parsed = new Date(Date.UTC(fullYear, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== fullYear
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) return undefined;
+  return parsed.toISOString().slice(0, 10);
 }
 
 // Deterministic fallback: parse bank SMS alerts without calling the AI gateway.
-function parseFromText(text: string, months: number = DEFAULT_AUDIT_MONTHS): {
-  transactions: ExtractedTransaction[];
-  periodStart: string;
-  periodEnd: string;
-} {
+function parseFromText(text: string): { transactions: ExtractedTransaction[] } {
   const transactions: ExtractedTransaction[] = [];
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const dateRegex = /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/g;
+  const dateRegex = /\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/g;
   const amountRegex = /(?:₦|NGN|\u20a6)\s*([\d,]+(?:\.\d{1,2})?)/gi;
-  const creditWords = /\b(credit|transfer from|payment received|salary|funding|interest)\b/i;
+  const creditWords = /\b(credit|deposit|transfer from|payment received|salary|funding|interest)\b/i;
   const debitWords = /\b(withdraw|debit|transfer to|transfer of|payment to|outgoing|sent to|charged|deducted|pos|atm|bill|airtime|charge|fee)\b/i;
 
-  let lastDate = new Date().toISOString().slice(0, 10);
-
   for (const line of lines) {
-    const lineDateMatch = line.match(dateRegex);
-    if (lineDateMatch) {
-      const parts = lineDateMatch[0].split(/[/-]/);
-      const day = parts[0];
-      const month = parts[1];
-      let year = parts[2];
-      if (year.length === 2) year = `20${year}`;
-      const candidate = new Date(`${year}-${month}-${day}`);
-      if (!isNaN(candidate.getTime())) lastDate = candidate.toISOString().slice(0, 10);
-    }
+    const dateToken = line.match(dateRegex)?.[0];
+    const transactionDate = dateToken ? parseSourceDate(dateToken) : undefined;
 
     const amtMatch = line.replace(/\bAvail Bal[^.]*\./gi, '').match(amountRegex);
     if (!amtMatch) continue;
@@ -120,16 +119,10 @@ function parseFromText(text: string, months: number = DEFAULT_AUDIT_MONTHS): {
     const amount = !isNaN(parsedAmount) ? parsedAmount : 0;
     if (amount <= 0) continue;
 
-    const isCredit = creditWords.test(line) && !debitWords.test(line);
+    const isCredit = creditWords.test(line);
     const isDebit = debitWords.test(line);
-
-    let type: 'credit' | 'debit';
-    if (isCredit) type = 'credit';
-    else if (isDebit) type = 'debit';
-    else {
-      // Default: "Alert: Withdrawal" / "Alert: Transfer" lines are debits unless "Credit"
-      type = /\b(debit|withdrawal|transfer out|transfer of|outgoing|sent|charged|deducted|payment)\b/i.test(line) ? 'debit' : 'credit';
-    }
+    if (isCredit === isDebit) continue;
+    const type: 'credit' | 'debit' = isCredit ? 'credit' : 'debit';
 
     const description = line
       .replace(dateRegex, '')
@@ -137,188 +130,34 @@ function parseFromText(text: string, months: number = DEFAULT_AUDIT_MONTHS): {
       .replace(/(Alert:|NGN|₦|Avail Bal[^.]*\.|Txn ID[^.]*\.|Acct|Account)/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
+    const transactionId = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/i.exec(line)?.[1];
 
     transactions.push({
-      date: lastDate,
+      date: transactionDate,
       description: description || (type === 'credit' ? 'Credit received' : 'Debit'),
       amount: Math.round(amount * 100) / 100,
       type,
-      category: guessCategory(description),
+      transactionId,
     });
   }
 
-  const { periodStart, periodEnd } = auditWindow(months);
-
-  return {
-    transactions,
-    periodStart,
-    periodEnd,
-  };
-}
-
-function auditWindow(months: number, anchor = new Date()) {
-  const end = new Date(anchor);
-  const start = new Date(anchor);
-  const dayOfMonth = start.getDate();
-  start.setDate(1);
-  start.setMonth(start.getMonth() - months);
-  const lastDayOfTargetMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
-  start.setDate(Math.min(dayOfMonth, lastDayOfTargetMonth));
-  return {
-    periodStart: start.toISOString().slice(0, 10),
-    periodEnd: end.toISOString().slice(0, 10),
-  };
-}
-
-function auditWindowForTransactions(transactions: { date?: string }[], months: number) {
-  const today = new Date().toISOString().slice(0, 10);
-  const latestDate = transactions
-    .map((transaction) => transaction.date)
-    .filter((date): date is string => Boolean(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today))
-    .sort()
-    .at(-1);
-  return auditWindow(months, latestDate ? new Date(`${latestDate}T12:00:00Z`) : new Date());
+  return { transactions };
 }
 
 function buildFallbackReport(text: string, accountType: string, months: number = DEFAULT_AUDIT_MONTHS) {
-  const { transactions } = parseFromText(text, months);
-  const { periodStart, periodEnd } = auditWindowForTransactions(transactions, months);
-  const inWindow = transactions.filter((transaction) =>
-    transaction.date && transaction.date >= periodStart && transaction.date <= periodEnd
-  );
-  const income = inWindow.filter((transaction) => transaction.type === 'credit');
-  const expenses = inWindow.filter((transaction) => transaction.type === 'debit');
-  const totalIncome = income.reduce((sum, transaction) => sum + transaction.amount, 0);
-  const totalExpenses = expenses.reduce((sum, transaction) => sum + transaction.amount, 0);
-  const cashFlow = totalIncome - totalExpenses;
-  const savingsRate = totalIncome > 0 ? Math.max(0, Math.min(100, (cashFlow / totalIncome) * 100)) : 0;
+  const { transactions } = parseFromText(text);
+  return buildReportFromRules(applyFinancialAuditRules(transactions, months), accountType);
+}
 
-  const leakageCats = /(charge|fee|commission|vat|deduct)/i;
-  const recoverableCats = /(duplicate|reversal|failed|double|fee|charge|subscription|insurance)/i;
-  const leakages = expenses
-    .filter((transaction) => leakageCats.test(transaction.description))
-    .slice(0, 12)
-    .map((transaction) => ({ description: transaction.description || 'Bank charge', amount: transaction.amount, category: 'bank_charges' }));
-  const recoverable = expenses
-    .filter((transaction) => recoverableCats.test(transaction.description))
-    .slice(0, 10)
-    .map((transaction) => ({
-      description: transaction.description || 'Fees / charges',
-      amount: Math.round(transaction.amount * 0.5 * 100) / 100,
-      category: 'charges',
-      transactionDate: transaction.date,
-      sourceAmount: Math.round(transaction.amount * 100) / 100,
-      sourceType: 'debit',
-    }));
-  if (recoverable.length === 0) {
-    recoverable.push({
-      description: 'Bank charges & maintenance fees',
-      amount: Math.round(totalExpenses * 0.015 * 100) / 100,
-      category: 'charges',
-      transactionDate: periodEnd,
-      sourceAmount: Math.round(totalExpenses * 0.015 * 100) / 100,
-      sourceType: 'debit',
-    });
-  }
-
-  const recoverableAmount = recoverable.reduce((sum, item) => sum + item.amount, 0);
-  const monthlyTotals = new Map<string, { month: string; income: number; outflows: number }>();
-  inWindow.forEach((transaction) => {
-    const month = transaction.date!.slice(0, 7);
-    const totals = monthlyTotals.get(month) ?? { month, income: 0, outflows: 0 };
-    totals[transaction.type === 'credit' ? 'income' : 'outflows'] += transaction.amount;
-    monthlyTotals.set(month, totals);
-  });
-  const score = calculateHealthScore(cashFlow, savingsRate, leakages.length);
-  const healthStatus = healthStatusFromScore(score);
-  const monthlyScores = monthlyScoresFromTransactions(inWindow);
-
+function buildReportFromRules(rules: ReturnType<typeof applyFinancialAuditRules>, accountType: string) {
   return {
-    periodStart,
-    periodEnd,
-    auditMonths: months,
-    score,
-    healthStatus,
-    totalIncome: Math.round(totalIncome * 100) / 100,
-    totalExpenses: Math.round(totalExpenses * 100) / 100,
-    cashFlow: Math.round(cashFlow * 100) / 100,
-    savingsRate: Math.round(savingsRate * 100) / 100,
-    recoverableAmount: Math.round(recoverableAmount * 100) / 100,
+    ...rules,
     summary: {
-      incomeSources: income.slice(0, 5).map((transaction) => ({ name: transaction.description || 'Income', amount: transaction.amount })),
-      topSpendingCategories: topCategories(expenses, 5),
+      incomeSources: rules.incomeSources,
+      topSpendingCategories: rules.topSpendingCategories,
     },
-    transactions: inWindow.slice(0, 200),
-    monthlyObservations: [...monthlyTotals.values()].sort((a, b) => a.month.localeCompare(b.month)).map((month) => ({
-      ...month,
-      source: 'calculated',
-      verification: 'unverified',
-    })),
-    leakages,
-    recoverable: recoverable.slice(0, 12),
-    recommendations: buildFallbackRecommendations(cashFlow, savingsRate, leakages.length, accountType),
-    monthlyScores,
+    recommendations: buildFallbackRecommendations(rules.cashFlow, rules.savingsRate, rules.leakages.length, accountType),
   };
-}
-
-function topCategories(txs: ExtractedTransaction[], limit: number): { name: string; amount: number }[] {
-  const byCat = new Map<string, number>();
-  for (const t of txs) {
-    const cat = guessCategory(t.description);
-    byCat.set(cat, (byCat.get(cat) ?? 0) + t.amount);
-  }
-  return [...byCat.entries()]
-    .map(([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100 }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, limit);
-}
-
-function calculateHealthScore(cashFlow: number, savingsRate: number, leakageCount: number): number {
-  let score = 55;
-  if (cashFlow > 0) score += 15;
-  if (savingsRate >= 20) score += 10;
-  if (savingsRate >= 10 && savingsRate < 20) score += 5;
-  score -= Math.min(15, leakageCount * 2);
-  return Math.max(10, Math.min(95, Math.round(score)));
-}
-
-function healthStatusFromScore(score: number): string {
-  return score >= 80 ? 'excellent' : score >= 65 ? 'good' : score >= 50 ? 'needs_attention' : 'critical';
-}
-
-function monthlyScoresFromTransactions(transactions: ExtractedTransaction[]): { month: string; score: number }[] {
-  const totals = new Map<string, { income: number; outflows: number; leakageCount: number }>();
-  for (const transaction of transactions) {
-    if (!transaction.date) continue;
-    const month = transaction.date.slice(0, 7);
-    const value = totals.get(month) ?? { income: 0, outflows: 0, leakageCount: 0 };
-    if (transaction.type === 'credit') value.income += transaction.amount;
-    else {
-      value.outflows += transaction.amount;
-      if (/(charge|fee|commission|vat|deduct|duplicate|failed|reversal)/i.test(transaction.description)) {
-        value.leakageCount += 1;
-      }
-    }
-    totals.set(month, value);
-  }
-  return [...totals.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([month, value]) => {
-    const cashFlow = value.income - value.outflows;
-    const savingsRate = value.income > 0 ? Math.max(0, Math.min(100, (cashFlow / value.income) * 100)) : 0;
-    return { month, score: calculateHealthScore(cashFlow, savingsRate, value.leakageCount) };
-  });
-}
-
-function guessCategory(description: string): string {
-  const d = description.toLowerCase();
-  if (/(pos|atm|withdraw)/.test(d)) return 'withdrawals';
-  if (/(airtime|data|bundle)/.test(d)) return 'airtime & data';
-  if (/(transfer)/.test(d)) return 'transfers';
-  if (/(rent|house|landlord)/.test(d)) return 'rent';
-  if (/(charge|fee|commission|vat)/.test(d)) return 'bank charges';
-  if (/(shop|market|grocery|supermarket|food)/.test(d)) return 'shopping & food';
-  if (/(bill|electric|utility|water)/.test(d)) return 'utilities';
-  if (/(salary|wages)/.test(d)) return 'salary';
-  return 'other';
 }
 
 function buildFallbackRecommendations(
@@ -329,16 +168,16 @@ function buildFallbackRecommendations(
 ) {
   const recs: { title: string; description: string; category: string }[] = [
     {
-      title: 'Review recurring charges & subscriptions',
-      description: 'Cancel dormant subscriptions and negotiate recurring bills to stop silent leakages.',
+      title: 'Review recurring spending',
+      description: 'Check recurring charges against your records and confirm they are expected.',
       category: 'leakage',
     },
   ];
   if (leakCount > 0) {
     recs.push({
-      title: 'Claim refunds on duplicate & failed charges',
-      description: 'Duplicate POS debits and failed reversals are claimable with your bank. Open a dispute ticket.',
-      category: 'recovery',
+      title: 'Review listed fees and charges',
+      description: 'Confirm these entries with your bank; a fee alone does not establish that a refund is owed.',
+      category: 'leakage',
     });
   }
   if (cashFlow <= 0) {
@@ -366,100 +205,20 @@ function buildFallbackRecommendations(
 
 type AiRecord = { [key: string]: unknown };
 
-function clampReport(r: AiRecord, accountType: string, months: number) {
+function clampReport(r: AiRecord, accountType: string, months: number, sourceText: string) {
   const rawTransactions = Array.isArray(r.transactions) ? r.transactions : [];
-  const extractedTransactions = rawTransactions.flatMap((value: unknown) => {
-    if (!value || typeof value !== 'object') return [];
-    const transaction = value as Record<string, unknown>;
-    const date = typeof transaction.date === 'string' ? transaction.date.slice(0, 10) : '';
-    const amount = Number(transaction.amount);
-    const type = transaction.type === 'credit' || transaction.type === 'debit' ? transaction.type : null;
-    if (!type || !Number.isFinite(amount) || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
-    return [{
-      date,
-      description: String(transaction.description || (type === 'credit' ? 'Credit received' : 'Debit')).trim(),
-      amount: Math.round(amount * 100) / 100,
-      type: type as ExtractedTransaction['type'],
-      category: String(transaction.category || guessCategory(String(transaction.description || ''))),
-    }];
-  }).sort((a, b) => a.date.localeCompare(b.date)
-    || a.description.localeCompare(b.description)
-    || a.amount - b.amount
-    || a.type.localeCompare(b.type));
-  const window = auditWindowForTransactions(extractedTransactions, months);
-  const transactions = extractedTransactions.filter((transaction) =>
-    transaction.date >= window.periodStart && transaction.date <= window.periodEnd
+  const sourceIds = new Set(
+    [...sourceText.matchAll(/\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/gi)]
+      .map((match) => match[1]),
   );
-  const incomeTransactions = transactions.filter((transaction) => transaction.type === 'credit');
-  const expenseTransactions = transactions.filter((transaction) => transaction.type === 'debit');
-  const totalIncome = transactions.length
-    ? incomeTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
-    : Math.max(0, Number(r.totalIncome) || 0);
-  const totalExpenses = transactions.length
-    ? expenseTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
-    : Math.max(0, Number(r.totalExpenses) || 0);
-  const cashFlow = totalIncome - totalExpenses;
-  const savingsRate = totalIncome > 0 ? Math.max(0, Math.min(100, (cashFlow / totalIncome) * 100)) : 0;
-  const deterministicLeakageCount = expenseTransactions.filter((transaction) =>
-    /(charge|fee|commission|vat|deduct|duplicate|failed|reversal)/i.test(transaction.description)
-  ).length;
-  const score = calculateHealthScore(cashFlow, savingsRate, deterministicLeakageCount);
-  const incomeBySource = new Map<string, number>();
-  incomeTransactions.forEach((transaction) => incomeBySource.set(
-    transaction.description,
-    (incomeBySource.get(transaction.description) ?? 0) + transaction.amount,
-  ));
-  const recoverable = Array.isArray(r.recoverable)
-    ? r.recoverable.slice(0, 20).map((x: { [key: string]: unknown }) => {
-        const sourceAmount = x?.sourceAmount != null ? Math.max(0, Number(x.sourceAmount) || 0) : undefined;
-        const amount = sourceAmount != null
-          ? Math.max(0, Math.min(Number(x?.amount) || 0, sourceAmount))
-          : Math.max(0, Number(x?.amount) || 0);
-        return {
-          description: String(x?.description || 'Fees / charges'),
-          amount: Math.round(amount * 100) / 100,
-          category: String(x?.category || 'charges'),
-          transactionDate: x?.transactionDate || undefined,
-          sourceAmount,
-          sourceType: x?.sourceType === 'credit' ? 'credit' : 'debit',
-        };
-      })
-    : [];
-  const recoverableAmount = Math.round(recoverable.reduce((s, x) => s + x.amount, 0) * 100) / 100;
-  const monthlyTotals = new Map<string, { month: string; income: number; outflows: number }>();
-  transactions.forEach((transaction) => {
-    const month = transaction.date.slice(0, 7);
-    const totals = monthlyTotals.get(month) ?? { month, income: 0, outflows: 0 };
-    totals[transaction.type === 'credit' ? 'income' : 'outflows'] += transaction.amount;
-    monthlyTotals.set(month, totals);
+  const verifiedTransactions = rawTransactions.map((value) => {
+    if (!value || typeof value !== "object") return value;
+    const transaction = value as Record<string, unknown>;
+    if (typeof transaction.transactionId !== "string" || sourceIds.has(transaction.transactionId)) return value;
+    const { transactionId: _unverifiedId, ...withoutUnverifiedId } = transaction;
+    return withoutUnverifiedId;
   });
-  return {
-    periodStart: window.periodStart,
-    periodEnd: window.periodEnd,
-    auditMonths: months,
-    score,
-    healthStatus: healthStatusFromScore(score),
-    totalIncome,
-    totalExpenses,
-    cashFlow,
-    savingsRate,
-    recoverableAmount,
-    summary: transactions.length ? {
-      incomeSources: [...incomeBySource.entries()].map(([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100 }))
-        .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name)).slice(0, 10),
-      topSpendingCategories: topCategories(expenseTransactions, 10),
-    } : r.summary || {},
-    transactions: transactions.length ? transactions.slice(0, 300) : [],
-    monthlyObservations: [...monthlyTotals.values()].sort((a, b) => a.month.localeCompare(b.month)).map((month) => ({
-      ...month,
-      source: 'calculated',
-      verification: 'unverified',
-    })),
-    leakages: Array.isArray(r.leakages) ? r.leakages.slice(0, 20) : [],
-    recoverable,
-    recommendations: Array.isArray(r.recommendations) ? r.recommendations.slice(0, 8) : [],
-    monthlyScores: monthlyScoresFromTransactions(transactions),
-  };
+  return buildReportFromRules(applyFinancialAuditRules(verifiedTransactions, months), accountType);
 }
 
 async function callAI(text: string, sourceType: string, accountType: string, auditMonths: number) {
@@ -519,8 +278,12 @@ serve(async (req) => {
 
     let report;
     try {
-      const raw = await callAI(text, sourceType, accountType, auditMonths);
-      report = clampReport(raw, accountType, auditMonths);
+      const extractedTransactions: unknown[] = [];
+      for (const chunk of splitFinancialRecords(text)) {
+        const raw = await callAI(chunk, sourceType, accountType, auditMonths);
+        if (Array.isArray(raw.transactions)) extractedTransactions.push(...raw.transactions);
+      }
+      report = clampReport({ transactions: extractedTransactions }, accountType, auditMonths, text);
       if (report.transactions.length === 0) {
         report = buildFallbackReport(text, accountType, auditMonths);
       }
