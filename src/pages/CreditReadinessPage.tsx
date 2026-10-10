@@ -14,7 +14,22 @@ interface AssessmentAudit {
   audit_period_end: string | null;
   total_income: number;
   total_expenses: number;
+  created_at: string;
   report_json: Record<string, unknown> | null;
+}
+
+interface AuditTransaction {
+  date?: string;
+  amount?: number;
+  type?: "credit" | "debit";
+}
+
+interface StoredMonthlyObservation {
+  month: string;
+  income: number;
+  outflows: number;
+  source?: "calculated";
+  verification?: "unverified";
 }
 
 export function CreditReadinessPage() {
@@ -34,7 +49,7 @@ export function CreditReadinessPage() {
       try {
         const query = supabase
           .from("financial_audits")
-          .select("id,is_locked,audit_period_start,audit_period_end,total_income,total_expenses,report_json")
+          .select("id,is_locked,audit_period_start,audit_period_end,total_income,total_expenses,created_at,report_json")
           .eq("user_id", user.id);
         const requestedId = searchParams.get("audit");
         const { data, error } = requestedId
@@ -106,7 +121,26 @@ export function CreditReadinessPage() {
     );
   }
 
-  const incomeSources = (audit.report_json?.summary as { incomeSources?: { name: string; amount: number }[] } | undefined)?.incomeSources;
+  const report = audit.report_json ?? {};
+  const incomeSources = (report.summary as { incomeSources?: { name: string; amount: number }[] } | undefined)?.incomeSources;
+  const transactions = Array.isArray(report.transactions) ? report.transactions as AuditTransaction[] : [];
+  const storedObservations = Array.isArray(report.monthlyObservations)
+    ? report.monthlyObservations as StoredMonthlyObservation[]
+    : null;
+  const monthly = new Map<string, StoredMonthlyObservation>();
+  if (storedObservations) {
+    storedObservations.forEach((observation) => monthly.set(observation.month, observation));
+  } else {
+    for (const transaction of transactions) {
+      if (!transaction.date || !Number.isFinite(Number(transaction.amount)) || Number(transaction.amount) < 0) continue;
+      const month = transaction.date.slice(0, 7);
+      const observation = monthly.get(month) ?? { month, income: 0, outflows: 0 };
+      if (transaction.type === "credit") observation.income += Number(transaction.amount);
+      if (transaction.type === "debit") observation.outflows += Number(transaction.amount);
+      monthly.set(month, observation);
+    }
+  }
+  const auditMonths = Number(report.auditMonths) || 1;
 
   return (
     <main className="p-4 md:p-6">
@@ -115,9 +149,14 @@ export function CreditReadinessPage() {
           input={{
             periodStart: audit.audit_period_start,
             periodEnd: audit.audit_period_end,
+            auditMonths,
             totalIncome: audit.total_income,
             totalExpenses: audit.total_expenses,
+            monthlyObservations: [...monthly.values()]
+              .sort((a, b) => a.month.localeCompare(b.month))
+              .map((observation) => ({ ...observation, source: "calculated" as const, verification: "unverified" as const })),
             incomeSources,
+            transactionDataVerified: false,
           }}
         />
       </div>

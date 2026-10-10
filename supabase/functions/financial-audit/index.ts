@@ -147,50 +147,59 @@ function parseFromText(text: string, months: number = DEFAULT_AUDIT_MONTHS): {
     });
   }
 
-  const end = new Date();
-  const start = new Date();
-  start.setMonth(start.getMonth() - months);
+  const { periodStart, periodEnd } = auditWindow(months);
 
   return {
     transactions,
+    periodStart,
+    periodEnd,
+  };
+}
+
+function auditWindow(months: number, now = new Date()) {
+  const end = new Date(now);
+  const start = new Date(now);
+  const dayOfMonth = start.getDate();
+  start.setDate(1);
+  start.setMonth(start.getMonth() - months);
+  const lastDayOfTargetMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+  start.setDate(Math.min(dayOfMonth, lastDayOfTargetMonth));
+  return {
     periodStart: start.toISOString().slice(0, 10),
     periodEnd: end.toISOString().slice(0, 10),
   };
 }
 
 function buildFallbackReport(text: string, accountType: string, months: number = DEFAULT_AUDIT_MONTHS) {
-  const { transactions, periodStart, periodEnd } = parseFromText(text, months);
-
-  const income = transactions.filter((t) => t.type === 'credit');
-  const expenses = transactions.filter((t) => t.type === 'debit');
-
-  const totalIncome = income.reduce((s, t) => s + t.amount, 0);
-  const totalExpenses = expenses.reduce((s, t) => s + t.amount, 0);
+  const { transactions } = parseFromText(text, months);
+  const { periodStart, periodEnd } = auditWindow(months);
+  const inWindow = transactions.filter((transaction) =>
+    transaction.date && transaction.date >= periodStart && transaction.date <= periodEnd
+  );
+  const income = inWindow.filter((transaction) => transaction.type === 'credit');
+  const expenses = inWindow.filter((transaction) => transaction.type === 'debit');
+  const totalIncome = income.reduce((sum, transaction) => sum + transaction.amount, 0);
+  const totalExpenses = expenses.reduce((sum, transaction) => sum + transaction.amount, 0);
   const cashFlow = totalIncome - totalExpenses;
   const savingsRate = totalIncome > 0 ? Math.max(0, Math.min(100, (cashFlow / totalIncome) * 100)) : 0;
 
-  // Heuristic: estimate leakages from bank charges/fees + POS withdrawals
   const leakageCats = /(charge|fee|commission|vat|deduct)/i;
   const recoverableCats = /(duplicate|reversal|failed|double|fee|charge|subscription|insurance)/i;
-
   const leakages = expenses
-    .filter((t) => leakageCats.test(t.description))
+    .filter((transaction) => leakageCats.test(transaction.description))
     .slice(0, 12)
-    .map((t) => ({ description: t.description || 'Bank charge', amount: t.amount, category: 'bank_charges' }));
-
-  const recoverable = [
-    ...expenses
-      .filter((t) => recoverableCats.test(t.description))
-      .slice(0, 10)
-      .map((t) => ({
-        description: t.description || 'Fees / charges',
-        amount: Math.round(t.amount * 0.5 * 100) / 100,
-        category: 'charges',
-        transactionDate: t.date,
-        sourceAmount: Math.round(t.amount * 100) / 100,
-        sourceType: 'debit',
-      })),
-  ];
+    .map((transaction) => ({ description: transaction.description || 'Bank charge', amount: transaction.amount, category: 'bank_charges' }));
+  const recoverable = expenses
+    .filter((transaction) => recoverableCats.test(transaction.description))
+    .slice(0, 10)
+    .map((transaction) => ({
+      description: transaction.description || 'Fees / charges',
+      amount: Math.round(transaction.amount * 0.5 * 100) / 100,
+      category: 'charges',
+      transactionDate: transaction.date,
+      sourceAmount: Math.round(transaction.amount * 100) / 100,
+      sourceType: 'debit',
+    }));
   if (recoverable.length === 0) {
     recoverable.push({
       description: 'Bank charges & maintenance fees',
@@ -202,29 +211,22 @@ function buildFallbackReport(text: string, accountType: string, months: number =
     });
   }
 
-  const recoverableAmount = recoverable.reduce((s, r) => s + r.amount, 0);
-
-  let score = 55;
-  if (cashFlow > 0) score += 15;
-  if (savingsRate >= 20) score += 10;
-  if (savingsRate >= 10 && savingsRate < 20) score += 5;
-  score -= Math.min(15, leakages.length * 2);
-  score = Math.max(10, Math.min(95, Math.round(score)));
-
-  const healthStatus = score >= 80 ? 'excellent' : score >= 65 ? 'good' : score >= 50 ? 'needs_attention' : 'critical';
-
-  const monthlyScores: { month: string; score: number }[] = [];
-  for (let i = months - 1; i >= 0; i -= 1) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    const month = d.toISOString().slice(0, 7);
-    // The most recent month is the audited score; earlier months trend up to it.
-    monthlyScores.push({ month, score: Math.max(10, Math.min(100, score - i * 2)) });
-  }
+  const recoverableAmount = recoverable.reduce((sum, item) => sum + item.amount, 0);
+  const monthlyTotals = new Map<string, { month: string; income: number; outflows: number }>();
+  inWindow.forEach((transaction) => {
+    const month = transaction.date!.slice(0, 7);
+    const totals = monthlyTotals.get(month) ?? { month, income: 0, outflows: 0 };
+    totals[transaction.type === 'credit' ? 'income' : 'outflows'] += transaction.amount;
+    monthlyTotals.set(month, totals);
+  });
+  const score = calculateHealthScore(cashFlow, savingsRate, leakages.length);
+  const healthStatus = healthStatusFromScore(score);
+  const monthlyScores = monthlyScoresFromTransactions(inWindow);
 
   return {
     periodStart,
     periodEnd,
+    auditMonths: months,
     score,
     healthStatus,
     totalIncome: Math.round(totalIncome * 100) / 100,
@@ -233,10 +235,15 @@ function buildFallbackReport(text: string, accountType: string, months: number =
     savingsRate: Math.round(savingsRate * 100) / 100,
     recoverableAmount: Math.round(recoverableAmount * 100) / 100,
     summary: {
-      incomeSources: income.slice(0, 5).map((t) => ({ name: t.description || 'Income', amount: t.amount })),
+      incomeSources: income.slice(0, 5).map((transaction) => ({ name: transaction.description || 'Income', amount: transaction.amount })),
       topSpendingCategories: topCategories(expenses, 5),
     },
-    transactions: transactions.slice(0, 200),
+    transactions: inWindow.slice(0, 200),
+    monthlyObservations: [...monthlyTotals.values()].sort((a, b) => a.month.localeCompare(b.month)).map((month) => ({
+      ...month,
+      source: 'calculated',
+      verification: 'unverified',
+    })),
     leakages,
     recoverable: recoverable.slice(0, 12),
     recommendations: buildFallbackRecommendations(cashFlow, savingsRate, leakages.length, accountType),
@@ -254,6 +261,41 @@ function topCategories(txs: ExtractedTransaction[], limit: number): { name: stri
     .map(([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100 }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, limit);
+}
+
+function calculateHealthScore(cashFlow: number, savingsRate: number, leakageCount: number): number {
+  let score = 55;
+  if (cashFlow > 0) score += 15;
+  if (savingsRate >= 20) score += 10;
+  if (savingsRate >= 10 && savingsRate < 20) score += 5;
+  score -= Math.min(15, leakageCount * 2);
+  return Math.max(10, Math.min(95, Math.round(score)));
+}
+
+function healthStatusFromScore(score: number): string {
+  return score >= 80 ? 'excellent' : score >= 65 ? 'good' : score >= 50 ? 'needs_attention' : 'critical';
+}
+
+function monthlyScoresFromTransactions(transactions: ExtractedTransaction[]): { month: string; score: number }[] {
+  const totals = new Map<string, { income: number; outflows: number; leakageCount: number }>();
+  for (const transaction of transactions) {
+    if (!transaction.date) continue;
+    const month = transaction.date.slice(0, 7);
+    const value = totals.get(month) ?? { income: 0, outflows: 0, leakageCount: 0 };
+    if (transaction.type === 'credit') value.income += transaction.amount;
+    else {
+      value.outflows += transaction.amount;
+      if (/(charge|fee|commission|vat|deduct|duplicate|failed|reversal)/i.test(transaction.description)) {
+        value.leakageCount += 1;
+      }
+    }
+    totals.set(month, value);
+  }
+  return [...totals.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([month, value]) => {
+    const cashFlow = value.income - value.outflows;
+    const savingsRate = value.income > 0 ? Math.max(0, Math.min(100, (cashFlow / value.income) * 100)) : 0;
+    return { month, score: calculateHealthScore(cashFlow, savingsRate, value.leakageCount) };
+  });
 }
 
 function guessCategory(description: string): string {
@@ -314,12 +356,47 @@ function buildFallbackRecommendations(
 
 type AiRecord = { [key: string]: unknown };
 
-function clampReport(r: AiRecord, accountType: string) {
-  const fallback = buildFallbackReport('', accountType);
-  const totalIncome = Math.max(0, Number(r.totalIncome) || 0);
-  const totalExpenses = Math.max(0, Number(r.totalExpenses) || 0);
+function clampReport(r: AiRecord, accountType: string, months: number) {
+  const window = auditWindow(months);
+  const rawTransactions = Array.isArray(r.transactions) ? r.transactions : [];
+  const transactions = rawTransactions.flatMap((value: unknown) => {
+    if (!value || typeof value !== 'object') return [];
+    const transaction = value as Record<string, unknown>;
+    const date = typeof transaction.date === 'string' ? transaction.date.slice(0, 10) : '';
+    const amount = Number(transaction.amount);
+    const type = transaction.type === 'credit' || transaction.type === 'debit' ? transaction.type : null;
+    if (!type || !Number.isFinite(amount) || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
+    if (date < window.periodStart || date > window.periodEnd) return [];
+    return [{
+      date,
+      description: String(transaction.description || (type === 'credit' ? 'Credit received' : 'Debit')).trim(),
+      amount: Math.round(amount * 100) / 100,
+      type: type as ExtractedTransaction['type'],
+      category: String(transaction.category || guessCategory(String(transaction.description || ''))),
+    }];
+  }).sort((a, b) => a.date.localeCompare(b.date)
+    || a.description.localeCompare(b.description)
+    || a.amount - b.amount
+    || a.type.localeCompare(b.type));
+  const incomeTransactions = transactions.filter((transaction) => transaction.type === 'credit');
+  const expenseTransactions = transactions.filter((transaction) => transaction.type === 'debit');
+  const totalIncome = transactions.length
+    ? incomeTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
+    : Math.max(0, Number(r.totalIncome) || 0);
+  const totalExpenses = transactions.length
+    ? expenseTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
+    : Math.max(0, Number(r.totalExpenses) || 0);
   const cashFlow = totalIncome - totalExpenses;
   const savingsRate = totalIncome > 0 ? Math.max(0, Math.min(100, (cashFlow / totalIncome) * 100)) : 0;
+  const deterministicLeakageCount = expenseTransactions.filter((transaction) =>
+    /(charge|fee|commission|vat|deduct|duplicate|failed|reversal)/i.test(transaction.description)
+  ).length;
+  const score = calculateHealthScore(cashFlow, savingsRate, deterministicLeakageCount);
+  const incomeBySource = new Map<string, number>();
+  incomeTransactions.forEach((transaction) => incomeBySource.set(
+    transaction.description,
+    (incomeBySource.get(transaction.description) ?? 0) + transaction.amount,
+  ));
   const recoverable = Array.isArray(r.recoverable)
     ? r.recoverable.slice(0, 20).map((x: { [key: string]: unknown }) => {
         const sourceAmount = x?.sourceAmount != null ? Math.max(0, Number(x.sourceAmount) || 0) : undefined;
@@ -337,24 +414,39 @@ function clampReport(r: AiRecord, accountType: string) {
       })
     : [];
   const recoverableAmount = Math.round(recoverable.reduce((s, x) => s + x.amount, 0) * 100) / 100;
+  const monthlyTotals = new Map<string, { month: string; income: number; outflows: number }>();
+  transactions.forEach((transaction) => {
+    const month = transaction.date.slice(0, 7);
+    const totals = monthlyTotals.get(month) ?? { month, income: 0, outflows: 0 };
+    totals[transaction.type === 'credit' ? 'income' : 'outflows'] += transaction.amount;
+    monthlyTotals.set(month, totals);
+  });
   return {
-    periodStart: typeof r.periodStart === 'string' ? r.periodStart : fallback.periodStart,
-    periodEnd: typeof r.periodEnd === 'string' ? r.periodEnd : fallback.periodEnd,
-    score: Math.max(0, Math.min(100, Math.round(Number(r.score) || 0))),
-    healthStatus: ['excellent', 'good', 'needs_attention', 'critical'].includes(r.healthStatus as string)
-      ? r.healthStatus
-      : 'critical',
+    periodStart: window.periodStart,
+    periodEnd: window.periodEnd,
+    auditMonths: months,
+    score,
+    healthStatus: healthStatusFromScore(score),
     totalIncome,
     totalExpenses,
     cashFlow,
     savingsRate,
     recoverableAmount,
-    summary: r.summary || {},
-    transactions: Array.isArray(r.transactions) ? r.transactions.slice(0, 300) : [],
+    summary: transactions.length ? {
+      incomeSources: [...incomeBySource.entries()].map(([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100 }))
+        .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name)).slice(0, 10),
+      topSpendingCategories: topCategories(expenseTransactions, 10),
+    } : r.summary || {},
+    transactions: transactions.length ? transactions.slice(0, 300) : [],
+    monthlyObservations: [...monthlyTotals.values()].sort((a, b) => a.month.localeCompare(b.month)).map((month) => ({
+      ...month,
+      source: 'calculated',
+      verification: 'unverified',
+    })),
     leakages: Array.isArray(r.leakages) ? r.leakages.slice(0, 20) : [],
     recoverable,
     recommendations: Array.isArray(r.recommendations) ? r.recommendations.slice(0, 8) : [],
-    monthlyScores: Array.isArray(r.monthlyScores) ? r.monthlyScores : fallback.monthlyScores,
+    monthlyScores: monthlyScoresFromTransactions(transactions),
   };
 }
 
@@ -416,7 +508,10 @@ serve(async (req) => {
     let report;
     try {
       const raw = await callAI(text, sourceType, accountType, auditMonths);
-      report = clampReport(raw, accountType);
+      report = clampReport(raw, accountType, auditMonths);
+      if (report.transactions.length === 0) {
+        report = buildFallbackReport(text, accountType, auditMonths);
+      }
     } catch (err) {
       // AI gateway failure -> deterministic fallback so the audit still completes.
       const e = err as { status?: number; message?: string };

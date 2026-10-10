@@ -22,6 +22,7 @@ export interface CreditReadinessInput {
   assessmentDate?: string;
   periodStart?: string | null;
   periodEnd?: string | null;
+  auditMonths?: number;
   totalIncome?: number | null;
   totalExpenses?: number | null;
   incomeSources?: { name: string; amount: number; recurring?: boolean }[];
@@ -159,26 +160,25 @@ export function assessCreditReadiness(
   const periodDays = Number.isFinite(startTime) && Number.isFinite(endTime) && endTime >= startTime
     ? (endTime - startTime) / 86400000 + 1
     : 0;
-  const periodMonths = periodDays > 0 ? Math.max(1, periodDays / 30.4375) : 1;
-  const averageIncome = observations.length
-    ? observations.reduce((sum, item) => sum + item.income, 0) / observations.length
-    : average(input.totalIncome, periodMonths);
-  const averageOutflows = observations.length
-    ? observations.reduce((sum, item) => sum + item.outflows, 0) / observations.length
-    : average(input.totalExpenses, periodMonths);
+  const periodMonths = input.auditMonths != null && Number.isFinite(input.auditMonths) && input.auditMonths > 0
+    ? input.auditMonths
+    : periodDays > 0 ? Math.max(1, periodDays / 30.4375) : 1;
+  const averageIncome = average(input.totalIncome, periodMonths)
+    ?? (observations.length ? observations.reduce((sum, item) => sum + item.income, 0) / observations.length : null);
+  const averageOutflows = average(input.totalExpenses, periodMonths)
+    ?? (observations.length ? observations.reduce((sum, item) => sum + item.outflows, 0) / observations.length : null);
   const monthlyDebt = input.debts?.monthlyRepayment;
   const observedSurplus = averageIncome != null && averageOutflows != null
     ? averageIncome - averageOutflows
     : null;
+  const debtObligationsKnown = Boolean(input.debts?.explicitlyNoDebt) || monthlyDebt != null;
   const debtAdjustmentKnown = Boolean(input.debts?.explicitlyNoDebt)
-    || monthlyDebt == null
-    || input.outflowsIncludeDebtRepayments != null;
+    || (monthlyDebt != null && input.outflowsIncludeDebtRepayments != null);
   const disposable = observedSurplus == null || !debtAdjustmentKnown
     ? null
     : input.debts?.explicitlyNoDebt || monthlyDebt == null || input.outflowsIncludeDebtRepayments
       ? observedSurplus - (input.otherMonthlyCommitments ?? 0)
       : observedSurplus - monthlyDebt - (input.otherMonthlyCommitments ?? 0);
-  const debtObligationsKnown = Boolean(input.debts?.explicitlyNoDebt) || input.debts?.monthlyRepayment != null;
   const capacity = disposable == null || !debtObligationsKnown
     ? null
     : Math.max(0, disposable * policy.repaymentCapacityShare);
@@ -199,6 +199,7 @@ export function assessCreditReadiness(
   if (!debtObligationsKnown) missingInformation.push("Existing loan balances, repayments and arrears, or confirmation of no debt");
   if (monthlyDebt != null && input.outflowsIncludeDebtRepayments == null) missingInformation.push("Whether recorded outflows already include existing loan repayments");
   if (observations.length < policy.minimumObservationMonths) missingInformation.push("Monthly income and outflow records across at least three months");
+  if (observations.length < periodMonths) missingInformation.push("Transaction observations for every month in the selected audit period");
   if (!input.repaymentHistory) missingInformation.push("Authorised repayment-history or credit-bureau information");
   if (input.supportingDocumentsAvailable !== true) missingInformation.push("Supporting documents for reported financial figures");
   if (input.transactionDataVerified !== true) missingInformation.push("Verification status for transaction or account data");
@@ -267,7 +268,7 @@ export function assessCreditReadiness(
   const recurring = input.incomeSources?.some((source) => source.recurring === true)
     ? "Recurring source reported; not independently verified"
     : "Not established from the available data";
-  const dataPeriod = observations.length ? observations.length : Math.floor(periodMonths);
+  const dataPeriod = Math.floor(periodMonths);
 
   return {
     schemaVersion: "1.0.0",
@@ -285,7 +286,7 @@ export function assessCreditReadiness(
       existingMonthlyDebtRepayments: monthlyDebtValue,
       estimatedMonthlyDisposableIncome: disposable == null ? unavailable() : amount(disposable, "calculated", "unverified"),
       estimatedMonthlyRepaymentCapacity: capacity == null ? unavailable("estimated") : amount(capacity, "estimated", "unverified"),
-      observationMonths: dataPeriod,
+      observationMonths: observations.length,
       observation: capacity == null
         ? "A repayment estimate is unavailable because required income, outflow or obligation data is missing."
         : `Planning estimate uses ${Math.round(policy.repaymentCapacityShare * 100)}% of positive disposable income; this is not an underwriting threshold and does not establish loan affordability.`,
@@ -322,7 +323,7 @@ export function assessCreditReadiness(
     recordQuality: {
       missingInformation,
       observations: [
-        `${observations.length} monthly income/outflow observation(s) available.`,
+        `${observations.length} of ${dataPeriod} selected month(s) contain transaction observations.`,
         input.supportingDocumentsAvailable === true ? "Supporting documents reported as available; not independently reviewed here." : "Supporting documents are not recorded as available.",
         input.transactionDataVerified === true ? "Transaction data marked verified by the source." : "Transaction-data verification is not established.",
       ],

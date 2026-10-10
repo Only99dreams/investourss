@@ -277,39 +277,6 @@ const AuditorConnect = () => {
     }, 1600);
 
     try {
-      // 0. Reuse the previous audit for the exact same statement so results stay stable
-      const sameText = activeText.slice(0, 50000);
-      const { data: recentSources, error: prevSourceError } = await supabase
-        .from("financial_data_sources")
-        .select("id, content_text")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (prevSourceError) throw prevSourceError;
-      const prevSources = ((recentSources ?? []) as Array<{ id: string; content_text: string | null }>).filter(
-        (s) => s.content_text === sameText
-      );
-
-      if (prevSources && prevSources.length > 0) {
-        const { data: prevAudit, error: prevAuditError } = await supabase
-          .from("financial_audits")
-          .select("report_json")
-          .eq("source_id", prevSources[0].id)
-          .eq("status", "completed")
-          .order("created_at", { ascending: false })
-          .limit(1);
-        if (prevAuditError) throw prevAuditError;
-        if (prevAudit && prevAudit.length > 0 && prevAudit[0]?.report_json) {
-          clearInterval(stepTimer);
-          toast({
-            title: "Stable result",
-            description: "Same statement detected - reusing your previous audit for identical results.",
-          });
-          navigate("/auditor/audit");
-          return;
-        }
-      }
-
       // 1. Determine audit access (free / subscription / credits)
       const accessRes = await supabase.rpc("get_audit_access");
       if (accessRes.error) throw accessRes.error;
