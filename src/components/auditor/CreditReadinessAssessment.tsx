@@ -8,7 +8,7 @@ interface CreditReadinessAssessmentProps {
   input: CreditReadinessInput;
 }
 
-const displayAmount = (value: AssessedValue) => value.value == null ? "Not available" : formatNaira(value.value);
+const displayAmount = (value: AssessedValue) => value.value == null ? "Not included in audit" : formatNaira(value.value);
 const evidenceLabel = (value: AssessedValue) => `${value.source} · ${value.verification}`;
 
 export function CreditReadinessAssessment({ input }: CreditReadinessAssessmentProps) {
@@ -17,10 +17,10 @@ export function CreditReadinessAssessment({ input }: CreditReadinessAssessmentPr
     ? `${new Date(assessment.financialPeriod.start).toLocaleDateString("en-NG")} – ${new Date(assessment.financialPeriod.end).toLocaleDateString("en-NG")}`
     : "Not available";
   const factors = [
-    { title: "Repayment capacity", status: assessment.repaymentCapacity.estimatedMonthlyRepaymentCapacity.value == null ? "More data needed" : "Assessable", detail: "Income relative to recorded outflows and obligations" },
-    { title: "Income stability", status: assessment.incomeStability.sourceCount == null || assessment.repaymentCapacity.observationMonths < 3 ? "More data needed" : "Assessable", detail: assessment.incomeStability.variability },
-    { title: "Existing debt", status: assessment.debt.status.startsWith("Not assessed") ? "More data needed" : "Reported", detail: assessment.debt.status },
-    { title: "Repayment history", status: assessment.repaymentHistory.status === "Assessed" ? "Assessed" : "Not available", detail: assessment.repaymentHistory.status },
+    { title: "Repayment capacity", status: assessment.repaymentCapacity.estimatedMonthlyRepaymentCapacity.value == null ? "Cash flow reviewed" : "Estimated", detail: "Income relative to recorded outflows; unknown debt is not assumed to be zero" },
+    { title: "Income stability", status: `${assessment.repaymentCapacity.observationMonths} month(s) reviewed`, detail: assessment.incomeStability.variability },
+    { title: "Existing debt", status: assessment.debt.status.startsWith("Debt obligations are not included") ? "Not in report" : "Reported", detail: assessment.debt.status },
+    { title: "Repayment history", status: assessment.repaymentHistory.status === "Assessed" ? "Assessed" : "Not in report", detail: "No repayment record was included in this audit" },
   ];
   const tone = assessment.readinessBand === "Strong" ? "text-emerald-700 bg-emerald-50" : assessment.readinessBand === "Moderate" ? "text-amber-800 bg-amber-50" : assessment.readinessBand === "Needs Improvement" ? "text-rose-700 bg-rose-50" : "text-muted-foreground bg-muted";
 
@@ -39,15 +39,18 @@ export function CreditReadinessAssessment({ input }: CreditReadinessAssessmentPr
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credit readiness</p>
               <p className="mt-1 text-2xl font-semibold">{assessment.readinessBand}</p>
               <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                {assessment.readinessBand === "Insufficient Data"
-                  ? "Available records do not establish enough information to assign a readiness band."
-                  : "This band summarizes the evidence available; it is not a lending decision."}
+                {assessment.readinessBasis === "Preliminary cash-flow indication"
+                  ? "Preliminary judgment from the selected audit's recorded cash flow. Debt and repayment history are not assumed."
+                  : "This band summarizes the available evidence; it is not a lending decision."}
               </p>
             </div>
-            <Badge variant="outline" className="w-fit">{assessment.assessmentStatus}</Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="w-fit">{assessment.assessmentStatus}</Badge>
+              <Badge variant="secondary" className="w-fit">Preliminary</Badge>
+            </div>
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4">
-            <OverviewValue label="Data completeness" value={assessment.dataCompleteness} />
+            <OverviewValue label="Assessment basis" value="Selected audit cash flow" />
             <OverviewValue label="Assessment confidence" value={assessment.assessmentConfidence} />
             <OverviewValue label="Assessment date" value={new Date(assessment.assessmentDate).toLocaleDateString("en-NG")} />
             <OverviewValue label="Financial data period" value={period} />
@@ -78,10 +81,9 @@ export function CreditReadinessAssessment({ input }: CreditReadinessAssessmentPr
         </AssessmentSection>
 
         <AssessmentSection title="Income stability">
-          <Metric label="Income sources" value={assessment.incomeStability.sourceCount == null ? "Not available" : `${assessment.incomeStability.sourceCount} reported source(s)`} />
+          <Metric label="Income sources" value={assessment.incomeStability.sourceCount == null ? "Not categorized in audit" : `${assessment.incomeStability.sourceCount} reported source(s)`} />
           <Metric label="Observed variability" value={assessment.incomeStability.variability} />
           <Metric label="Recurring income" value={assessment.incomeStability.recurringIncome} />
-          <p className="text-sm text-muted-foreground">{assessment.incomeStability.risk}</p>
           {assessment.incomeStability.sources.map((source) => <Metric key={source.name} label={source.name} value={formatNaira(source.amount)} evidence="Reported in audit summary" />)}
         </AssessmentSection>
 
@@ -89,7 +91,7 @@ export function CreditReadinessAssessment({ input }: CreditReadinessAssessmentPr
           <Metric label="Average monthly inflows" value={displayAmount(assessment.cashFlow.averageMonthlyInflows)} />
           <Metric label="Average monthly outflows" value={displayAmount(assessment.cashFlow.averageMonthlyOutflows)} />
           <Metric label="Average monthly surplus / deficit" value={displayAmount(assessment.cashFlow.averageMonthlySurplus)} />
-          <Metric label="Negative cash-flow periods" value={assessment.cashFlow.negativePeriods == null ? "Not available" : `${assessment.cashFlow.negativePeriods} observed`} />
+          <Metric label="Negative cash-flow periods" value={assessment.cashFlow.negativePeriods == null ? "Not shown by monthly records" : `${assessment.cashFlow.negativePeriods} observed`} />
           <p className="text-sm text-muted-foreground">{assessment.cashFlow.observation} {assessment.cashFlow.resilience}</p>
         </AssessmentSection>
 
@@ -97,21 +99,20 @@ export function CreditReadinessAssessment({ input }: CreditReadinessAssessmentPr
           <Metric label="Outstanding loan balance" value={displayAmount(assessment.debt.outstandingBalance)} />
           <Metric label="Monthly repayments" value={displayAmount(assessment.debt.monthlyRepayments)} />
           <Metric label="Known arrears" value={displayAmount(assessment.debt.arrears)} />
-          <Metric label="Debt-to-income ratio" value={assessment.debt.debtToIncomeRatio == null ? "Not available" : `${(assessment.debt.debtToIncomeRatio * 100).toFixed(1)}%`} />
+          <Metric label="Debt-to-income ratio" value={assessment.debt.debtToIncomeRatio == null ? "Not included in audit" : `${(assessment.debt.debtToIncomeRatio * 100).toFixed(1)}%`} />
           <p className="text-sm text-muted-foreground">{assessment.debt.status}</p>
           <div className="border-t pt-3"><p className="text-sm font-medium">Repayment history</p><p className="text-sm text-muted-foreground">{assessment.repaymentHistory.status}: {assessment.repaymentHistory.summary}</p></div>
         </AssessmentSection>
       </div>
 
       <AssessmentSection title="Financial record quality">
-        <p className="text-sm text-muted-foreground">Rules {assessment.rulesVersion} · Policy {assessment.policyId} · {assessment.repaymentCapacity.observationMonths} month(s) represented</p>
-        {assessment.recordQuality.observations.map((item) => <p key={item} className="text-sm">{item}</p>)}
-        {assessment.recordQuality.missingInformation.length > 0 && <div className="mt-2 border-t pt-3"><p className="mb-2 text-sm font-medium">Information that could improve this assessment</p><ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">{assessment.recordQuality.missingInformation.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+        <p className="text-sm text-muted-foreground">Rules {assessment.rulesVersion} · Policy {assessment.policyId} · {assessment.repaymentCapacity.observationMonths} month(s) reviewed</p>
+        <p className="text-sm">This assessment uses the selected audit's recorded income and outflows. It does not assume unlisted debts are zero or infer repayment history.</p>
       </AssessmentSection>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <AssessmentSection title="Key credit strengths">
-          {assessment.strengths.length ? assessment.strengths.map((item) => <p key={item} className="flex gap-2 text-sm"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />{item}</p>) : <p className="text-sm text-muted-foreground">No strengths can be established from the available evidence.</p>}
+          {assessment.strengths.length ? assessment.strengths.map((item) => <p key={item} className="flex gap-2 text-sm"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />{item}</p>) : <p className="text-sm text-muted-foreground">No positive cash-flow signal stood out in this audit period.</p>}
         </AssessmentSection>
         <AssessmentSection title="Risks and areas for improvement">
           {assessment.risks.length ? assessment.risks.map((risk) => <div key={risk.issue} className="flex gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" /><div><p className="text-sm font-medium">{risk.issue}</p><p className="text-sm text-muted-foreground">{risk.whyItMatters} {risk.action}</p></div></div>) : <p className="text-sm text-muted-foreground">No material risk identified from the available evidence.</p>}

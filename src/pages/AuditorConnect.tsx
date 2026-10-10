@@ -500,8 +500,8 @@ const AuditorConnect = () => {
               </div>
               <p className="text-xs text-muted-foreground flex-1 min-w-[200px]">
                 {statementPeriod === 1
-                  ? "Your free audit covers the last 1 month — upload this month's statement."
-                  : `Auditing the last ${statementPeriod} months of statements.`}
+                  ? "Your free audit covers 1 month ending on the latest transaction date in your statement."
+                  : `Auditing ${statementPeriod} months ending on the latest transaction date in your statement.`}
               </p>
             </div>
           </CardContent>
@@ -702,7 +702,7 @@ const AuditorConnect = () => {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Auditing your last {statementPeriod} month{statementPeriod === 1 ? "" : "s"} of statements
+              Auditing {statementPeriod} month{statementPeriod === 1 ? "" : "s"} ending on the latest transaction date in your statement
             </p>
           </div>
         )}

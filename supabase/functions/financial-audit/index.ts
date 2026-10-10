@@ -25,7 +25,7 @@ Extract every transaction you can find. Bank SMS alerts look like:
 
 Rules:
 1. Parse ALL transactions. For each: date (ISO yyyy-mm-dd), description (merchant/counterparty), amount (NGN), type ('credit' for money in, 'debit' for money out), and a category (salary, transfers, shopping, food, transport, utilities, subscriptions, airtime, atm_withdrawal, pos, bills, investment, entertainment, other).
-2. Only count transactions that fall within the audit period stated in the user message (1, 3 or 6 months). If no dates are present, assume the records cover the stated audit period.
+2. Extract every dated transaction present in the supplied records. Do not discard transactions based on today's date. The application will apply the selected 1, 3 or 6-month window relative to the latest dated transaction in these records. If dates are not present, include the available records and mark dates as unavailable.
 3. Compute:
    - totalIncome: sum of credits
    - totalExpenses: sum of debits
@@ -64,15 +64,15 @@ Respond with STRICT JSON only, no markdown, no commentary. Shape:
 
 function buildUserPrompt(input: { text: string; sourceType: string; accountType: string; auditMonths?: number }): string {
   const months = input.auditMonths ?? DEFAULT_AUDIT_MONTHS;
-  return `Audit period: the last ${months} month${months === 1 ? "" : "s"}.
-Only include transactions dated within that window. Ignore anything older.
+  return `Selected audit duration: ${months} month${months === 1 ? "" : "s"}.
+Extract and analyze every transaction in the supplied records. Do not compare dates with today's date or omit older entries; the application will select the requested duration relative to the statement's latest transaction date.
 
 Financial data source: ${input.sourceType}
 Account type: ${input.accountType || 'individual'}
 
 Raw financial records:
 ---
-${input.text.slice(0, 60000)}
+${input.text}
 ---
 
 Extract all transactions and produce the Financial Health Audit JSON described in the system instructions.`;
@@ -156,9 +156,9 @@ function parseFromText(text: string, months: number = DEFAULT_AUDIT_MONTHS): {
   };
 }
 
-function auditWindow(months: number, now = new Date()) {
-  const end = new Date(now);
-  const start = new Date(now);
+function auditWindow(months: number, anchor = new Date()) {
+  const end = new Date(anchor);
+  const start = new Date(anchor);
   const dayOfMonth = start.getDate();
   start.setDate(1);
   start.setMonth(start.getMonth() - months);
@@ -170,9 +170,19 @@ function auditWindow(months: number, now = new Date()) {
   };
 }
 
+function auditWindowForTransactions(transactions: { date?: string }[], months: number) {
+  const today = new Date().toISOString().slice(0, 10);
+  const latestDate = transactions
+    .map((transaction) => transaction.date)
+    .filter((date): date is string => Boolean(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today))
+    .sort()
+    .at(-1);
+  return auditWindow(months, latestDate ? new Date(`${latestDate}T12:00:00Z`) : new Date());
+}
+
 function buildFallbackReport(text: string, accountType: string, months: number = DEFAULT_AUDIT_MONTHS) {
   const { transactions } = parseFromText(text, months);
-  const { periodStart, periodEnd } = auditWindow(months);
+  const { periodStart, periodEnd } = auditWindowForTransactions(transactions, months);
   const inWindow = transactions.filter((transaction) =>
     transaction.date && transaction.date >= periodStart && transaction.date <= periodEnd
   );
@@ -357,16 +367,14 @@ function buildFallbackRecommendations(
 type AiRecord = { [key: string]: unknown };
 
 function clampReport(r: AiRecord, accountType: string, months: number) {
-  const window = auditWindow(months);
   const rawTransactions = Array.isArray(r.transactions) ? r.transactions : [];
-  const transactions = rawTransactions.flatMap((value: unknown) => {
+  const extractedTransactions = rawTransactions.flatMap((value: unknown) => {
     if (!value || typeof value !== 'object') return [];
     const transaction = value as Record<string, unknown>;
     const date = typeof transaction.date === 'string' ? transaction.date.slice(0, 10) : '';
     const amount = Number(transaction.amount);
     const type = transaction.type === 'credit' || transaction.type === 'debit' ? transaction.type : null;
     if (!type || !Number.isFinite(amount) || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
-    if (date < window.periodStart || date > window.periodEnd) return [];
     return [{
       date,
       description: String(transaction.description || (type === 'credit' ? 'Credit received' : 'Debit')).trim(),
@@ -378,6 +386,10 @@ function clampReport(r: AiRecord, accountType: string, months: number) {
     || a.description.localeCompare(b.description)
     || a.amount - b.amount
     || a.type.localeCompare(b.type));
+  const window = auditWindowForTransactions(extractedTransactions, months);
+  const transactions = extractedTransactions.filter((transaction) =>
+    transaction.date >= window.periodStart && transaction.date <= window.periodEnd
+  );
   const incomeTransactions = transactions.filter((transaction) => transaction.type === 'credit');
   const expenseTransactions = transactions.filter((transaction) => transaction.type === 'debit');
   const totalIncome = transactions.length

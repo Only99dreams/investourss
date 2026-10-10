@@ -3,9 +3,8 @@ export const CREDIT_READINESS_RULES_VERSION = "1.0.0";
 export type CreditReadinessBand =
   | "Strong"
   | "Moderate"
-  | "Needs Improvement"
-  | "Insufficient Data";
-export type AssessmentStatus = "Completed" | "Partially Completed" | "Insufficient Data";
+  | "Needs Improvement";
+export type AssessmentStatus = "Completed" | "Preliminary";
 export type EvidenceSource = "customer-reported" | "calculated" | "externally-sourced";
 export type VerificationStatus = "verified" | "unverified" | "not-available";
 export type DataLevel = "High" | "Moderate" | "Low";
@@ -74,6 +73,7 @@ export interface CreditReadinessAssessment {
   assessmentDate: string;
   assessmentStatus: AssessmentStatus;
   readinessBand: CreditReadinessBand;
+  readinessBasis: "Preliminary cash-flow indication" | "Documented repayment-capacity assessment";
   dataCompleteness: DataLevel;
   assessmentConfidence: DataLevel;
   financialPeriod: { start: string | null; end: string | null };
@@ -109,7 +109,7 @@ export interface CreditReadinessAssessment {
     status: string;
   };
   repaymentHistory: {
-    status: "Assessed" | "Not Assessed — Information Unavailable";
+    status: "Assessed" | "Not in audit";
     summary: string;
     source: EvidenceSource | null;
     verification: VerificationStatus;
@@ -204,20 +204,23 @@ export function assessCreditReadiness(
   if (input.supportingDocumentsAvailable !== true) missingInformation.push("Supporting documents for reported financial figures");
   if (input.transactionDataVerified !== true) missingInformation.push("Verification status for transaction or account data");
 
-  const readinessSupported = requiredAvailable
-    && debtObligationsKnown
-    && observations.length >= policy.minimumObservationMonths;
-  const readinessBand: CreditReadinessBand = !readinessSupported || disposable == null || averageIncome == null || averageIncome <= 0
-    ? "Insufficient Data"
-    : disposable / averageIncome >= policy.readinessMargins.strong
-      ? "Strong"
-      : disposable / averageIncome >= policy.readinessMargins.moderate
-        ? "Moderate"
-        : "Needs Improvement";
-  const completed = readinessSupported && input.repaymentHistory != null && missingInformation.length === 0;
-  const assessmentStatus: AssessmentStatus = !requiredAvailable
-    ? "Insufficient Data"
-    : completed ? "Completed" : "Partially Completed";
+  const readinessSupported = requiredAvailable && observedSurplus != null;
+  const observedMargin = readinessSupported
+    && averageIncome != null
+    && averageIncome > 0
+    ? observedSurplus / averageIncome
+    : Number.NEGATIVE_INFINITY;
+  const readinessBand: CreditReadinessBand = observedMargin < policy.readinessMargins.moderate
+      ? "Needs Improvement"
+      : observedMargin >= policy.readinessMargins.strong && debtObligationsKnown && observations.length >= policy.minimumObservationMonths
+        ? "Strong"
+        : "Moderate";
+  const readinessBasis = debtObligationsKnown && observations.length >= policy.minimumObservationMonths
+      ? "Documented repayment-capacity assessment"
+      : "Preliminary cash-flow indication";
+  const completed = readinessSupported && debtObligationsKnown && observations.length >= policy.minimumObservationMonths
+    && input.repaymentHistory != null && missingInformation.length === 0;
+  const assessmentStatus: AssessmentStatus = completed ? "Completed" : "Preliminary";
   const completenessCount = 7 - missingInformation.length;
   const dataCompleteness = dataLevel(Math.max(0, completenessCount), 7);
   const assessmentConfidence: DataLevel = verifiedFieldCount >= policy.minimumVerifiedFieldsForHighConfidence
@@ -225,7 +228,6 @@ export function assessCreditReadiness(
     : verifiedFieldCount >= Math.ceil(policy.minimumVerifiedFieldsForHighConfidence / 2)
       ? "Moderate"
       : "Low";
-  const debtKnown = input.debts != null;
   const negativePeriods = observations.length
     ? observations.filter((item) => item.income - item.outflows < 0).length
     : null;
@@ -237,22 +239,18 @@ export function assessCreditReadiness(
         const coefficient = Math.sqrt(variance) / mean;
         return coefficient < 0.15 ? "Low observed variability" : coefficient < 0.35 ? "Moderate observed variability" : "High observed variability";
       })()
-    : "Not assessable — monthly income observations unavailable";
-  const supports = disposable != null && disposable > 0
-    ? [`Positive average disposable cash flow of ${Math.round(disposable).toLocaleString("en-NG")} per month in the available records.`]
+    : observations.length === 1
+      ? "One month of observed income; variability not inferred"
+      : "Income variability not inferred from this audit";
+  const supports = observedSurplus != null && observedSurplus > 0
+    ? [`Positive observed cash flow of ${Math.round(observedSurplus).toLocaleString("en-NG")} per month before unreported debt and other commitments.`]
     : [];
   const risks: CreditReadinessAssessment["risks"] = [];
   if (disposable != null && disposable <= 0) {
     risks.push({ issue: "Little or no documented disposable cash flow", whyItMatters: "There may be limited room for an additional repayment after observed outflows.", action: "Review recurring expenses and reassess after a sustained period of positive cash flow." });
   }
-  if (!debtKnown) {
-    risks.push({ issue: "Existing debt obligations are unknown", whyItMatters: "Current loan repayments could reduce the cash available for another commitment.", action: "Provide current balances, repayment amounts and arrears, or explicitly confirm there are none." });
-  }
-  if (observations.length < policy.minimumObservationMonths) {
-    risks.push({ issue: "Limited evidence of income stability", whyItMatters: "A short or aggregate-only period cannot show whether income is recurring or variable.", action: "Provide monthly income records and supporting evidence over a longer period." });
-  }
-  if (!input.repaymentHistory) {
-    risks.push({ issue: "Repayment history not assessed", whyItMatters: "No reliable repayment-performance information was supplied.", action: "Provide authorised repayment records if available; absence of data is not a positive or negative history." });
+  if (averageIncome != null && averageIncome <= 0) {
+    risks.push({ issue: "No income inflows were recorded in the selected period", whyItMatters: "The supplied audit does not demonstrate income available to support repayments.", action: "Include complete income records for the selected period before relying on this preliminary indication." });
   }
   const actions = [
     "Provide complete monthly income and expense records with supporting documents.",
@@ -267,7 +265,7 @@ export function assessCreditReadiness(
   const debtRatio = monthlyDebt != null && averageIncome != null && averageIncome > 0 ? monthlyDebt / averageIncome : null;
   const recurring = input.incomeSources?.some((source) => source.recurring === true)
     ? "Recurring source reported; not independently verified"
-    : "Not established from the available data";
+    : "Recurrence is not inferred from audit activity";
   const dataPeriod = Math.floor(periodMonths);
 
   return {
@@ -277,6 +275,7 @@ export function assessCreditReadiness(
     assessmentDate,
     assessmentStatus,
     readinessBand,
+    readinessBasis,
     dataCompleteness,
     assessmentConfidence,
     financialPeriod: { start, end },
@@ -288,7 +287,7 @@ export function assessCreditReadiness(
       estimatedMonthlyRepaymentCapacity: capacity == null ? unavailable("estimated") : amount(capacity, "estimated", "unverified"),
       observationMonths: observations.length,
       observation: capacity == null
-        ? "A repayment estimate is unavailable because required income, outflow or obligation data is missing."
+        ? "Repayment capacity is not estimated because this audit does not include confirmed debt obligations."
         : `Planning estimate uses ${Math.round(policy.repaymentCapacityShare * 100)}% of positive disposable income; this is not an underwriting threshold and does not establish loan affordability.`,
     },
     incomeStability: {
@@ -315,11 +314,11 @@ export function assessCreditReadiness(
         ? amount(0, "customer-reported", "unverified")
         : input.debts?.arrears == null ? unavailable("customer-reported") : amount(input.debts.arrears, "customer-reported", "unverified"),
       debtToIncomeRatio: debtRatio,
-      status: !debtObligationsKnown ? "Not assessed — information unavailable" : input.debts?.explicitlyNoDebt ? "User reported no existing debt; not independently verified" : "Customer-reported obligations; verification status unavailable",
+      status: !debtObligationsKnown ? "Debt obligations are not included in this audit" : input.debts?.explicitlyNoDebt ? "User reported no existing debt; not independently verified" : "Customer-reported obligations; verification status unavailable",
     },
     repaymentHistory: input.repaymentHistory
       ? { status: "Assessed", summary: input.repaymentHistory.summary, source: input.repaymentHistory.source, verification: input.repaymentHistory.verification }
-      : { status: "Not Assessed — Information Unavailable", summary: "No reliable repayment-history information was supplied; no positive or negative history is inferred.", source: null, verification: "not-available" },
+      : { status: "Not in audit", summary: "No repayment record was included; no history is inferred.", source: null, verification: "not-available" },
     recordQuality: {
       missingInformation,
       observations: [
