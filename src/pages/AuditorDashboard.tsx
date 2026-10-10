@@ -387,7 +387,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
       )}
 
       {/* Financial Health Guidance — personalized advice section */}
-      {!loading && viewingAudit && (
+      {!loading && viewingAudit && !viewingAudit.is_locked && (
         <FinancialHealthGuidance
           healthScore={viewingAudit.health_score}
           healthStatus={viewingAudit.health_status}
@@ -408,12 +408,13 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
       )}
 
       {/* Continuous reporting (weekly / monthly monitoring) */}
-      {!loading && viewingAudit && (
+      {!loading && viewingAudit && !viewingAudit.is_locked && (
         <div className="mb-8">
           <ContinuousReportingSection />
         </div>
       )}
 
+      {!loading && viewingAudit && !viewingAudit.is_locked && (
       <div className="grid lg:grid-cols-2 gap-6 mb-8">
         {/* Timeline */}
         {!loading && (timeline.length > 0 || viewingAudit) && (
@@ -525,6 +526,7 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
           </Card>
         )}
       </div>
+      )}
 
       {/* Blurred / full report */}
       {!loading && viewingAudit && (
