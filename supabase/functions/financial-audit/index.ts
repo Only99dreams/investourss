@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { applyFinancialAuditRules, splitFinancialRecords } from "./auditRules.ts";
+import { applyFinancialAuditRules, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +9,8 @@ const corsHeaders = {
 // Banks issue statements monthly, so the free audit is a 1-month audit.
 const DEFAULT_AUDIT_MONTHS = 1;
 const ALLOWED_AUDIT_MONTHS = [1, 3, 6];
+const AI_CONCURRENCY = 4;
+const AI_TIMEOUT_MS = 125_000;
 
 function normalizeAuditMonths(value: unknown): number {
   const n = Number(value);
@@ -74,78 +76,8 @@ ${input.text}
 Extract all transactions and produce the Financial Health Audit JSON described in the system instructions.`;
 }
 
-interface ExtractedTransaction {
-  date?: string;
-  description: string;
-  amount: number;
-  type: 'credit' | 'debit';
-  transactionId?: string;
-}
-
-function parseSourceDate(value: string): string | undefined {
-  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value);
-  const local = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(value);
-  const year = Number(iso?.[1] ?? local?.[3]);
-  const month = Number(iso?.[2] ?? local?.[2]);
-  const day = Number(iso?.[3] ?? local?.[1]);
-  if (!iso && !local) return undefined;
-  const fullYear = year < 100 ? 2000 + year : year;
-  const parsed = new Date(Date.UTC(fullYear, month - 1, day));
-  if (
-    parsed.getUTCFullYear() !== fullYear
-    || parsed.getUTCMonth() !== month - 1
-    || parsed.getUTCDate() !== day
-  ) return undefined;
-  return parsed.toISOString().slice(0, 10);
-}
-
-// Deterministic fallback: parse bank SMS alerts without calling the AI gateway.
-function parseFromText(text: string): { transactions: ExtractedTransaction[] } {
-  const transactions: ExtractedTransaction[] = [];
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const dateRegex = /\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/g;
-  const amountRegex = /(?:₦|NGN|\u20a6)\s*([\d,]+(?:\.\d{1,2})?)/gi;
-  const creditWords = /\b(credit|deposit|transfer from|payment received|salary|funding|interest)\b/i;
-  const debitWords = /\b(withdraw|debit|transfer to|transfer of|payment to|outgoing|sent to|charged|deducted|pos|atm|bill|airtime|charge|fee)\b/i;
-
-  for (const line of lines) {
-    const dateToken = line.match(dateRegex)?.[0];
-    const transactionDate = dateToken ? parseSourceDate(dateToken) : undefined;
-
-    const amtMatch = line.replace(/\bAvail Bal[^.]*\./gi, '').match(amountRegex);
-    if (!amtMatch) continue;
-
-    const parsedAmount = parseFloat(amtMatch[0].replace(/[^\d.]/g, ''));
-    const amount = !isNaN(parsedAmount) ? parsedAmount : 0;
-    if (amount <= 0) continue;
-
-    const isCredit = creditWords.test(line);
-    const isDebit = debitWords.test(line);
-    if (isCredit === isDebit) continue;
-    const type: 'credit' | 'debit' = isCredit ? 'credit' : 'debit';
-
-    const description = line
-      .replace(dateRegex, '')
-      .replace(amountRegex, '')
-      .replace(/(Alert:|NGN|₦|Avail Bal[^.]*\.|Txn ID[^.]*\.|Acct|Account)/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    const transactionId = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/i.exec(line)?.[1];
-
-    transactions.push({
-      date: transactionDate,
-      description: description || (type === 'credit' ? 'Credit received' : 'Debit'),
-      amount: Math.round(amount * 100) / 100,
-      type,
-      transactionId,
-    });
-  }
-
-  return { transactions };
-}
-
 function buildFallbackReport(text: string, accountType: string, months: number = DEFAULT_AUDIT_MONTHS) {
-  const { transactions } = parseFromText(text);
+  const transactions = parseFinancialRecords(text);
   return buildReportFromRules(applyFinancialAuditRules(transactions, months), accountType);
 }
 
@@ -207,10 +139,9 @@ type AiRecord = { [key: string]: unknown };
 
 function clampReport(r: AiRecord, accountType: string, months: number, sourceText: string) {
   const rawTransactions = Array.isArray(r.transactions) ? r.transactions : [];
-  const sourceIds = new Set(
-    [...sourceText.matchAll(/\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/gi)]
-      .map((match) => match[1]),
-  );
+  const sourceIds = new Set<string>();
+  const sourceIdPattern = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/gi;
+  for (const match of sourceText.matchAll(sourceIdPattern)) sourceIds.add(match[1]);
   const verifiedTransactions = rawTransactions.map((value) => {
     if (!value || typeof value !== "object") return value;
     const transaction = value as Record<string, unknown>;
@@ -221,7 +152,13 @@ function clampReport(r: AiRecord, accountType: string, months: number, sourceTex
   return buildReportFromRules(applyFinancialAuditRules(verifiedTransactions, months), accountType);
 }
 
-async function callAI(text: string, sourceType: string, accountType: string, auditMonths: number) {
+async function callAI(
+  text: string,
+  sourceType: string,
+  accountType: string,
+  auditMonths: number,
+  signal: AbortSignal,
+) {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
@@ -232,12 +169,16 @@ async function callAI(text: string, sourceType: string, accountType: string, aud
       headers: {
         "Content-Type": "application/json",
       },
+      signal,
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [
           { role: "user", parts: [{ text: buildUserPrompt({ text, sourceType, accountType, auditMonths }) }] },
         ],
-        generationConfig: { responseMimeType: "application/json", temperature: 0 },
+        generationConfig: {
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingLevel: "minimal" },
+        },
       }),
     },
   );
@@ -245,7 +186,6 @@ async function callAI(text: string, sourceType: string, accountType: string, aud
   if (!response.ok) {
     const errorText = await response.text();
     if (response.status === 429) throw { status: 429, message: "Rate limit exceeded. Please try again in a moment." };
-    if (response.status === 402) throw { status: 402, message: "Service temporarily unavailable. Please try again later." };
     throw new Error(`Gemini AI error: ${response.status} - ${errorText}`);
   }
 
@@ -257,6 +197,46 @@ async function callAI(text: string, sourceType: string, accountType: string, aud
   const end = content.lastIndexOf('}');
   if (start === -1 || end === -1) throw new Error("AI returned invalid JSON");
   return JSON.parse(content.slice(start, end + 1));
+}
+
+async function extractTransactionsWithAI(
+  text: string,
+  sourceType: string,
+  accountType: string,
+  auditMonths: number,
+): Promise<unknown[]> {
+  const chunks = splitFinancialRecords(text);
+  const results: unknown[][] = Array.from({ length: chunks.length }, () => []);
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, AI_TIMEOUT_MS);
+  let nextChunk = 0;
+
+  const worker = async () => {
+    while (nextChunk < chunks.length) {
+      const index = nextChunk++;
+      const raw = await callAI(chunks[index], sourceType, accountType, auditMonths, controller.signal);
+      if (Array.isArray(raw.transactions)) results[index] = raw.transactions;
+    }
+  };
+
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(AI_CONCURRENCY, chunks.length) }, () => worker()),
+    );
+    return results.flat();
+  } catch (error) {
+    controller.abort();
+    if (timedOut) {
+      throw new Error(`Gemini extraction timed out after ${Math.round(AI_TIMEOUT_MS / 1000)} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 serve(async (req) => {
@@ -277,27 +257,54 @@ serve(async (req) => {
     }
 
     let report;
+    let extractedCount = 0;
+    let excludedCount = 0;
+    let aiExtractionFailed = false;
+    let aiFailureMessage = "";
     try {
-      const extractedTransactions: unknown[] = [];
-      for (const chunk of splitFinancialRecords(text)) {
-        const raw = await callAI(chunk, sourceType, accountType, auditMonths);
-        if (Array.isArray(raw.transactions)) extractedTransactions.push(...raw.transactions);
-      }
+      const extractedTransactions = await extractTransactionsWithAI(text, sourceType, accountType, auditMonths);
+      extractedCount = extractedTransactions.length;
       report = clampReport({ transactions: extractedTransactions }, accountType, auditMonths, text);
+      excludedCount = report.dataQuality.excludedInvalidTransactions;
       if (report.transactions.length === 0) {
-        report = buildFallbackReport(text, accountType, auditMonths);
+        const fallbackTransactions = parseFinancialRecords(text);
+        extractedCount = Math.max(extractedCount, fallbackTransactions.length);
+        report = buildReportFromRules(applyFinancialAuditRules(fallbackTransactions, auditMonths), accountType);
+        excludedCount = Math.max(excludedCount, report.dataQuality.excludedInvalidTransactions);
       }
     } catch (err) {
       // AI gateway failure -> deterministic fallback so the audit still completes.
       const e = err as { status?: number; message?: string };
-      if (e?.status === 429 || e?.status === 402) {
+      if (e?.status === 429) {
         return new Response(JSON.stringify({ success: false, error: e.message }), {
           status: e.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       console.warn('AI analysis failed, using fallback parser:', e?.message || e);
-      report = buildFallbackReport(text, accountType, auditMonths);
+      aiExtractionFailed = true;
+      aiFailureMessage = typeof e?.message === "string" ? e.message.slice(0, 300) : "Unknown Gemini API error";
+      const fallbackTransactions = parseFinancialRecords(text);
+      extractedCount = fallbackTransactions.length;
+      report = buildReportFromRules(applyFinancialAuditRules(fallbackTransactions, auditMonths), accountType);
+      excludedCount = report.dataQuality.excludedInvalidTransactions;
+    }
+
+    if (report.transactions.length === 0) {
+      const detail = extractedCount === 0
+        ? aiExtractionFailed
+          ? `AI extraction failed: ${aiFailureMessage}. The fallback parser also found no readable transaction rows; confirm the statement text contains readable amounts and credit/debit directions.`
+          : 'No transaction rows could be extracted. Check that the statement text includes readable amounts and credit/debit directions.'
+        : excludedCount > 0
+          ? `${excludedCount} of ${extractedCount} extracted row(s) had invalid amounts, dates, descriptions, or directions.`
+          : `${extractedCount} candidate row(s) were found, but none fell within the selected ${auditMonths}-month period (${report.periodStart} to ${report.periodEnd}). Try a wider audit period.`;
+      return new Response(JSON.stringify({
+        success: false,
+        error: `No transactions could be included in the audit. ${detail}`,
+      }), {
+        status: aiExtractionFailed ? 502 : 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ success: true, report }), {

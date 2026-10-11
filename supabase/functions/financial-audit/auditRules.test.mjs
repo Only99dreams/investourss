@@ -1,12 +1,58 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyFinancialAuditRules, getAuditWindow, splitFinancialRecords } from "./auditRules.ts";
+import { applyFinancialAuditRules, getAuditWindow, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
 
 test("chunks long statements without dropping or reordering source text", () => {
   const source = `first record\r\n${"x".repeat(50001)}\r\nlast record`;
   const chunks = splitFinancialRecords(source, 10000);
   assert.equal(chunks.join(""), source);
   assert.ok(chunks.every((chunk) => chunk.length <= 10000));
+});
+
+test("parses common PDF rows with plain amounts and CR/DR markers", () => {
+  const transactions = parseFinancialRecords([
+    "05/08/2026 TRANSFER FROM EMPLOYER 250,000.00 CR 700,000.00",
+    "06/08/2026 POS PURCHASE 10,000.00 DR 690,000.00",
+  ].join("\n"));
+
+  assert.deepEqual(transactions.map(({ date, amount, type }) => ({ date, amount, type })), [
+    { date: "2026-08-05", amount: 250000, type: "credit" },
+    { date: "2026-08-06", amount: 10000, type: "debit" },
+  ]);
+});
+
+test("parses currency-prefixed SMS and signed statement amounts", () => {
+  const transactions = parseFinancialRecords([
+    "Alert: Credit of NGN250,000.00 on 05/08/26. Desc: Salary. Avail Bal: NGN700,000.00",
+    "06/08/2026 CARD PURCHASE -10,000.00",
+  ].join("\n"));
+
+  assert.deepEqual(transactions.map(({ amount, type }) => ({ amount, type })), [
+    { amount: 250000, type: "credit" },
+    { amount: 10000, type: "debit" },
+  ]);
+});
+
+test("parses plain whole-number amounts when transaction direction is explicit", () => {
+  const transactions = parseFinancialRecords([
+    "2026-05-08 SALARY CREDIT 250000",
+    "2026-05-09 POS PURCHASE DEBIT 10000",
+  ].join("\n"));
+
+  assert.deepEqual(transactions.map(({ amount, type }) => ({ amount, type })), [
+    { amount: 250000, type: "credit" },
+    { amount: 10000, type: "debit" },
+  ]);
+});
+
+test("normalizes string amounts and CR/DR direction aliases", () => {
+  const report = applyFinancialAuditRules([
+    { description: "Salary", amount: "NGN 1,000.00", type: "CR" },
+    { description: "Purchase", amount: "₦250.00", type: "DR" },
+  ], 1, new Date("2025-02-28T12:00:00Z"));
+
+  assert.equal(report.totalIncome, 1000);
+  assert.equal(report.totalExpenses, 250);
 });
 
 test("uses the latest source transaction as the selected-period anchor", () => {
@@ -32,6 +78,7 @@ test("derives totals and score inputs from only normalized in-window transaction
   assert.equal(report.totalExpenses, 20);
   assert.equal(report.cashFlow, 980);
   assert.equal(report.savingsRate, 98);
+  assert.equal(report.score, report.healthScore);
   assert.equal(report.transactions.length, 2);
   assert.deepEqual(report.monthlyObservations, [
     { month: "2025-01", income: 1000, outflows: 0, source: "calculated", verification: "unverified" },

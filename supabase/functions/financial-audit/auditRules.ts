@@ -18,6 +18,7 @@ export interface FinancialAuditRulesResult {
   totalExpenses: number;
   cashFlow: number;
   savingsRate: number;
+  score: number;
   healthScore: number;
   healthStatus: "excellent" | "good" | "needs_attention" | "critical";
   recoverableAmount: number;
@@ -81,6 +82,112 @@ function validIsoDate(value: unknown): value is string {
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+function normalizeAmount(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return Number.NaN;
+  const normalized = value
+    .trim()
+    .replace(/^(?:NGN|₦)\s*/i, "")
+    .replace(/\s*(?:NGN|₦)$/i, "")
+    .replace(/,/g, "");
+  if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(normalized)) return Number.NaN;
+  return Number(normalized);
+}
+
+export interface ExtractedTransaction {
+  date?: string;
+  description: string;
+  amount: number;
+  type: "credit" | "debit";
+  transactionId?: string;
+}
+
+const SOURCE_DATE_PATTERN = /\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/g;
+const FALLBACK_AMOUNT_PATTERN = /[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?/;
+const CURRENCY_AMOUNT_PATTERN = /(?:NGN|₦)\s*([+-]?[\d,]+(?:\.\d{1,2})?)|([+-]?[\d,]+(?:\.\d{1,2})?)\s*(?:NGN|₦)/i;
+const MARKED_AMOUNT_PATTERN = new RegExp(
+  `(${FALLBACK_AMOUNT_PATTERN.source})\\s*(CR|DR)\\b|\\b(CR|DR)\\s*(${FALLBACK_AMOUNT_PATTERN.source})`,
+  "i",
+);
+const BARE_AMOUNT_PATTERN = /(?:^|\s)([+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{1,2}|\d{1,3}(?:,\d{3})+|\d+))(?=$|\s)/g;
+const CREDIT_WORDS = /\b(credit|cr|deposit|transfer from|payment received|salary|funding|interest)\b/i;
+const DEBIT_WORDS = /\b(debit|dr|withdraw|transfer to|transfer of|payment to|outgoing|sent to|charged|deducted|pos|atm|bill|airtime|charge|fee)\b/i;
+
+function parseSourceDate(value: string): string | undefined {
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value);
+  const local = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(value);
+  const year = Number(iso?.[1] ?? local?.[3]);
+  const month = Number(iso?.[2] ?? local?.[2]);
+  const day = Number(iso?.[3] ?? local?.[1]);
+  if (!iso && !local) return undefined;
+  const fullYear = year < 100 ? 2000 + year : year;
+  const parsed = new Date(Date.UTC(fullYear, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== fullYear
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) return undefined;
+  return parsed.toISOString().slice(0, 10);
+}
+
+export function parseFinancialRecords(text: string): ExtractedTransaction[] {
+  const transactions: ExtractedTransaction[] = [];
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+
+  for (const originalLine of lines) {
+    const line = originalLine.replace(/\b(?:avail(?:able)?\s+bal(?:ance)?|closing\s+balance)\b[:\s].*$/i, "");
+    const dateToken = line.match(SOURCE_DATE_PATTERN)?.[0];
+    const transactionDate = dateToken ? parseSourceDate(dateToken) : undefined;
+    const withoutDate = line.replace(SOURCE_DATE_PATTERN, " ");
+    const currencyMatch = CURRENCY_AMOUNT_PATTERN.exec(withoutDate);
+    const markedMatch = MARKED_AMOUNT_PATTERN.exec(withoutDate);
+    let rawAmount = currencyMatch?.[1] ?? currencyMatch?.[2] ?? markedMatch?.[1] ?? markedMatch?.[4];
+
+    if (!rawAmount) {
+      BARE_AMOUNT_PATTERN.lastIndex = 0;
+      rawAmount = BARE_AMOUNT_PATTERN.exec(withoutDate)?.[1];
+    }
+    if (!rawAmount) continue;
+
+    const amount = Number(rawAmount.replace(/[\s,]/g, ""));
+    if (!Number.isFinite(amount) || amount === 0) continue;
+
+    const marker = markedMatch?.[2] ?? markedMatch?.[3];
+    const isCredit = CREDIT_WORDS.test(line);
+    const isDebit = DEBIT_WORDS.test(line);
+    let type: "credit" | "debit";
+    if (marker) {
+      type = marker.toLowerCase() === "cr" ? "credit" : "debit";
+    } else if (isCredit !== isDebit) {
+      type = isCredit ? "credit" : "debit";
+    } else if (rawAmount.trimStart().startsWith("+") || rawAmount.trimStart().startsWith("-")) {
+      type = rawAmount.trimStart().startsWith("+") ? "credit" : "debit";
+    } else {
+      continue;
+    }
+
+    const transactionId = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/i.exec(line)?.[1];
+    const description = line
+      .replace(SOURCE_DATE_PATTERN, " ")
+      .replace(CURRENCY_AMOUNT_PATTERN, " ")
+      .replace(MARKED_AMOUNT_PATTERN, " ")
+      .replace(BARE_AMOUNT_PATTERN, " ")
+      .replace(/\b(?:CR|DR|NGN|Avail Bal|Available Balance|Closing Balance|Txn ID|Acct|Account)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    transactions.push({
+      date: transactionDate,
+      description: description || (type === "credit" ? "Credit received" : "Debit"),
+      amount: Math.abs(amount),
+      type,
+      transactionId,
+    });
+  }
+
+  return transactions;
+}
+
 export function getAuditWindow(
   dates: (string | undefined)[],
   months: number,
@@ -126,8 +233,13 @@ function normalizeTransactions(raw: unknown[]): {
       continue;
     }
     const value = item as Record<string, unknown>;
-    const type = value.type === "credit" || value.type === "debit" ? value.type : null;
-    const amount = Number(value.amount);
+    const direction = typeof value.type === "string" ? value.type.trim().toLowerCase() : "";
+    const type = direction === "credit" || direction === "cr"
+      ? "credit"
+      : direction === "debit" || direction === "dr"
+        ? "debit"
+        : null;
+    const amount = normalizeAmount(value.amount);
     const description = typeof value.description === "string" ? value.description.trim() : "";
     const hasDate = value.date !== undefined && value.date !== null && value.date !== "";
     const date = validIsoDate(value.date) ? value.date : undefined;
@@ -215,6 +327,7 @@ export function applyFinancialAuditRules(
     totalExpenses,
     cashFlow,
     savingsRate,
+    score: healthScore,
     healthScore,
     healthStatus: statusFromScore(healthScore),
     recoverableAmount: 0,
