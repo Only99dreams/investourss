@@ -141,27 +141,23 @@ Funding Information:
 }
 
 async function callAI(messages: { role: string; content: string }[]) {
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
-
-  const systemInstruction = messages.find((m) => m.role === "system")?.content || "";
-  const contents = messages
-    .filter((m) => m.role !== "system")
-    .map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
+  const MODEL_API_KEY = Deno.env.get("MODEL_API_KEY");
+  if (!MODEL_API_KEY) throw new Error("MODEL_API_KEY is not configured");
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+    "https://api.meta.ai/v1/chat/completions",
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${MODEL_API_KEY}`,
       },
       body: JSON.stringify({
-        ...(systemInstruction ? { systemInstruction: { parts: [{ text: systemInstruction }] } } : {}),
-        contents,
+        model: "muse-spark-1.3",
+        messages: messages.map(({ role, content }) => ({
+          role: role === "system" ? "developer" : role,
+          content,
+        })),
       }),
     },
   );
@@ -170,15 +166,11 @@ async function callAI(messages: { role: string; content: string }[]) {
     const errorText = await response.text();
     if (response.status === 429) throw { status: 429, message: "Rate limit exceeded. Please try again in a moment." };
     if (response.status === 402) throw { status: 402, message: "Service temporarily unavailable. Please try again later." };
-    throw new Error(`Gemini AI error: ${response.status} - ${errorText}`);
+    throw new Error(`Meta Model API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  return (
-    data.candidates?.[0]?.content?.parts
-      ?.map((p: any) => p.text || "")
-      .join("") || "I apologize, but I couldn't generate a response."
-  );
+  return data.choices?.[0]?.message?.content || "I apologize, but I couldn't generate a response.";
 }
 
 serve(async (req) => {

@@ -125,3 +125,15 @@ test("does not invent transaction dates or treat unknown directions as income", 
   assert.equal(report.dataQuality.excludedInvalidTransactions, 3);
   assert.equal(report.monthlyObservations.length, 0);
 });
+
+test("excludes amounts and selected-period totals beyond NUMERIC(15,2) capacity", () => {
+  const report = applyFinancialAuditRules([
+    { date: "2025-02-10", description: "Oversized transfer", amount: 10_000_000_000_000, type: "credit" },
+    { date: "2025-02-11", description: "Large deposit A", amount: 6_000_000_000_000, type: "credit" },
+    { date: "2025-02-12", description: "Large deposit B", amount: 5_000_000_000_000, type: "credit" },
+  ], 1, new Date("2025-02-28T12:00:00Z"));
+
+  assert.equal(report.transactions.length, 1);
+  assert.equal(report.totalIncome, 6_000_000_000_000);
+  assert.equal(report.dataQuality.excludedInvalidTransactions, 2);
+});

@@ -12,10 +12,10 @@ serve(async (req) => {
 
   try {
     const { messages, userId, userLevel } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    const MODEL_API_KEY = Deno.env.get("MODEL_API_KEY");
 
-    if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not configured");
+    if (!MODEL_API_KEY) {
+      throw new Error("MODEL_API_KEY is not configured");
     }
 
     const levelPrompts = {
@@ -49,29 +49,33 @@ Personalization for ${level} level: ${levelPrompts[level as keyof typeof levelPr
 
 Remember: You're an educator, not a financial advisor. Always recommend users consult with licensed professionals for personalized financial advice.`;
 
-    console.log("Calling Gemini AI with messages:", messages?.length);
+    console.log("Calling Meta Model API with messages:", messages?.length);
 
-    const contents = (messages || [])
+    const conversationMessages = (messages || [])
       .filter((m: any) => m.role !== "system")
       .map((m: any) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content || "" }],
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.content || "",
       }));
 
-    if (contents.length === 0) {
-      contents.push({ role: "user", parts: [{ text: "Hello" }] });
+    if (conversationMessages.length === 0) {
+      conversationMessages.push({ role: "user", content: "Hello" });
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+      "https://api.meta.ai/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${MODEL_API_KEY}`,
         },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents,
+          model: "muse-spark-1.3",
+          messages: [
+            { role: "developer", content: systemPrompt },
+            ...conversationMessages,
+          ],
         }),
       },
     );
@@ -103,9 +107,7 @@ Remember: You're an educator, not a financial advisor. Always recommend users co
 
     const data = await response.json();
     const assistantResponse =
-      data.candidates?.[0]?.content?.parts
-        ?.map((p: any) => p.text || "")
-        .join("") || "I apologize, but I couldn't generate a response.";
+      data.choices?.[0]?.message?.content || "I apologize, but I couldn't generate a response.";
 
     console.log("Successfully generated response");
 

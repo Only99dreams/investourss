@@ -21,9 +21,9 @@ serve(async (req) => {
       });
     }
 
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    if (!GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY is not configured');
+    const MODEL_API_KEY = Deno.env.get('MODEL_API_KEY');
+    if (!MODEL_API_KEY) {
+      throw new Error('MODEL_API_KEY is not configured');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -82,18 +82,57 @@ serve(async (req) => {
     console.log(`Processing ${analysisType} analysis for: ${query}`);
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+      'https://api.meta.ai/v1/chat/completions',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${MODEL_API_KEY}`,
         },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [
-            { role: 'user', parts: [{ text: userPrompt }] }
+          model: 'muse-spark-1.3',
+          messages: [
+            { role: 'developer', content: systemPrompt },
+            { role: 'user', content: userPrompt },
           ],
-          generationConfig: { responseMimeType: 'application/json' },
+          response_format: {
+            type: 'json_schema',
+            json_schema: analysisType === 'deep'
+              ? {
+                  name: 'deep_scam_analysis',
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      riskScore: { type: 'number', minimum: 0, maximum: 100 },
+                      riskLevel: { type: 'string', enum: ['safe', 'low', 'medium', 'high', 'critical'] },
+                      summary: { type: 'string' },
+                      companyAnalysis: { type: 'string' },
+                      redFlags: { type: 'array', items: { type: 'string' } },
+                      greenFlags: { type: 'array', items: { type: 'string' } },
+                      regulatoryStatus: { type: 'string' },
+                      similarScams: { type: 'array', items: { type: 'string' } },
+                      recommendations: { type: 'array', items: { type: 'string' } },
+                      confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+                    },
+                    required: ['riskScore', 'riskLevel', 'summary', 'companyAnalysis', 'redFlags', 'greenFlags', 'regulatoryStatus', 'similarScams', 'recommendations', 'confidence'],
+                    additionalProperties: false,
+                  },
+                }
+              : {
+                  name: 'quick_scam_analysis',
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      riskLevel: { type: 'string', enum: ['safe', 'warning', 'danger'] },
+                      summary: { type: 'string' },
+                      keyFindings: { type: 'array', items: { type: 'string' } },
+                      recommendation: { type: 'string' },
+                    },
+                    required: ['riskLevel', 'summary', 'keyFindings', 'recommendation'],
+                    additionalProperties: false,
+                  },
+                },
+          },
         }),
       },
     );
@@ -112,14 +151,12 @@ serve(async (req) => {
         });
       }
       const errorText = await response.text();
-      console.error('Gemini AI error:', response.status, errorText);
+      console.error('Meta Model API error:', response.status, errorText);
       throw new Error('AI analysis failed');
     }
 
     const data = await response.json();
-    const aiContent = data.candidates?.[0]?.content?.parts
-      ?.map((p: any) => p.text || '')
-      .join('') || '';
+    const aiContent = data.choices?.[0]?.message?.content || '';
 
     if (!aiContent) {
       throw new Error('No response from AI');

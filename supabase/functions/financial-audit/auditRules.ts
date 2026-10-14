@@ -34,6 +34,7 @@ export interface FinancialAuditRulesResult {
 
 const VALID_MONTHS = [1, 3, 6];
 const DEFAULT_CHUNK_SIZE = 24000;
+const MAX_NUMERIC_15_2_EXCLUSIVE = 10_000_000_000_000;
 const LEAKAGE_DESCRIPTION = /\b(bank fee|bank charge|service charge|maintenance fee|commission|stamp duty|vat)\b/i;
 
 function categoryFromDescription(description: string): string {
@@ -243,7 +244,15 @@ function normalizeTransactions(raw: unknown[]): {
     const description = typeof value.description === "string" ? value.description.trim() : "";
     const hasDate = value.date !== undefined && value.date !== null && value.date !== "";
     const date = validIsoDate(value.date) ? value.date : undefined;
-    if (!type || !Number.isFinite(amount) || amount <= 0 || !description || (hasDate && !date)) {
+    const roundedAmount = roundMoney(amount);
+    if (
+      !type
+      || !Number.isFinite(amount)
+      || amount <= 0
+      || roundedAmount >= MAX_NUMERIC_15_2_EXCLUSIVE
+      || !description
+      || (hasDate && !date)
+    ) {
       excludedInvalidTransactions += 1;
       continue;
     }
@@ -260,7 +269,7 @@ function normalizeTransactions(raw: unknown[]): {
     transactions.push({
       date,
       description,
-      amount: roundMoney(amount),
+      amount: roundedAmount,
       type,
       category: categoryFromDescription(description),
       transactionId,
@@ -300,12 +309,23 @@ export function applyFinancialAuditRules(
 ): FinancialAuditRulesResult {
   const normalized = normalizeTransactions(rawTransactions);
   const window = getAuditWindow(normalized.transactions.map((transaction) => transaction.date), requestedMonths, referenceDate);
-  const transactions = normalized.transactions
+  const selectedTransactions = normalized.transactions
     .filter((transaction) => !transaction.date || (transaction.date >= window.periodStart && transaction.date <= window.periodEnd))
     .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "")
       || a.description.localeCompare(b.description)
       || a.amount - b.amount
       || a.type.localeCompare(b.type));
+  const totalsByType = new Map<FinancialTransaction["type"], number>();
+  const transactions: FinancialTransaction[] = [];
+  for (const transaction of selectedTransactions) {
+    const nextTotal = roundMoney((totalsByType.get(transaction.type) ?? 0) + transaction.amount);
+    if (!Number.isFinite(nextTotal) || nextTotal >= MAX_NUMERIC_15_2_EXCLUSIVE) {
+      normalized.excludedInvalidTransactions += 1;
+      continue;
+    }
+    totalsByType.set(transaction.type, nextTotal);
+    transactions.push(transaction);
+  }
   const credits = transactions.filter((transaction) => transaction.type === "credit");
   const debits = transactions.filter((transaction) => transaction.type === "debit");
   const totalIncome = roundMoney(credits.reduce((sum, transaction) => sum + transaction.amount, 0));

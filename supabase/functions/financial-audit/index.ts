@@ -159,25 +159,52 @@ async function callAI(
   auditMonths: number,
   signal: AbortSignal,
 ) {
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
+  const MODEL_API_KEY = Deno.env.get("MODEL_API_KEY");
+  if (!MODEL_API_KEY) throw new Error("MODEL_API_KEY is not configured");
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+    "https://api.meta.ai/v1/chat/completions",
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${MODEL_API_KEY}`,
       },
       signal,
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [
-          { role: "user", parts: [{ text: buildUserPrompt({ text, sourceType, accountType, auditMonths }) }] },
+        model: "muse-spark-1.3",
+        messages: [
+          { role: "developer", content: SYSTEM_PROMPT },
+          { role: "user", content: buildUserPrompt({ text, sourceType, accountType, auditMonths }) },
         ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          thinkingConfig: { thinkingLevel: "minimal" },
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "financial_transactions",
+            schema: {
+              type: "object",
+              properties: {
+                transactions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      date: { type: "string" },
+                      description: { type: "string" },
+                      amount: { type: "number" },
+                      type: { type: "string", enum: ["credit", "debit"] },
+                      category: { type: "string" },
+                      transactionId: { type: "string" },
+                    },
+                    required: ["date", "description", "amount", "type", "category", "transactionId"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["transactions"],
+              additionalProperties: false,
+            },
+          },
         },
       }),
     },
@@ -186,13 +213,11 @@ async function callAI(
   if (!response.ok) {
     const errorText = await response.text();
     if (response.status === 429) throw { status: 429, message: "Rate limit exceeded. Please try again in a moment." };
-    throw new Error(`Gemini AI error: ${response.status} - ${errorText}`);
+    throw new Error(`Meta Model API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  const content = data.candidates?.[0]?.content?.parts
-    ?.map((p: { text?: string }) => p.text || "")
-    .join("") || '';
+  const content = data.choices?.[0]?.message?.content || '';
   const start = content.indexOf('{');
   const end = content.lastIndexOf('}');
   if (start === -1 || end === -1) throw new Error("AI returned invalid JSON");
@@ -231,7 +256,7 @@ async function extractTransactionsWithAI(
   } catch (error) {
     controller.abort();
     if (timedOut) {
-      throw new Error(`Gemini extraction timed out after ${Math.round(AI_TIMEOUT_MS / 1000)} seconds.`);
+      throw new Error(`Meta Llama extraction timed out after ${Math.round(AI_TIMEOUT_MS / 1000)} seconds.`);
     }
     throw error;
   } finally {
@@ -283,7 +308,7 @@ serve(async (req) => {
       }
       console.warn('AI analysis failed, using fallback parser:', e?.message || e);
       aiExtractionFailed = true;
-      aiFailureMessage = typeof e?.message === "string" ? e.message.slice(0, 300) : "Unknown Gemini API error";
+      aiFailureMessage = typeof e?.message === "string" ? e.message.slice(0, 300) : "Unknown Meta Llama API error";
       const fallbackTransactions = parseFinancialRecords(text);
       extractedCount = fallbackTransactions.length;
       report = buildReportFromRules(applyFinancialAuditRules(fallbackTransactions, auditMonths), accountType);
