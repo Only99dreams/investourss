@@ -33,7 +33,7 @@ export interface FinancialAuditRulesResult {
 }
 
 const VALID_MONTHS = [1, 3, 6];
-const DEFAULT_CHUNK_SIZE = 24000;
+const DEFAULT_CHUNK_SIZE = 12000;
 const MAX_NUMERIC_15_2_EXCLUSIVE = 10_000_000_000_000;
 const LEAKAGE_DESCRIPTION = /\b(bank fee|bank charge|service charge|maintenance fee|commission|stamp duty|vat)\b/i;
 

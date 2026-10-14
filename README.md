@@ -7,7 +7,7 @@ Investours is a fintech platform for African investors with opportunity vetting,
 - Vite + React + TypeScript
 - Tailwind CSS + shadcn-ui
 - Supabase (database, auth, Edge Functions)
-- Meta Model API (`muse-spark-1.3`) for all AI features
+- Groq API (`openai/gpt-oss-120b`) for all AI features
 
 ## Getting started
 
@@ -27,14 +27,14 @@ All AI features run as Supabase Edge Functions in `supabase/functions`:
 - `business-plan` - business plan generator
 - `financial-audit` - financial health audit
 
-All AI Edge Functions call Meta's chat completions API using the `muse-spark-1.3` model and the `MODEL_API_KEY` secret. Keep the key server-side only; never put it in frontend code or commit it to git.
+All AI Edge Functions call Groq's OpenAI-compatible chat completions API using the `openai/gpt-oss-120b` model and the `GROQ_API_KEY` secret. Keep the key server-side only; never put it in frontend code or commit it to git.
 
-### Setting `MODEL_API_KEY`
+### Setting `GROQ_API_KEY`
 
-1. Create an API key in the [Meta Model API dashboard](https://dev.meta.ai/).
-2. **Local development**: add `MODEL_API_KEY="..."` to `.env` (already git-ignored).
-3. **Supabase (where the functions run)**: Dashboard > Edge Functions > Secrets, add `MODEL_API_KEY`.
+1. Create an API key in the [Groq Console](https://console.groq.com/keys).
+2. **Local development**: add `GROQ_API_KEY="..."` to `.env` (already git-ignored).
+3. **Supabase (where the functions run)**: Dashboard > Edge Functions > Secrets, add `GROQ_API_KEY`.
 
 ## Deployment
 
-The frontend is a static Vite build served on your host of choice (e.g. Vercel or Render) - no backend environment variables are needed for the client. The AI backend lives in Supabase Edge Functions, so `MODEL_API_KEY` is configured there, not on the static host.
+The frontend is a static Vite build served on your host of choice (e.g. Vercel or Render) - no backend environment variables are needed for the client. The AI backend lives in Supabase Edge Functions, so `GROQ_API_KEY` is configured there, not on the static host.

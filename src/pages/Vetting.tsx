@@ -34,6 +34,26 @@ interface DeepAnalysisResult {
   confidence: "low" | "medium" | "high";
 }
 
+async function functionErrorMessage(err: unknown): Promise<string> {
+  const error = err as { message?: string; context?: Response };
+  if (error?.context) {
+    const status = error.context.status;
+    const errorCode = error.context.headers.get("sb-error-code");
+    try {
+      const body = await error.context.clone().json();
+      const detail = body?.error || body?.message || body?.msg;
+      if (detail) {
+        return [`Scam detection failed${errorCode ? ` (${errorCode})` : ` (HTTP ${status})`}.`, detail]
+          .filter(Boolean)
+          .join(" ");
+      }
+    } catch { /* body wasn't JSON */ }
+    if (errorCode) return `Scam detection failed (${errorCode}, HTTP ${status}). Check the Edge Function logs.`;
+    return `Scam detection failed (HTTP ${status}). Check the Edge Function logs.`;
+  }
+  return error?.message || "Request failed";
+}
+
 const Vetting = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [analyzeQuery, setAnalyzeQuery] = useState("");
@@ -65,7 +85,7 @@ const Vetting = () => {
         }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error));
 
       if (data.success && data.analysis) {
         setQuickResult(data.analysis);
@@ -125,7 +145,7 @@ const Vetting = () => {
         }
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await functionErrorMessage(error));
 
       if (data.success && data.analysis) {
         setDeepResult(data.analysis);

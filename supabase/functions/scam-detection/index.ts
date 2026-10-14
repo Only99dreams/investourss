@@ -21,9 +21,15 @@ serve(async (req) => {
       });
     }
 
-    const MODEL_API_KEY = Deno.env.get('MODEL_API_KEY');
-    if (!MODEL_API_KEY) {
-      throw new Error('MODEL_API_KEY is not configured');
+    // Meta Muse configuration (disabled)
+    // const MODEL_API_KEY = Deno.env.get('MODEL_API_KEY');
+    // if (!MODEL_API_KEY) {
+    //   throw new Error('MODEL_API_KEY is not configured');
+    // }
+
+    const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+    if (!GROQ_API_KEY) {
+      throw new Error('GROQ_API_KEY is not configured');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -82,15 +88,18 @@ serve(async (req) => {
     console.log(`Processing ${analysisType} analysis for: ${query}`);
 
     const response = await fetch(
-      'https://api.meta.ai/v1/chat/completions',
+      // Meta Muse endpoint (disabled)
+      // 'https://api.meta.ai/v1/chat/completions',
+      'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${MODEL_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'muse-spark-1.3',
+          // model: 'muse-spark-1.3',
+          model: 'openai/gpt-oss-120b',
           messages: [
             { role: 'developer', content: systemPrompt },
             { role: 'user', content: userPrompt },
@@ -151,7 +160,7 @@ serve(async (req) => {
         });
       }
       const errorText = await response.text();
-      console.error('Meta Model API error:', response.status, errorText);
+      console.error('Groq API error:', response.status, errorText);
       throw new Error('AI analysis failed');
     }
 

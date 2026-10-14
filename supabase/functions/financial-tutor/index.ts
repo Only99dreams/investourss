@@ -12,10 +12,15 @@ serve(async (req) => {
 
   try {
     const { messages, userId, userLevel } = await req.json();
-    const MODEL_API_KEY = Deno.env.get("MODEL_API_KEY");
+    // Meta Muse configuration (disabled)
+    // const MODEL_API_KEY = Deno.env.get("MODEL_API_KEY");
+    // if (!MODEL_API_KEY) {
+    //   throw new Error("MODEL_API_KEY is not configured");
+    // }
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
-    if (!MODEL_API_KEY) {
-      throw new Error("MODEL_API_KEY is not configured");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     const levelPrompts = {
@@ -49,7 +54,7 @@ Personalization for ${level} level: ${levelPrompts[level as keyof typeof levelPr
 
 Remember: You're an educator, not a financial advisor. Always recommend users consult with licensed professionals for personalized financial advice.`;
 
-    console.log("Calling Meta Model API with messages:", messages?.length);
+    console.log("Calling Groq API with messages:", messages?.length);
 
     const conversationMessages = (messages || [])
       .filter((m: any) => m.role !== "system")
@@ -63,15 +68,18 @@ Remember: You're an educator, not a financial advisor. Always recommend users co
     }
 
     const response = await fetch(
-      "https://api.meta.ai/v1/chat/completions",
+      // Meta Muse endpoint (disabled)
+      // "https://api.meta.ai/v1/chat/completions",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${MODEL_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "muse-spark-1.3",
+          // model: "muse-spark-1.3",
+          model: "openai/gpt-oss-120b",
           messages: [
             { role: "developer", content: systemPrompt },
             ...conversationMessages,

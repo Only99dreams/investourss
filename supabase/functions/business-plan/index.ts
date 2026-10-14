@@ -141,19 +141,25 @@ Funding Information:
 }
 
 async function callAI(messages: { role: string; content: string }[]) {
-  const MODEL_API_KEY = Deno.env.get("MODEL_API_KEY");
-  if (!MODEL_API_KEY) throw new Error("MODEL_API_KEY is not configured");
+  // Meta Muse configuration (disabled)
+  // const MODEL_API_KEY = Deno.env.get("MODEL_API_KEY");
+  // if (!MODEL_API_KEY) throw new Error("MODEL_API_KEY is not configured");
+  const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+  if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is not configured");
 
   const response = await fetch(
-    "https://api.meta.ai/v1/chat/completions",
+    // Meta Muse endpoint (disabled)
+    // "https://api.meta.ai/v1/chat/completions",
+    "https://api.groq.com/openai/v1/chat/completions",
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${MODEL_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "muse-spark-1.3",
+        // model: "muse-spark-1.3",
+        model: "openai/gpt-oss-120b",
         messages: messages.map(({ role, content }) => ({
           role: role === "system" ? "developer" : role,
           content,
@@ -166,7 +172,7 @@ async function callAI(messages: { role: string; content: string }[]) {
     const errorText = await response.text();
     if (response.status === 429) throw { status: 429, message: "Rate limit exceeded. Please try again in a moment." };
     if (response.status === 402) throw { status: 402, message: "Service temporarily unavailable. Please try again later." };
-    throw new Error(`Meta Model API error: ${response.status} - ${errorText}`);
+    throw new Error(`Groq API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();

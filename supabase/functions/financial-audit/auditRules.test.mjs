@@ -9,6 +9,14 @@ test("chunks long statements without dropping or reordering source text", () => 
   assert.ok(chunks.every((chunk) => chunk.length <= 10000));
 });
 
+test("uses a conservative default chunk size for low token limits", () => {
+  const source = "x".repeat(30001);
+  const chunks = splitFinancialRecords(source);
+
+  assert.equal(chunks.join(""), source);
+  assert.ok(chunks.every((chunk) => chunk.length <= 12000));
+});
+
 test("parses common PDF rows with plain amounts and CR/DR markers", () => {
   const transactions = parseFinancialRecords([
     "05/08/2026 TRANSFER FROM EMPLOYER 250,000.00 CR 700,000.00",
