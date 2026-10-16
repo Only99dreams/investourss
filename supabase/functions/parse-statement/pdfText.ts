@@ -11,6 +11,10 @@
  * x-position and inserts a single space wherever two items are separated by a
  * horizontal gap (i.e. a real column/word boundary), while keeping items that
  * merely continue the same word glued together.
+ *
+ * NOTE: `parse-statement/index.ts` inlines the very same implementation so the
+ * edge function stays a single-file deploy. `pdfText.test.mjs` asserts the two
+ * copies are identical, so always edit both together.
  */
 
 export interface PdfTextItem {
@@ -22,6 +26,7 @@ export interface PdfTextItem {
   hasEOL?: boolean;
 }
 
+// >>> itemsToText
 interface Run {
   str: string;
   x: number;
@@ -52,9 +57,7 @@ export function itemsToText(items: PdfTextItem[]): string {
 
   // Top-to-bottom, then left-to-right. PDF y increases upwards, so a larger y
   // is higher on the page.
-  const ordered = runs
-    .slice()
-    .sort((a, b) => b.y - a.y || a.x - b.x);
+  const ordered = runs.slice().sort((a, b) => b.y - a.y || a.x - b.x);
 
   const rows: { y: number; runs: Run[] }[] = [];
   let current: { y: number; runs: Run[] } | null = null;
@@ -79,8 +82,7 @@ export function itemsToText(items: PdfTextItem[]): string {
       if (previousEndX !== undefined) {
         const gap = run.x - previousEndX;
         // A small gap is intra-word kerning; a larger gap is a word/column
-        // boundary and must become a space so the parser can separate the
-        // amount from the running balance.
+        // boundary and must become a space.
         const threshold = Math.max(0.75, Math.min(previousHeight, run.height) * 0.15);
         if (gap > threshold) line += " ";
       }
@@ -93,3 +95,4 @@ export function itemsToText(items: PdfTextItem[]): string {
 
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
+// <<< itemsToText

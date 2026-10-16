@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { itemsToText } from "./pdfText.ts";
 
 test("rebuilds a PDF row with a space between every table column", () => {
@@ -41,4 +44,24 @@ test("orders rows top-to-bottom and items left-to-right", () => {
 test("returns an empty string for no usable items", () => {
   assert.equal(itemsToText([]), "");
   assert.equal(itemsToText([{ str: "" }, {}]), "");
+});
+
+test("index.ts inlines an identical copy of itemsToText", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const marked = (source) => {
+    const start = source.indexOf("// >>> itemsToText");
+    const end = source.indexOf("// <<< itemsToText");
+    assert.ok(start !== -1 && end > start, "itemsToText markers are missing");
+    // Compare ignoring whitespace so CRLF vs LF and formatting do not matter.
+    return source.slice(start, end).replace(/\s+/g, " ").trim();
+  };
+
+  const module = marked(readFileSync(join(here, "pdfText.ts"), "utf8"));
+  const edgeFunction = marked(readFileSync(join(here, "index.ts"), "utf8"));
+
+  assert.equal(
+    edgeFunction,
+    module,
+    "index.ts and pdfText.ts copies of itemsToText have drifted apart — update both",
+  );
 });

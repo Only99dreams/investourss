@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import pdf from "npm:pdf-parse@1.1.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { itemsToText, type PdfTextItem } from "./pdfText.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +8,93 @@ const corsHeaders = {
 };
 
 const MIN_TEXT_LENGTH = 20;
+
+// ---------------------------------------------------------------------------
+// PDF text reconstruction.
+//
+// Inlined (rather than imported from pdfText.ts) so this edge function is a
+// single self-contained file that any deploy method can bundle. The guarded
+// block below is intentionally byte-for-byte identical to pdfText.ts's
+// implementation, and pdfText.test.mjs asserts the two copies stay in sync.
+// ---------------------------------------------------------------------------
+interface PdfTextItem {
+  str?: string;
+  transform?: number[];
+  width?: number;
+  height?: number;
+  hasEOL?: boolean;
+}
+
+// >>> itemsToText
+interface Run {
+  str: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  eol: boolean;
+}
+
+export function itemsToText(items: PdfTextItem[]): string {
+  const runs: Run[] = [];
+  for (const item of items ?? []) {
+    if (!item || typeof item.str !== "string" || item.str === "") continue;
+    const transform = item.transform ?? [];
+    const x = Number.isFinite(transform[4]) ? transform[4] : 0;
+    const y = Number.isFinite(transform[5]) ? transform[5] : 0;
+    const height = item.height && item.height > 0 ? item.height : Math.abs(transform[3] || 10) || 10;
+    runs.push({
+      str: item.str,
+      x,
+      y,
+      width: item.width && item.width > 0 ? item.width : 0,
+      height,
+      eol: Boolean(item.hasEOL),
+    });
+  }
+  if (runs.length === 0) return "";
+
+  // Top-to-bottom, then left-to-right. PDF y increases upwards, so a larger y
+  // is higher on the page.
+  const ordered = runs.slice().sort((a, b) => b.y - a.y || a.x - b.x);
+
+  const rows: { y: number; runs: Run[] }[] = [];
+  let current: { y: number; runs: Run[] } | null = null;
+  let previousEndedLine = false;
+  for (const run of ordered) {
+    const tolerance = Math.max(1.5, run.height * 0.5);
+    const sameRow = current !== null && !previousEndedLine && Math.abs(current.y - run.y) <= tolerance;
+    if (!sameRow) {
+      current = { y: run.y, runs: [] };
+      rows.push(current);
+    }
+    current!.runs.push(run);
+    previousEndedLine = run.eol;
+  }
+
+  const lines = rows.map((row) => {
+    const sorted = row.runs.slice().sort((a, b) => a.x - b.x);
+    let line = "";
+    let previousEndX: number | undefined;
+    let previousHeight = sorted[0]?.height ?? 10;
+    for (const run of sorted) {
+      if (previousEndX !== undefined) {
+        const gap = run.x - previousEndX;
+        // A small gap is intra-word kerning; a larger gap is a word/column
+        // boundary and must become a space.
+        const threshold = Math.max(0.75, Math.min(previousHeight, run.height) * 0.15);
+        if (gap > threshold) line += " ";
+      }
+      line += run.str;
+      previousEndX = run.x + run.width;
+      previousHeight = run.height;
+    }
+    return line.replace(/[ \t]+/g, " ").trim();
+  });
+
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+// <<< itemsToText
 
 interface PdfPageData {
   getTextContent: (opts: { normalizeWhitespace: boolean; disableCombineTextItems: boolean }) => Promise<{ items: PdfTextItem[] }>;
