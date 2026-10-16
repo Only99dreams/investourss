@@ -29,7 +29,7 @@ export interface FinancialAuditRulesResult {
   incomeSources: { name: string; amount: number }[];
   topSpendingCategories: { name: string; amount: number }[];
   leakages: { description: string; amount: number; category: string }[];
-  dataQuality: { excludedInvalidTransactions: number; duplicateRowsIgnored: number; undatedTransactions: number };
+  dataQuality: { excludedInvalidTransactions: number; duplicateRowsIgnored: number; undatedTransactions: number; excludedUndatedTransactions: number };
 }
 
 const VALID_MONTHS = [1, 3, 6];
@@ -309,8 +309,21 @@ export function applyFinancialAuditRules(
 ): FinancialAuditRulesResult {
   const normalized = normalizeTransactions(rawTransactions);
   const window = getAuditWindow(normalized.transactions.map((transaction) => transaction.date), requestedMonths, referenceDate);
+  // Undated rows can't be placed inside a dated audit window. Keeping them would
+  // silently inflate the audited month's totals (and make them disagree with the
+  // dated monthly breakdown), so they are only kept when the entire dataset is
+  // undated and the window has nothing better to anchor on.
+  const hasDatedTransactions = normalized.transactions.some((transaction) => Boolean(transaction.date));
+  let excludedUndatedTransactions = 0;
   const selectedTransactions = normalized.transactions
-    .filter((transaction) => !transaction.date || (transaction.date >= window.periodStart && transaction.date <= window.periodEnd))
+    .filter((transaction) => {
+      if (transaction.date) return transaction.date >= window.periodStart && transaction.date <= window.periodEnd;
+      if (hasDatedTransactions) {
+        excludedUndatedTransactions += 1;
+        return false;
+      }
+      return true;
+    })
     .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "")
       || a.description.localeCompare(b.description)
       || a.amount - b.amount
@@ -362,6 +375,7 @@ export function applyFinancialAuditRules(
       excludedInvalidTransactions: normalized.excludedInvalidTransactions,
       duplicateRowsIgnored: normalized.duplicateRowsIgnored,
       undatedTransactions: transactions.filter((transaction) => !transaction.date).length,
+      excludedUndatedTransactions,
     },
   };
 }

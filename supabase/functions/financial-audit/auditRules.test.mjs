@@ -157,3 +157,24 @@ test("excludes amounts and selected-period totals beyond NUMERIC(15,2) capacity"
   assert.equal(report.totalIncome, 6_000_000_000_000);
   assert.equal(report.dataQuality.excludedInvalidTransactions, 2);
 });
+
+test("keeps undated rows only when the whole dataset is undated", () => {
+  const mixed = applyFinancialAuditRules([
+    { date: "2025-02-10", description: "Salary", amount: 1000, type: "credit" },
+    { description: "Undated transfer", amount: 5000, type: "credit" },
+  ], 1, new Date("2025-02-28T12:00:00Z"));
+
+  assert.equal(mixed.totalIncome, 1000);
+  assert.equal(mixed.dataQuality.excludedUndatedTransactions, 1);
+  assert.equal(mixed.dataQuality.undatedTransactions, 0);
+
+  const allUndated = applyFinancialAuditRules([
+    { description: "Undated credit", amount: 200, type: "credit" },
+    { description: "Undated debit", amount: 50, type: "debit" },
+  ], 1, new Date("2025-02-28T12:00:00Z"));
+
+  assert.equal(allUndated.totalIncome, 200);
+  assert.equal(allUndated.totalExpenses, 50);
+  assert.equal(allUndated.dataQuality.excludedUndatedTransactions, 0);
+  assert.equal(allUndated.dataQuality.undatedTransactions, 2);
+});

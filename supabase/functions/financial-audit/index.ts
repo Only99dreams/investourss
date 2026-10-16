@@ -74,6 +74,10 @@ const SYSTEM_PROMPT = `You are FinScope, a financial-record transaction extracto
 Extract every transaction from the supplied bank alerts, statements, or records. For each transaction return a date (ISO yyyy-mm-dd, or an empty string if unavailable), description, positive amount in NGN, direction ("credit" or "debit"), category, and transactionId (exact source reference, or an empty string).
 
 Rules:
+- Report ONLY real transactions: money that moved in (credit) or out (debit).
+- IGNORE balance figures: running balance, closing balance, available balance, opening balance, subtotals, headers, footers, page numbers and account numbers. Never treat a balance as a transaction amount.
+- Use the transaction's own amount, copied exactly (do not round, convert, or derive it from a balance).
+- If a row has separate debit and credit columns, report the amount from the column that matches that transaction's direction and ignore the other column.
 - Do not omit transactions because they are old. The application audits the requested duration starting from the first (earliest) month present in the statement.
 - Do not invent, merge, or deduplicate transactions. Only deduplicate exact repeated source IDs.
 - Do not infer missing dates, amounts, or directions. Include only transactions whose direction is explicit in the source.
@@ -204,6 +208,9 @@ async function callAI(
         // model: "muse-spark-1.3",
         model: "openai/gpt-oss-120b",
         max_completion_tokens: MAX_COMPLETION_TOKENS,
+        // Deterministic extraction so the same statement produces the same
+        // transactions (and therefore the same totals) on every run.
+        temperature: 0,
         // gpt-oss is a reasoning model: max_completion_tokens covers both the
         // hidden reasoning and the JSON answer. Keep reasoning low so the token
         // budget is spent on transactions instead of being truncated mid-output.
@@ -314,7 +321,7 @@ async function extractTransactionsWithAI(
       try {
         results[index] = await extractChunk(chunks[index]);
       } catch (error) {
-        const e = error as { status?: number };
+        const e = error as { status?: number; message?: string };
         // Rate limits and the global timeout should abort the whole run.
         if (timedOut || controller.signal.aborted || e?.status === 429) throw error;
         // A single unrecoverable chunk (e.g. truncation) must not discard the
