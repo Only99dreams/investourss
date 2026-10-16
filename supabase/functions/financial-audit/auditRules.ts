@@ -103,7 +103,11 @@ export interface ExtractedTransaction {
   transactionId?: string;
 }
 
-const SOURCE_DATE_PATTERN = /\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/g;
+const SOURCE_DATE_PATTERN = /\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}[-\s][A-Za-z]{3,9}[-\s,]{0,2}\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{2,4})\b/g;
+const MONTH_NAMES: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
 const FALLBACK_AMOUNT_PATTERN = /[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?/;
 const CURRENCY_AMOUNT_PATTERN = /(?:NGN|₦)\s*([+-]?[\d,]+(?:\.\d{1,2})?)|([+-]?[\d,]+(?:\.\d{1,2})?)\s*(?:NGN|₦)/i;
 const MARKED_AMOUNT_PATTERN = new RegExp(
@@ -113,8 +117,9 @@ const MARKED_AMOUNT_PATTERN = new RegExp(
 const BARE_AMOUNT_PATTERN = /(?:^|\s)([+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{1,2}|\d{1,3}(?:,\d{3})+|\d+))(?=$|\s)/g;
 // A balance is never a transaction amount. Strip the label and its figure (but
 // not the rest of the line) so trailing references such as "Txn ID: 1001" survive
-// and can still be used to deduplicate.
-const BALANCE_TOKEN_PATTERN = /\b(?:avail(?:able)?\s+bal(?:ance)?|closing\s+bal(?:ance)?|opening\s+bal(?:ance)?|ledger\s+bal(?:ance)?|running\s+bal(?:ance)?|book\s+bal(?:ance)?|bal(?:ance)?)\b\s*[:=]?\s*(?:NGN|₦)?\s*[\d,]+(?:\.\d{1,2})?/gi;
+// and can still be used to deduplicate. The figure is captured so it can be used
+// to reconcile direction when a row's description carries no direction word.
+const BALANCE_TOKEN_PATTERN = /\b(?:avail(?:able)?\s+bal(?:ance)?|closing\s+bal(?:ance)?|opening\s+bal(?:ance)?|ledger\s+bal(?:ance)?|running\s+bal(?:ance)?|book\s+bal(?:ance)?|bal(?:ance)?)\b\s*[:=]?\s*(?:NGN|₦)?\s*([\d,]+(?:\.\d{1,2})?)/gi;
 const SOURCE_ID_CLEANUP_PATTERN = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*[A-Z0-9-]+/gi;
 const CREDIT_WORDS = /\b(credit|cr|deposit|transfer from|payment received|salary|funding|interest|refund|inward|remittance)\b/i;
 const DEBIT_WORDS = /\b(debit|dr|withdraw|transfer to|transfer of|payment to|outgoing|sent to|charged|deducted|pos|atm|bill|airtime|charge|fee|purchase|outward|levy)\b/i;
@@ -122,14 +127,35 @@ const DEBIT_WORDS = /\b(debit|dr|withdraw|transfer to|transfer of|payment to|out
 function parseSourceDate(value: string): string | undefined {
   const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value);
   const local = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(value);
-  const year = Number(iso?.[1] ?? local?.[3]);
-  const month = Number(iso?.[2] ?? local?.[2]);
-  const day = Number(iso?.[3] ?? local?.[1]);
-  if (!iso && !local) return undefined;
+  const dayFirstName = /^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s,]{0,2}(\d{2,4})$/.exec(value);
+  const nameFirst = /^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{2,4})$/.exec(value);
+  let year: number;
+  let month: number;
+  let day: number;
+  if (iso) {
+    year = Number(iso[1]);
+    month = Number(iso[2]);
+    day = Number(iso[3]);
+  } else if (local) {
+    year = Number(local[3]);
+    month = Number(local[2]);
+    day = Number(local[1]);
+  } else if (dayFirstName) {
+    year = Number(dayFirstName[3]);
+    month = MONTH_NAMES[dayFirstName[2].slice(0, 3).toLowerCase()] ?? Number.NaN;
+    day = Number(dayFirstName[1]);
+  } else if (nameFirst) {
+    year = Number(nameFirst[3]);
+    month = MONTH_NAMES[nameFirst[1].slice(0, 3).toLowerCase()] ?? Number.NaN;
+    day = Number(nameFirst[2]);
+  } else {
+    return undefined;
+  }
   const fullYear = year < 100 ? 2000 + year : year;
   const parsed = new Date(Date.UTC(fullYear, month - 1, day));
   if (
-    parsed.getUTCFullYear() !== fullYear
+    !Number.isFinite(month)
+    || parsed.getUTCFullYear() !== fullYear
     || parsed.getUTCMonth() !== month - 1
     || parsed.getUTCDate() !== day
   ) return undefined;
@@ -151,61 +177,108 @@ function coerceIsoDate(value: unknown): string | undefined {
   return token ? parseSourceDate(token) : undefined;
 }
 
+// Choose the transaction amount from the numbers found on a line. Statement
+// rows often carry a leading serial number and/or a trailing running balance, so
+// prefer a number that looks like money (has a decimal point or thousands
+// grouping) and ignore zeros (an empty debit/credit column).
+function pickAmount(
+  entries: { raw: string; value: number }[],
+): { raw: string; value: number } | undefined {
+  const nonZero = entries.filter((entry) => entry.value !== 0);
+  if (nonZero.length === 0) return undefined;
+  return nonZero.find((entry) => /[.,]/.test(entry.raw)) ?? nonZero[0];
+}
+
 export function parseFinancialRecords(text: string): ExtractedTransaction[] {
-  const transactions: ExtractedTransaction[] = [];
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
+  type ParsedRow = {
+    date?: string;
+    description: string;
+    amount: number;
+    explicitType?: "credit" | "debit";
+    balance?: number;
+    transactionId?: string;
+    balanceOnly?: boolean;
+  };
+
+  const rows: ParsedRow[] = [];
+
   for (const originalLine of lines) {
-    const line = originalLine.replace(BALANCE_TOKEN_PATTERN, " ");
-    const dateToken = line.match(SOURCE_DATE_PATTERN)?.[0];
+    const transactionId = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/i.exec(originalLine)?.[1];
+
+    // Capture a labelled running balance before it is stripped from the line.
+    let labelledBalance: number | undefined;
+    BALANCE_TOKEN_PATTERN.lastIndex = 0;
+    const balanceMatch = BALANCE_TOKEN_PATTERN.exec(originalLine);
+    if (balanceMatch) {
+      const value = Number(balanceMatch[1].replace(/[\s,]/g, ""));
+      if (Number.isFinite(value)) labelledBalance = value;
+    }
+
+    const dateToken = originalLine.match(SOURCE_DATE_PATTERN)?.[0];
     const transactionDate = dateToken ? parseSourceDate(dateToken) : undefined;
-    const withoutDate = line.replace(SOURCE_DATE_PATTERN, " ");
-    const currencyMatch = CURRENCY_AMOUNT_PATTERN.exec(withoutDate);
-    const markedMatch = MARKED_AMOUNT_PATTERN.exec(withoutDate);
-    const bareAmounts: string[] = [];
+
+    // Remove balances, references, dates and currency symbols, then read every
+    // amount that remains. BARE_AMOUNT_PATTERN never matches inside "NGN250.00",
+    // so the currency symbols are blanked out first to expose those amounts.
+    const amountText = originalLine
+      .replace(BALANCE_TOKEN_PATTERN, " ")
+      .replace(SOURCE_ID_CLEANUP_PATTERN, " ")
+      .replace(SOURCE_DATE_PATTERN, " ")
+      .replace(/(?:NGN|₦)/gi, " ");
+    const amounts: { raw: string; value: number }[] = [];
     BARE_AMOUNT_PATTERN.lastIndex = 0;
-    for (let match = BARE_AMOUNT_PATTERN.exec(withoutDate); match; match = BARE_AMOUNT_PATTERN.exec(withoutDate)) {
-      bareAmounts.push(match[1]);
+    for (let match = BARE_AMOUNT_PATTERN.exec(amountText); match; match = BARE_AMOUNT_PATTERN.exec(amountText)) {
+      const value = Number(match[1].replace(/[\s,]/g, ""));
+      if (Number.isFinite(value)) amounts.push({ raw: match[1], value });
     }
-    // Prefer an explicit currency or CR/DR-marked amount, then any bare amount.
-    // Skip zeros so an empty debit/credit column (0.00) cannot hide the real
-    // amount that follows it, and a balance is never chosen over an amount.
-    const amountCandidates = [
-      currencyMatch?.[1] ?? currencyMatch?.[2],
-      markedMatch?.[1] ?? markedMatch?.[4],
-      ...bareAmounts,
-    ];
-    let rawAmount: string | undefined;
-    for (const candidate of amountCandidates) {
-      if (!candidate) continue;
-      const candidateValue = Number(candidate.replace(/[\s,]/g, ""));
-      if (Number.isFinite(candidateValue) && candidateValue !== 0) {
-        rawAmount = candidate;
-        break;
+    if (amounts.length === 0) {
+      // A line that is only a labelled balance (e.g. "Opening Balance 100,000.00")
+      // is not a transaction, but it anchors the running balance so the first
+      // real transaction can still be given a direction.
+      if (labelledBalance !== undefined) {
+        rows.push({
+          date: transactionDate,
+          description: "",
+          amount: 0,
+          balance: labelledBalance,
+          transactionId,
+          balanceOnly: true,
+        });
       }
-    }
-    if (!rawAmount) continue;
-
-    const amount = Number(rawAmount.replace(/[\s,]/g, ""));
-    if (!Number.isFinite(amount) || amount === 0) continue;
-
-    const marker = markedMatch?.[2] ?? markedMatch?.[3];
-    const isCredit = CREDIT_WORDS.test(line);
-    const isDebit = DEBIT_WORDS.test(line);
-    let type: "credit" | "debit";
-    if (marker) {
-      type = marker.toLowerCase() === "cr" ? "credit" : "debit";
-    } else if (isCredit !== isDebit) {
-      type = isCredit ? "credit" : "debit";
-    } else if (rawAmount.trimStart().startsWith("+") || rawAmount.trimStart().startsWith("-")) {
-      type = rawAmount.trimStart().startsWith("+") ? "credit" : "debit";
-    } else {
       continue;
     }
 
-    const transactionId = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/i.exec(line)?.[1];
-    const description = line
+    // The last number on a statement row is the running balance, unless a label
+    // already gave us one. The transaction amount is the money-like number that
+    // remains (ignoring an empty 0.00 debit/credit column).
+    let balance = labelledBalance;
+    let chosen: { raw: string; value: number } | undefined;
+    if (labelledBalance === undefined && amounts.length >= 2) {
+      balance = amounts[amounts.length - 1].value;
+      chosen = pickAmount(amounts.slice(0, -1));
+    } else {
+      chosen = pickAmount(amounts);
+    }
+    if (!chosen || chosen.value === 0) continue;
+
+    const marker = MARKED_AMOUNT_PATTERN.exec(originalLine);
+    const markerValue = (marker?.[2] ?? marker?.[3])?.toLowerCase();
+    const isCredit = CREDIT_WORDS.test(originalLine);
+    const isDebit = DEBIT_WORDS.test(originalLine);
+    let explicitType: "credit" | "debit" | undefined;
+    if (markerValue === "cr" || markerValue === "dr") {
+      explicitType = markerValue === "cr" ? "credit" : "debit";
+    } else if (isCredit !== isDebit) {
+      explicitType = isCredit ? "credit" : "debit";
+    } else if (/^[+-]/.test(chosen.raw.trim())) {
+      explicitType = chosen.raw.trim().startsWith("+") ? "credit" : "debit";
+    }
+
+    const description = originalLine
       .replace(SOURCE_ID_CLEANUP_PATTERN, " ")
+      .replace(BALANCE_TOKEN_PATTERN, " ")
       .replace(SOURCE_DATE_PATTERN, " ")
       .replace(CURRENCY_AMOUNT_PATTERN, " ")
       .replace(MARKED_AMOUNT_PATTERN, " ")
@@ -214,12 +287,44 @@ export function parseFinancialRecords(text: string): ExtractedTransaction[] {
       .replace(/\s+/g, " ")
       .trim();
 
-    transactions.push({
+    rows.push({
       date: transactionDate,
-      description: description || (type === "credit" ? "Credit received" : "Debit"),
-      amount: Math.abs(amount),
-      type,
+      description,
+      amount: Math.abs(chosen.value),
+      explicitType,
+      balance,
       transactionId,
+    });
+  }
+
+  // Rows whose description carries no direction word can still be read from the
+  // running balance: a row's own balance differs from an adjacent row's balance
+  // by exactly its transaction amount, and the sign of that difference gives the
+  // direction. This works whether the statement runs oldest-first or newest-first,
+  // so it handles most banks regardless of column layout.
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (row.balanceOnly || row.explicitType !== undefined || row.balance === undefined) continue;
+    for (const neighbourIndex of [index - 1, index + 1]) {
+      const neighbour = rows[neighbourIndex];
+      if (!neighbour || neighbour.balance === undefined) continue;
+      const delta = roundMoney(row.balance - neighbour.balance);
+      if (Math.abs(Math.abs(delta) - row.amount) <= 0.01) {
+        row.explicitType = delta > 0 ? "credit" : "debit";
+        break;
+      }
+    }
+  }
+
+  const transactions: ExtractedTransaction[] = [];
+  for (const row of rows) {
+    if (row.balanceOnly || !row.explicitType) continue;
+    transactions.push({
+      date: row.date,
+      description: row.description || (row.explicitType === "credit" ? "Credit received" : "Debit"),
+      amount: row.amount,
+      type: row.explicitType,
+      transactionId: row.transactionId,
     });
   }
 

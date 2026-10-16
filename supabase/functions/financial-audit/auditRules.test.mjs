@@ -298,3 +298,58 @@ test("is deterministic: identical text yields identical transactions and totals"
   assert.equal(first.totalIncome, 350000);
   assert.equal(first.totalExpenses, 25052);
 });
+
+test("infers direction from the running balance for neutral descriptions", () => {
+  const transactions = parseFinancialRecords([
+    "05/08/2026 OPENING BALANCE 100,000.00",
+    "06/08/2026 ACME SUPERMARKET 20,000.00 80,000.00",
+    "07/08/2026 SALARY MAY 250,000.00 330,000.00",
+    "08/08/2026 JOHN DOE 5,000.00 325,000.00",
+  ].join("\n"));
+
+  assert.deepEqual(transactions.map(({ amount, type }) => ({ amount, type })), [
+    { amount: 20000, type: "debit" },
+    { amount: 250000, type: "credit" },
+    { amount: 5000, type: "debit" },
+  ]);
+});
+
+test("handles row numbers and empty debit/credit columns on statement rows", () => {
+  const transactions = parseFinancialRecords([
+    "05/08/2026 OPENING BALANCE 100,000.00",
+    "1  06/08/2026 ACME SUPERMARKET  20,000.00  0.00  80,000.00",
+    "2  07/08/2026 SALARY MAY  0.00  250,000.00  330,000.00",
+  ].join("\n"));
+
+  assert.deepEqual(transactions.map(({ amount, type }) => ({ amount, type })), [
+    { amount: 20000, type: "debit" },
+    { amount: 250000, type: "credit" },
+  ]);
+});
+
+test("parses month-name and name-first date formats", () => {
+  const transactions = parseFinancialRecords([
+    "05-Aug-2026 OPENING BALANCE 100,000.00",
+    "06-Aug-2026 ACME SUPERMARKET 20,000.00 80,000.00",
+    "07 August 2026 SALARY MAY 250,000.00 330,000.00",
+    "Aug 08, 2026 JOHN DOE 5,000.00 325,000.00",
+  ].join("\n"));
+
+  assert.deepEqual(transactions.map(({ date, amount, type }) => ({ date, amount, type })), [
+    { date: "2026-08-06", amount: 20000, type: "debit" },
+    { date: "2026-08-07", amount: 250000, type: "credit" },
+    { date: "2026-08-08", amount: 5000, type: "debit" },
+  ]);
+});
+
+test("never treats an opening or closing balance line as a transaction", () => {
+  const transactions = parseFinancialRecords([
+    "05/08/2026 Opening Balance 100,000.00",
+    "06/08/2026 POS PURCHASE 10,000.00 90,000.00",
+    "07/08/2026 Closing Balance 90,000.00",
+  ].join("\n"));
+
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].amount, 10000);
+  assert.equal(transactions[0].type, "debit");
+});
