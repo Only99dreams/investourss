@@ -248,3 +248,53 @@ test("ignores a running balance when a row has no CR/DR marker", () => {
     { amount: 5000, type: "debit" },
   ]);
 });
+
+test("keeps the transaction id when stripping a balance figure", () => {
+  const transactions = parseFinancialRecords(
+    "Alert: Withdrawal NGN25,000.00 on 12/07/26 by POS. Avail Bal: NGN612,000.00. Txn ID: 1001.",
+  );
+
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].amount, 25000);
+  assert.equal(transactions[0].type, "debit");
+  assert.equal(transactions[0].transactionId, "1001");
+});
+
+test("skips an empty debit/credit column and reads the real amount", () => {
+  const transactions = parseFinancialRecords([
+    "06/08/2026 CHEQUE DEPOSIT 0.00 250,000.00 940,000.00",
+    "07/08/2026 POS PURCHASE 10,000.00 0.00 930,000.00",
+  ].join("\n"));
+
+  assert.deepEqual(transactions.map(({ amount, type }) => ({ amount, type })), [
+    { amount: 250000, type: "credit" },
+    { amount: 10000, type: "debit" },
+  ]);
+});
+
+test("does not treat a labelled balance as a transaction amount", () => {
+  const transactions = parseFinancialRecords(
+    "06/08/2026 POS PURCHASE 10,000.00 Ledger Balance: NGN690,000.00",
+  );
+
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].amount, 10000);
+  assert.equal(transactions[0].type, "debit");
+});
+
+test("is deterministic: identical text yields identical transactions and totals", () => {
+  const text = [
+    "Alert: Credit of NGN350,000.00 on 05/07/26. Desc: Salary. Avail Bal: NGN637,000.00",
+    "Alert: Withdrawal NGN25,000.00 on 12/07/26 by POS. Avail Bal: NGN612,000.00",
+    "Alert: Bank charge NGN52.00 on 08/06/26. Avail Bal: NGN301,250.00",
+  ].join("\n");
+
+  const first = applyFinancialAuditRules(parseFinancialRecords(text), 3, new Date("2026-08-01T12:00:00Z"));
+  const second = applyFinancialAuditRules(parseFinancialRecords(text), 3, new Date("2026-08-01T12:00:00Z"));
+
+  assert.deepEqual(first.transactions, second.transactions);
+  assert.equal(first.totalIncome, second.totalIncome);
+  assert.equal(first.totalExpenses, second.totalExpenses);
+  assert.equal(first.totalIncome, 350000);
+  assert.equal(first.totalExpenses, 25052);
+});

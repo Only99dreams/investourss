@@ -372,33 +372,42 @@ serve(async (req) => {
     let excludedCount = 0;
     let aiExtractionFailed = false;
     let aiFailureMessage = "";
-    try {
-      const extractedTransactions = await extractTransactionsWithAI(text, sourceType, accountType, auditMonths);
-      extractedCount = extractedTransactions.length;
-      report = clampReport({ transactions: extractedTransactions }, accountType, auditMonths, text);
+    let extractionMethod: "deterministic-parser" | "ai" = "deterministic-parser";
+
+    // Deterministic extraction first. The local parser reads the statement text
+    // verbatim, so the same upload always produces the same transactions and the
+    // same income/expense totals — this is what makes the report tally with the
+    // statement and stops the figures from changing between runs. The
+    // nondeterministic AI extractor is used ONLY when the local parser cannot
+    // read a single row (e.g. an unusual layout), so it can never silently alter
+    // the figures of a statement the parser already understands.
+    const parsedTransactions = parseFinancialRecords(text);
+    if (parsedTransactions.length > 0) {
+      extractedCount = parsedTransactions.length;
+      report = buildReportFromRules(applyFinancialAuditRules(parsedTransactions, auditMonths), accountType);
       excludedCount = report.dataQuality.excludedInvalidTransactions;
-      if (report.transactions.length === 0) {
-        const fallbackTransactions = parseFinancialRecords(text);
-        extractedCount = Math.max(extractedCount, fallbackTransactions.length);
-        report = buildReportFromRules(applyFinancialAuditRules(fallbackTransactions, auditMonths), accountType);
-        excludedCount = Math.max(excludedCount, report.dataQuality.excludedInvalidTransactions);
+    } else {
+      try {
+        const extractedTransactions = await extractTransactionsWithAI(text, sourceType, accountType, auditMonths);
+        extractedCount = extractedTransactions.length;
+        report = clampReport({ transactions: extractedTransactions }, accountType, auditMonths, text);
+        excludedCount = report.dataQuality.excludedInvalidTransactions;
+        extractionMethod = "ai";
+      } catch (err) {
+        // AI gateway failure -> deterministic fallback so the audit still completes.
+        const e = err as { status?: number; message?: string };
+        if (e?.status === 429) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), {
+            status: e.status,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        console.warn('AI analysis failed, using fallback parser:', e?.message || e);
+        aiExtractionFailed = true;
+        aiFailureMessage = typeof e?.message === "string" ? e.message.slice(0, 300) : "Unknown Groq GPT-OSS API error";
+        report = buildReportFromRules(applyFinancialAuditRules(parsedTransactions, auditMonths), accountType);
+        excludedCount = report.dataQuality.excludedInvalidTransactions;
       }
-    } catch (err) {
-      // AI gateway failure -> deterministic fallback so the audit still completes.
-      const e = err as { status?: number; message?: string };
-      if (e?.status === 429) {
-        return new Response(JSON.stringify({ success: false, error: e.message }), {
-          status: e.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      console.warn('AI analysis failed, using fallback parser:', e?.message || e);
-      aiExtractionFailed = true;
-      aiFailureMessage = typeof e?.message === "string" ? e.message.slice(0, 300) : "Unknown Groq GPT-OSS API error";
-      const fallbackTransactions = parseFinancialRecords(text);
-      extractedCount = fallbackTransactions.length;
-      report = buildReportFromRules(applyFinancialAuditRules(fallbackTransactions, auditMonths), accountType);
-      excludedCount = report.dataQuality.excludedInvalidTransactions;
     }
 
     if (report.transactions.length === 0) {
@@ -418,7 +427,11 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ success: true, report }), {
+    return new Response(JSON.stringify({
+      success: true,
+      report,
+      meta: { extractionMethod, extractedCount, excludedCount },
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

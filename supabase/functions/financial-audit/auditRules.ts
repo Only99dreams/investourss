@@ -111,8 +111,13 @@ const MARKED_AMOUNT_PATTERN = new RegExp(
   "i",
 );
 const BARE_AMOUNT_PATTERN = /(?:^|\s)([+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{1,2}|\d{1,3}(?:,\d{3})+|\d+))(?=$|\s)/g;
-const CREDIT_WORDS = /\b(credit|cr|deposit|transfer from|payment received|salary|funding|interest)\b/i;
-const DEBIT_WORDS = /\b(debit|dr|withdraw|transfer to|transfer of|payment to|outgoing|sent to|charged|deducted|pos|atm|bill|airtime|charge|fee)\b/i;
+// A balance is never a transaction amount. Strip the label and its figure (but
+// not the rest of the line) so trailing references such as "Txn ID: 1001" survive
+// and can still be used to deduplicate.
+const BALANCE_TOKEN_PATTERN = /\b(?:avail(?:able)?\s+bal(?:ance)?|closing\s+bal(?:ance)?|opening\s+bal(?:ance)?|ledger\s+bal(?:ance)?|running\s+bal(?:ance)?|book\s+bal(?:ance)?|bal(?:ance)?)\b\s*[:=]?\s*(?:NGN|₦)?\s*[\d,]+(?:\.\d{1,2})?/gi;
+const SOURCE_ID_CLEANUP_PATTERN = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*[A-Z0-9-]+/gi;
+const CREDIT_WORDS = /\b(credit|cr|deposit|transfer from|payment received|salary|funding|interest|refund|inward|remittance)\b/i;
+const DEBIT_WORDS = /\b(debit|dr|withdraw|transfer to|transfer of|payment to|outgoing|sent to|charged|deducted|pos|atm|bill|airtime|charge|fee|purchase|outward|levy)\b/i;
 
 function parseSourceDate(value: string): string | undefined {
   const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(value);
@@ -151,17 +156,33 @@ export function parseFinancialRecords(text: string): ExtractedTransaction[] {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
   for (const originalLine of lines) {
-    const line = originalLine.replace(/\b(?:avail(?:able)?\s+bal(?:ance)?|closing\s+balance)\b[:\s].*$/i, "");
+    const line = originalLine.replace(BALANCE_TOKEN_PATTERN, " ");
     const dateToken = line.match(SOURCE_DATE_PATTERN)?.[0];
     const transactionDate = dateToken ? parseSourceDate(dateToken) : undefined;
     const withoutDate = line.replace(SOURCE_DATE_PATTERN, " ");
     const currencyMatch = CURRENCY_AMOUNT_PATTERN.exec(withoutDate);
     const markedMatch = MARKED_AMOUNT_PATTERN.exec(withoutDate);
-    let rawAmount = currencyMatch?.[1] ?? currencyMatch?.[2] ?? markedMatch?.[1] ?? markedMatch?.[4];
-
-    if (!rawAmount) {
-      BARE_AMOUNT_PATTERN.lastIndex = 0;
-      rawAmount = BARE_AMOUNT_PATTERN.exec(withoutDate)?.[1];
+    const bareAmounts: string[] = [];
+    BARE_AMOUNT_PATTERN.lastIndex = 0;
+    for (let match = BARE_AMOUNT_PATTERN.exec(withoutDate); match; match = BARE_AMOUNT_PATTERN.exec(withoutDate)) {
+      bareAmounts.push(match[1]);
+    }
+    // Prefer an explicit currency or CR/DR-marked amount, then any bare amount.
+    // Skip zeros so an empty debit/credit column (0.00) cannot hide the real
+    // amount that follows it, and a balance is never chosen over an amount.
+    const amountCandidates = [
+      currencyMatch?.[1] ?? currencyMatch?.[2],
+      markedMatch?.[1] ?? markedMatch?.[4],
+      ...bareAmounts,
+    ];
+    let rawAmount: string | undefined;
+    for (const candidate of amountCandidates) {
+      if (!candidate) continue;
+      const candidateValue = Number(candidate.replace(/[\s,]/g, ""));
+      if (Number.isFinite(candidateValue) && candidateValue !== 0) {
+        rawAmount = candidate;
+        break;
+      }
     }
     if (!rawAmount) continue;
 
@@ -184,6 +205,7 @@ export function parseFinancialRecords(text: string): ExtractedTransaction[] {
 
     const transactionId = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/i.exec(line)?.[1];
     const description = line
+      .replace(SOURCE_ID_CLEANUP_PATTERN, " ")
       .replace(SOURCE_DATE_PATTERN, " ")
       .replace(CURRENCY_AMOUNT_PATTERN, " ")
       .replace(MARKED_AMOUNT_PATTERN, " ")
