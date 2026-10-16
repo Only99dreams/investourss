@@ -180,7 +180,7 @@ const AuditorLanding = () => {
                   ))}
                 </ul>
                 <div className="mt-4 rounded-lg bg-card border p-3 text-sm">
-                  <p className="font-medium mb-1">Platform Subscription — from ₦4,500/month</p>
+                  <p className="font-medium mb-1">Platform Subscription — from ₦7,200/month</p>
                   <p className="text-xs text-muted-foreground mb-3">
                     Unlimited audits, weekly monitoring, unlimited reports & priority support.
                   </p>

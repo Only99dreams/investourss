@@ -31,10 +31,10 @@ interface PaystackTransaction {
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
 
 const planDetails = {
-  monthly:    { name: 'Premium Monthly',    price: 4500,   period: 'month',    savings: null },
-  quarterly:  { name: 'Premium Quarterly',  price: 12000,  period: '3 months', savings: 'Save ₦1,500' },
-  biennial:   { name: 'Premium Bi-annual',  price: 22500,  period: '6 months', savings: 'Save ₦4,500' },
-  annual:     { name: 'Premium Annual',     price: 45000,  period: 'year',     savings: 'Save ₦9,000' },
+  monthly:    { name: 'Premium Monthly',    price: 7200,   period: 'month',    savings: null },
+  quarterly:  { name: 'Premium Quarterly',  price: 19200,  period: '3 months', savings: 'Save ₦2,400' },
+  biennial:   { name: 'Premium Bi-annual',  price: 36000,  period: '6 months', savings: 'Save ₦7,200' },
+  annual:     { name: 'Premium Annual',     price: 72000,  period: 'year',     savings: 'Save ₦14,400' },
   b2b_quarterly: { name: 'B2B Plan',         price: 360000, period: '3 months', savings: null },
 };
 

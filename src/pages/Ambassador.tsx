@@ -31,7 +31,7 @@ const HowItWorksSteps = [
   {
     title: "Join the Ambassadors",
     description:
-      "Purchase a Platform Credit Pack (₦1,700) or Subscription (₦4,500) and gain access to Investours AI tools.",
+      "Purchase a Platform Credit Pack (₦1,700) or Subscription (₦7,200) and gain access to Investours AI tools.",
   },
   {
     title: "Teach Businesses & Individuals",
