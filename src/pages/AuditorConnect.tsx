@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
   MessageSquare, Mail, FileUp, Landmark, Sparkles, ArrowRight, ArrowLeft,
-  Loader2, CheckCircle2, ScanLine, RefreshCw, Unlink,
+  Loader2, CheckCircle2, ScanLine, RefreshCw, Unlink, Lock, Unlock, AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,8 +94,15 @@ const AuditorConnect = () => {
   const [oauthConn, setOauthConn] = useState<{ provider: "gmail" | "outlook"; email: string; refreshToken: string } | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [parsingPdf, setParsingPdf] = useState(false);
+  // Locked-PDF handling. The password lives only in memory for the duration of
+  // the unlock request and is never persisted.
+  const [pdfPassword, setPdfPassword] = useState("");
+  const [needsPdfPassword, setNeedsPdfPassword] = useState(false);
+  const [pendingPdfPath, setPendingPdfPath] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [unlockingPdf, setUnlockingPdf] = useState(false);
 
-  const activeText = sourceType === "pdf" ? fileContent : text;
+  const activeText = sourceType === "pdf" ? (fileContent || text) : text;
   const canRun = activeText.trim().length >= 10 || sourceType === "open_banking";
 
   const loadOAuthConnections = async () => {
@@ -187,6 +194,14 @@ const AuditorConnect = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Drop any in-progress password prompt when the user switches data source.
+  useEffect(() => {
+    setNeedsPdfPassword(false);
+    setPendingPdfPath("");
+    setPdfPassword("");
+    setPasswordError(null);
+  }, [sourceType]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -204,6 +219,10 @@ const AuditorConnect = () => {
     }
     setFileName(file.name);
     setFileContent("");
+    setNeedsPdfPassword(false);
+    setPendingPdfPath("");
+    setPasswordError(null);
+    setPdfPassword("");
     setParsingPdf(true);
     try {
       const path = `${user.id}/${crypto.randomUUID()}.pdf`;
@@ -214,6 +233,13 @@ const AuditorConnect = () => {
 
       const { data, error } = await supabase.functions.invoke("parse-statement", { body: { path } });
       if (error) throw new Error(await functionErrorMessage(error));
+      if (data?.code === "PASSWORD_REQUIRED") {
+        // The statement is locked. Keep the uploaded path so the user can enter
+        // the password without re-uploading.
+        setPendingPdfPath(path);
+        setNeedsPdfPassword(true);
+        return;
+      }
       if (!data?.success) throw new Error(data?.error || "Failed to parse the PDF");
 
       setFileContent(data.text);
@@ -235,6 +261,52 @@ const AuditorConnect = () => {
     } finally {
       setParsingPdf(false);
     }
+  };
+
+  const unlockPdf = async () => {
+    if (!pendingPdfPath) return;
+    if (!pdfPassword.trim()) {
+      setPasswordError("Enter the PDF password to continue.");
+      return;
+    }
+    setUnlockingPdf(true);
+    setPasswordError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("parse-statement", {
+        body: { path: pendingPdfPath, password: pdfPassword },
+      });
+      if (error) throw new Error(await functionErrorMessage(error));
+      if (data?.code === "INCORRECT_PASSWORD") {
+        setPasswordError(data.error || "That password did not work. Please check it and try again.");
+        return;
+      }
+      if (data?.code === "PASSWORD_REQUIRED") {
+        setPasswordError("Please enter the PDF password.");
+        return;
+      }
+      if (!data?.success) throw new Error(data?.error || "Failed to parse the PDF");
+
+      setFileContent(data.text);
+      setNeedsPdfPassword(false);
+      setPendingPdfPath("");
+      setPdfPassword("");
+      toast({
+        title: "PDF unlocked!",
+        description: `Extracted ${data.pages ?? 1} page(s). Review the text below, then run your audit.`,
+      });
+    } catch (err) {
+      console.error(err);
+      setPasswordError(err instanceof Error ? err.message : "Could not unlock the PDF. Please try again.");
+    } finally {
+      setUnlockingPdf(false);
+    }
+  };
+
+  const cancelPdfPassword = () => {
+    setNeedsPdfPassword(false);
+    setPendingPdfPath("");
+    setPdfPassword("");
+    setPasswordError(null);
   };
 
   const fetchBankEmails = async () => {
@@ -553,6 +625,55 @@ const AuditorConnect = () => {
                   <p className="text-xs text-green-600 flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3" /> Text extracted — ready to audit.
                   </p>
+                )}
+                {needsPdfPassword && (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-50 p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <Lock className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-amber-900">
+                          This statement is password-protected
+                        </p>
+                        <p className="text-xs text-amber-800 leading-relaxed">
+                          Enter the password your bank set for this PDF — it's often your date of
+                          birth, the last 4 digits of your account/BVN, or a code in the bank's
+                          email. It's used only to unlock the file and is never stored.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input
+                        type="password"
+                        value={pdfPassword}
+                        onChange={(e) => setPdfPassword(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") unlockPdf();
+                        }}
+                        placeholder="PDF password"
+                        autoComplete="off"
+                        disabled={unlockingPdf}
+                      />
+                      <Button onClick={unlockPdf} disabled={unlockingPdf || !pdfPassword.trim()}>
+                        {unlockingPdf ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Unlock className="w-4 h-4 mr-2" />
+                        )}
+                        Unlock PDF
+                      </Button>
+                      <Button variant="ghost" onClick={cancelPdfPassword} disabled={unlockingPdf}>
+                        Cancel
+                      </Button>
+                    </div>
+                    {passwordError && (
+                      <p className="text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> {passwordError}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Don't know the password? You can paste the statement text below instead.
+                    </p>
+                  </div>
                 )}
                 <div>
                   <Label htmlFor="pdf-text">Or paste statement text</Label>
