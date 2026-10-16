@@ -35,12 +35,17 @@ interface DeepAnalysisResult {
 }
 
 async function functionErrorMessage(err: unknown): Promise<string> {
-  const error = err as { message?: string; context?: Response };
-  if (error?.context) {
-    const status = error.context.status;
-    const errorCode = error.context.headers.get("sb-error-code");
+  const error = err as { name?: string; message?: string; context?: Response };
+  // A FunctionsHttpError carries the HTTP Response on `context`, but a
+  // FunctionsFetchError (the request never reached the Edge Function) carries
+  // the underlying fetch error instead, which has no `headers`. Only treat
+  // `context` as a Response when it actually exposes the Response API.
+  const context = error?.context;
+  if (context && typeof context.clone === "function" && context.headers) {
+    const status = context.status;
+    const errorCode = context.headers.get("sb-error-code");
     try {
-      const body = await error.context.clone().json();
+      const body = await context.clone().json();
       const detail = body?.error || body?.message || body?.msg;
       if (detail) {
         return [`Scam detection failed${errorCode ? ` (${errorCode})` : ` (HTTP ${status})`}.`, detail]
@@ -50,6 +55,9 @@ async function functionErrorMessage(err: unknown): Promise<string> {
     } catch { /* body wasn't JSON */ }
     if (errorCode) return `Scam detection failed (${errorCode}, HTTP ${status}). Check the Edge Function logs.`;
     return `Scam detection failed (HTTP ${status}). Check the Edge Function logs.`;
+  }
+  if (error?.name === "FunctionsFetchError" || error?.message === "Failed to send a request to the Edge Function") {
+    return "Could not reach the scam detection service. Check your connection and try again, or confirm the Edge Function is deployed.";
   }
   return error?.message || "Request failed";
 }

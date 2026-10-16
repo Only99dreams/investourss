@@ -9,7 +9,7 @@ Run the deterministic rule fixtures with `npm run test:audit-rules` (Node.js 24+
 - Process the complete statement in bounded text chunks; preserve chunk order and concatenate extracted transactions before applying the period filter.
 - Accept a transaction only when it has a positive finite amount, a non-empty description, and an explicit `credit` or `debit` direction.
 - Accept only real calendar dates. Invalid supplied dates are excluded and counted; genuinely missing dates remain in totals but not monthly trends.
-- The 1-, 3-, or 6-month window ends on the latest valid source transaction date that is not in the future. If there are no valid dates, use the audit run date as the period anchor.
+- The 1-, 3-, or 6-month window starts at the first (earliest) valid source transaction month that is not in the future and runs forward, so a statement covering January to December audited for 1 month covers January and a 3-month audit covers January to March. If there are no valid dates, use the audit run date's month as the period anchor.
 - Deduplicate only repeated rows with the same exact source transaction ID. Equal date, description, and amount are not sufficient because separate purchases can be identical.
 - Do not infer a missing date, direction, transaction, debt, or repayment record.
 

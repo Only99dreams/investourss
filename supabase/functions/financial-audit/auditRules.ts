@@ -196,19 +196,19 @@ export function getAuditWindow(
 ): { periodStart: string; periodEnd: string; auditMonths: number } {
   const auditMonths = VALID_MONTHS.includes(months) ? months : 1;
   const referenceDay = referenceDate.toISOString().slice(0, 10);
-  const latestTransactionDate = dates
+  // Anchor the audit on the FIRST month present in the statement so an uploaded
+  // statement (e.g. January to December) is always audited from the earliest
+  // month: a 1-month audit of a Jan-Dec statement covers January, a 3-month
+  // audit covers January to March, and so on.
+  const earliestTransactionDate = dates
     .filter((date): date is string => validIsoDate(date) && date <= referenceDay)
     .sort()
-    .at(-1);
-  const end = latestTransactionDate
-    ? new Date(`${latestTransactionDate}T12:00:00.000Z`)
-    : new Date(referenceDate);
-  const start = new Date(end);
-  const dayOfMonth = start.getUTCDate();
-  start.setUTCDate(1);
-  start.setUTCMonth(start.getUTCMonth() - auditMonths);
-  const lastDayOfTargetMonth = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
-  start.setUTCDate(Math.min(dayOfMonth, lastDayOfTargetMonth));
+    .at(0);
+  const anchor = earliestTransactionDate
+    ? new Date(`${earliestTransactionDate}T12:00:00.000Z`)
+    : new Date(`${referenceDay}T12:00:00.000Z`);
+  const start = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + auditMonths, 0));
   return {
     periodStart: start.toISOString().slice(0, 10),
     periodEnd: end.toISOString().slice(0, 10),

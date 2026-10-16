@@ -48,12 +48,17 @@ const STATEMENT_PERIOD_MONTHS: { months: number; label: string }[] = [
 // supabase.functions.invoke() throws a generic FunctionsHttpError on non-2xx.
 // The real reason is in the edge function's response body, which lives on error.context.
 async function functionErrorMessage(err: unknown): Promise<string> {
-  const e = err as { message?: string; context?: Response };
-  if (e?.context) {
-    const status = e.context.status;
-    const errorCode = e.context.headers.get("sb-error-code");
+  const e = err as { name?: string; message?: string; context?: Response };
+  // A FunctionsHttpError carries the HTTP Response on `context`, but a
+  // FunctionsFetchError (the request never reached the Edge Function) carries
+  // the underlying fetch error instead, which has no `headers`. Only treat
+  // `context` as a Response when it actually exposes the Response API.
+  const context = e?.context;
+  if (context && typeof context.clone === "function" && context.headers) {
+    const status = context.status;
+    const errorCode = context.headers.get("sb-error-code");
     try {
-      const body = await e.context.clone().json();
+      const body = await context.clone().json();
       const detail = body?.error || body?.message || body?.msg;
       if (errorCode || detail) {
         return [`Financial audit failed${errorCode ? ` (${errorCode})` : ` (HTTP ${status})`}.`, detail]
@@ -62,6 +67,10 @@ async function functionErrorMessage(err: unknown): Promise<string> {
       }
     } catch { /* body wasn't JSON */ }
     if (errorCode) return `Financial audit failed (${errorCode}, HTTP ${status}). Check the Edge Function logs.`;
+    return e?.message || "Request failed";
+  }
+  if (e?.name === "FunctionsFetchError" || e?.message === "Failed to send a request to the Edge Function") {
+    return "Could not reach the financial audit service. Check your connection and try again, or confirm the Edge Function is deployed.";
   }
   return e?.message || "Request failed";
 }
@@ -508,8 +517,8 @@ const AuditorConnect = () => {
               </div>
               <p className="text-xs text-muted-foreground flex-1 min-w-[200px]">
                 {statementPeriod === 1
-                  ? "Your free audit covers 1 month ending on the latest transaction date in your statement."
-                  : `Auditing ${statementPeriod} months ending on the latest transaction date in your statement.`}
+                  ? "Your free audit covers the first month in your statement (starting from its earliest transaction)."
+                  : `Auditing ${statementPeriod} months starting from the first month in your statement.`}
               </p>
             </div>
           </CardContent>
@@ -710,7 +719,7 @@ const AuditorConnect = () => {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Auditing {statementPeriod} month{statementPeriod === 1 ? "" : "s"} ending on the latest transaction date in your statement
+              Auditing {statementPeriod} month{statementPeriod === 1 ? "" : "s"} starting from the first month in your statement
             </p>
           </div>
         )}

@@ -69,7 +69,7 @@ const SYSTEM_PROMPT = `You are FinScope, a financial-record transaction extracto
 Extract every transaction from the supplied bank alerts, statements, or records. For each transaction return a date (ISO yyyy-mm-dd, or an empty string if unavailable), description, positive amount in NGN, direction ("credit" or "debit"), category, and transactionId (exact source reference, or an empty string).
 
 Rules:
-- Do not omit transactions because they are old. The application selects the requested statement-relative period.
+- Do not omit transactions because they are old. The application audits the requested duration starting from the first (earliest) month present in the statement.
 - Do not invent, merge, or deduplicate transactions. Only deduplicate exact repeated source IDs.
 - Do not infer missing dates, amounts, or directions. Include only transactions whose direction is explicit in the source.
 - Copy transaction references exactly when present; otherwise return an empty transactionId.
@@ -82,7 +82,7 @@ Return only valid JSON with this shape and no other keys:
 function buildUserPrompt(input: { text: string; sourceType: string; accountType: string; auditMonths?: number }): string {
   const months = input.auditMonths ?? DEFAULT_AUDIT_MONTHS;
   return `Selected audit duration: ${months} month${months === 1 ? "" : "s"}.
-Extract every transaction present in this complete record chunk. Do not compare dates with today's date or omit older entries; the application selects the requested duration relative to the latest valid transaction date across all chunks. Copy source IDs exactly when present.
+Extract every transaction present in this complete record chunk. Do not compare dates with today's date or omit older entries; the application selects the requested duration starting from the earliest valid transaction month across all chunks. Copy source IDs exactly when present.
 
 Financial data source: ${input.sourceType}
 Account type: ${input.accountType || 'individual'}

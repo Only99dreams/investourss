@@ -63,15 +63,27 @@ test("normalizes string amounts and CR/DR direction aliases", () => {
   assert.equal(report.totalExpenses, 250);
 });
 
-test("uses the latest source transaction as the selected-period anchor", () => {
+test("anchors the selected period on the first source transaction month", () => {
   const dates = ["2025-01-01", "2025-02-15", "2025-03-25", "2025-04-25"];
   assert.deepEqual(
     getAuditWindow(dates, 1, new Date("2026-10-10T12:00:00Z")),
-    { periodStart: "2025-03-25", periodEnd: "2025-04-25", auditMonths: 1 },
+    { periodStart: "2025-01-01", periodEnd: "2025-01-31", auditMonths: 1 },
   );
   assert.deepEqual(
     getAuditWindow(dates, 3, new Date("2026-10-10T12:00:00Z")),
-    { periodStart: "2025-01-25", periodEnd: "2025-04-25", auditMonths: 3 },
+    { periodStart: "2025-01-01", periodEnd: "2025-03-31", auditMonths: 3 },
+  );
+});
+
+test("audits a January-to-December statement from January for a 1-month audit", () => {
+  const dates = [
+    "2025-01-05", "2025-02-10", "2025-03-10", "2025-04-10",
+    "2025-05-10", "2025-06-10", "2025-07-10", "2025-08-10",
+    "2025-09-10", "2025-10-10", "2025-11-10", "2025-12-10",
+  ];
+  assert.deepEqual(
+    getAuditWindow(dates, 1, new Date("2026-02-01T12:00:00Z")),
+    { periodStart: "2025-01-01", periodEnd: "2025-01-31", auditMonths: 1 },
   );
 });
 
@@ -79,8 +91,8 @@ test("derives totals and score inputs from only normalized in-window transaction
   const report = applyFinancialAuditRules([
     { transactionId: "salary-1", date: "2025-01-30", description: "Salary", amount: 1000, type: "credit" },
     { transactionId: "fee-1", date: "2025-02-25", description: "Bank fee", amount: 20, type: "debit" },
-    { transactionId: "old-1", date: "2024-12-25", description: "Old purchase", amount: 900, type: "debit" },
-  ], 1, new Date("2025-02-28T12:00:00Z"));
+    { transactionId: "later-1", date: "2025-06-25", description: "Later purchase", amount: 900, type: "debit" },
+  ], 3, new Date("2025-06-30T12:00:00Z"));
 
   assert.equal(report.totalIncome, 1000);
   assert.equal(report.totalExpenses, 20);
