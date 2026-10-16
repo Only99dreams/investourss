@@ -15,6 +15,11 @@ const MAX_COMPLETION_TOKENS = 8192;
 const MIN_RETRY_CHUNK_CHARACTERS = 2000;
 const MAX_RATE_LIMIT_RETRIES = 2;
 const MAX_RATE_LIMIT_DELAY_MS = 55_000;
+// A reasoning model can occasionally return an empty list or malformed JSON on
+// a cold/transient call even when the chunk contains valid transactions. Retry
+// the chunk a couple of times before falling back to the weaker local parser.
+const MAX_EMPTY_EXTRACTION_RETRIES = 2;
+const EMPTY_EXTRACTION_RETRY_MS = 1500;
 
 function getRateLimitDelayMs(response: Response): number | null {
   const retryAfter = response.headers.get("retry-after");
@@ -233,8 +238,14 @@ async function callAI(
   const content = choice?.message?.content || '';
   const start = content.indexOf('{');
   const end = content.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error("AI returned invalid JSON");
-  return JSON.parse(content.slice(start, end + 1));
+  // Flag empty/malformed bodies as retryable so the chunk is re-requested
+  // before we give up and fall back to the weaker local parser.
+  if (start === -1 || end === -1) throw { retryable: true, message: "AI returned an empty response" };
+  try {
+    return JSON.parse(content.slice(start, end + 1));
+  } catch {
+    throw { retryable: true, message: "AI returned invalid JSON" };
+  }
 }
 
 async function extractTransactionsWithAI(
@@ -260,9 +271,19 @@ async function extractTransactionsWithAI(
         for (let attempt = 0; ; attempt += 1) {
           try {
             const raw = await callAI(chunk, sourceType, accountType, auditMonths, controller.signal);
-            return Array.isArray(raw.transactions) ? raw.transactions : [];
+            const transactions = Array.isArray(raw.transactions) ? raw.transactions : [];
+            // An empty result is usually a transient model flake, not an empty
+            // chunk. Re-request before accepting it.
+            if (transactions.length > 0 || attempt >= MAX_EMPTY_EXTRACTION_RETRIES) return transactions;
+            console.warn(`AI returned no transactions (attempt ${attempt + 1}); retrying chunk.`);
+            await waitForRetry(EMPTY_EXTRACTION_RETRY_MS, controller.signal);
           } catch (error) {
-            const e = error as { status?: number; retryAfterMs?: number | null };
+            const e = error as { status?: number; retryAfterMs?: number | null; retryable?: boolean };
+            if (e?.retryable && attempt < MAX_EMPTY_EXTRACTION_RETRIES) {
+              console.warn(`AI returned unusable JSON (attempt ${attempt + 1}); retrying chunk.`);
+              await waitForRetry(EMPTY_EXTRACTION_RETRY_MS, controller.signal);
+              continue;
+            }
             if (e?.status !== 429 || attempt >= MAX_RATE_LIMIT_RETRIES) throw error;
             await waitForRetry(
               e.retryAfterMs ?? Math.min(MAX_RATE_LIMIT_DELAY_MS, 20_000 * 2 ** attempt),
@@ -375,7 +396,7 @@ serve(async (req) => {
       const detail = extractedCount === 0
         ? aiExtractionFailed
           ? `AI extraction failed: ${aiFailureMessage}. The fallback parser also found no readable transaction rows; confirm the statement text contains readable amounts and credit/debit directions.`
-          : 'No transaction rows could be extracted. Check that the statement text includes readable amounts and credit/debit directions.'
+          : 'No transaction rows could be extracted. Check that the statement text includes readable amounts and credit/debit directions, then try again.'
         : excludedCount > 0
           ? `${excludedCount} of ${extractedCount} extracted row(s) had invalid amounts, dates, descriptions, or directions.`
           : `${extractedCount} candidate row(s) were found, but none fell within the selected ${auditMonths}-month period (${report.periodStart} to ${report.periodEnd}). Try a wider audit period.`;
