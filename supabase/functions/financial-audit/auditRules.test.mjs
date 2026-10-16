@@ -134,7 +134,6 @@ test("does not invent transaction dates or treat unknown directions as income", 
   const report = applyFinancialAuditRules([
     { description: "Undated credit", amount: 75, type: "credit" },
     { date: "2025-02-10", description: "Unknown direction", amount: 80, type: "unknown" },
-    { date: "2025-02-10", description: "Negative amount", amount: -1, type: "debit" },
     { date: "2025-02-30", description: "Invalid date", amount: 40, type: "debit" },
   ], 1, new Date("2025-02-28T12:00:00Z"));
 
@@ -142,7 +141,7 @@ test("does not invent transaction dates or treat unknown directions as income", 
   assert.equal(report.totalExpenses, 0);
   assert.equal(report.transactions[0].date, undefined);
   assert.equal(report.dataQuality.undatedTransactions, 1);
-  assert.equal(report.dataQuality.excludedInvalidTransactions, 3);
+  assert.equal(report.dataQuality.excludedInvalidTransactions, 2);
   assert.equal(report.monthlyObservations.length, 0);
 });
 
@@ -177,4 +176,75 @@ test("keeps undated rows only when the whole dataset is undated", () => {
   assert.equal(allUndated.totalExpenses, 50);
   assert.equal(allUndated.dataQuality.excludedUndatedTransactions, 0);
   assert.equal(allUndated.dataQuality.undatedTransactions, 2);
+});
+
+test("counts signed amounts by their explicit direction, not their sign", () => {
+  const report = applyFinancialAuditRules([
+    { date: "2025-02-10", description: "Signed debit", amount: -10000, type: "debit" },
+    { date: "2025-02-11", description: "Signed credit", amount: -5000, type: "credit" },
+    { date: "2025-02-12", description: "String debit", amount: "-2,500.00", type: "DR" },
+  ], 1, new Date("2025-02-28T12:00:00Z"));
+
+  assert.equal(report.totalIncome, 5000);
+  assert.equal(report.totalExpenses, 12500);
+  assert.equal(report.cashFlow, -7500);
+  assert.equal(report.savingsRate, 0);
+});
+
+test("recovers rows whose dates are not already ISO formatted", () => {
+  const report = applyFinancialAuditRules([
+    { date: "10/02/2025", description: "Day-first credit", amount: 3000, type: "credit" },
+    { date: "2025-02-11T00:00:00Z", description: "ISO datetime debit", amount: 1000, type: "debit" },
+    { date: "2025-02-12", description: "Plain credit", amount: 500, type: "credit" },
+  ], 1, new Date("2025-02-28T12:00:00Z"));
+
+  assert.equal(report.totalIncome, 3500);
+  assert.equal(report.totalExpenses, 1000);
+  assert.equal(report.dataQuality.excludedInvalidTransactions, 0);
+  assert.deepEqual(report.monthlyObservations.map((month) => month.month), ["2025-02"]);
+});
+
+test("maps credits to income and debits to expenses with correct categories", () => {
+  const report = applyFinancialAuditRules([
+    { date: "2025-02-03", description: "SALARY PAYROLL", amount: 250000, type: "credit" },
+    { date: "2025-02-04", description: "ATM WITHDRAWAL", amount: 20000, type: "debit" },
+    { date: "2025-02-05", description: "Bank charge", amount: 100, type: "debit" },
+  ], 1, new Date("2025-02-28T12:00:00Z"));
+
+  assert.equal(report.totalIncome, 250000);
+  assert.equal(report.totalExpenses, 20100);
+  assert.equal(report.cashFlow, 229900);
+  assert.deepEqual(report.topSpendingCategories.map((category) => category.name), ["withdrawals", "bank charges"]);
+  assert.equal(report.leakages.length, 1);
+  assert.equal(report.incomeSources[0].name, "SALARY PAYROLL");
+  assert.equal(report.incomeSources[0].amount, 250000);
+});
+
+test("monthly breakdown reconciles with the period totals", () => {
+  const report = applyFinancialAuditRules([
+    { date: "2025-01-05", description: "Salary", amount: 1000, type: "credit" },
+    { date: "2025-01-09", description: "Rent", amount: 400, type: "debit" },
+    { date: "2025-02-05", description: "Salary", amount: 1200, type: "credit" },
+    { date: "2025-02-09", description: "Groceries", amount: 300, type: "debit" },
+  ], 3, new Date("2025-03-01T12:00:00Z"));
+
+  const monthlyIncome = report.monthlyObservations.reduce((sum, month) => sum + month.income, 0);
+  const monthlyOutflows = report.monthlyObservations.reduce((sum, month) => sum + month.outflows, 0);
+  assert.equal(monthlyIncome, report.totalIncome);
+  assert.equal(monthlyOutflows, report.totalExpenses);
+  assert.equal(report.totalIncome, 2200);
+  assert.equal(report.totalExpenses, 700);
+  assert.equal(report.cashFlow, 1500);
+});
+
+test("ignores a running balance when a row has no CR/DR marker", () => {
+  const transactions = parseFinancialRecords([
+    "05/08/2026 POS SHOP 4500.00 300000.00",
+    "06/08/2026 TRANSFER TO SAVINGS 5000.00 295000.00",
+  ].join("\n"));
+
+  assert.deepEqual(transactions.map(({ amount, type }) => ({ amount, type })), [
+    { amount: 4500, type: "debit" },
+    { amount: 5000, type: "debit" },
+  ]);
 });

@@ -131,6 +131,21 @@ function parseSourceDate(value: string): string | undefined {
   return parsed.toISOString().slice(0, 10);
 }
 
+// The model is asked for ISO dates, but it sometimes returns "10/02/2025" or a
+// full "2025-02-10T00:00:00Z". A row with a real, recoverable date should not be
+// thrown away (that would silently drop money from the totals), so try to parse
+// whatever date is present before treating it as missing.
+function coerceIsoDate(value: unknown): string | undefined {
+  if (validIsoDate(value)) return value;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  // Accept an ISO datetime ("2025-02-10T00:00:00Z") by taking its date part.
+  const isoPrefix = trimmed.slice(0, 10);
+  if (validIsoDate(isoPrefix)) return isoPrefix;
+  const token = trimmed.match(SOURCE_DATE_PATTERN)?.[0];
+  return token ? parseSourceDate(token) : undefined;
+}
+
 export function parseFinancialRecords(text: string): ExtractedTransaction[] {
   const transactions: ExtractedTransaction[] = [];
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -241,14 +256,18 @@ function normalizeTransactions(raw: unknown[]): {
         ? "debit"
         : null;
     const amount = normalizeAmount(value.amount);
+    // Direction lives in `type`, so a signed amount carries no extra meaning:
+    // use its magnitude. Models commonly write debits as negative numbers, and
+    // dropping those rows would understate income/expenses.
+    const magnitude = Math.abs(amount);
     const description = typeof value.description === "string" ? value.description.trim() : "";
     const hasDate = value.date !== undefined && value.date !== null && value.date !== "";
-    const date = validIsoDate(value.date) ? value.date : undefined;
-    const roundedAmount = roundMoney(amount);
+    const date = coerceIsoDate(value.date);
+    const roundedAmount = roundMoney(magnitude);
     if (
       !type
       || !Number.isFinite(amount)
-      || amount <= 0
+      || magnitude === 0
       || roundedAmount >= MAX_NUMERIC_15_2_EXCLUSIVE
       || !description
       || (hasDate && !date)
