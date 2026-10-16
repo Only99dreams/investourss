@@ -189,8 +189,41 @@ function pickAmount(
   return nonZero.find((entry) => /[.,]/.test(entry.raw)) ?? nonZero[0];
 }
 
+// Some PDF exports glue table columns together and some banks use a space as a
+// thousands separator. Normalise each line so the amount parser can read it:
+//   "10 000.00 690 000.00"          -> "10000.00 690000.00"
+//   "250,000.00700,000.00"          -> "250,000.00 700,000.00"
+//   "10,000.00CR"                   -> "10,000.00 CR"
+//   "TRANSFER FROM JOHN250,000.00"  -> "TRANSFER FROM JOHN 250,000.00"
+function normalizeStatementLine(line: string): string {
+  let value = line.replace(/\u00A0/g, " ");
+  // Merge space-separated thousands ("1 250 000.00" -> "1250000.00").
+  let previous: string;
+  do {
+    previous = value;
+    value = value.replace(/(\d)\s(?=\d{3}(?:\D|$))/g, "$1");
+  } while (value !== previous);
+  // Separate an amount from digits glued to its decimals ("...00" + "700...").
+  // Require a full two-decimal fraction so a normal amount like "100,000.00"
+  // (which ends the cell) is never split.
+  value = value.replace(/(\.\d{2})(?=\d)/g, "$1 ");
+  // Separate a number from an immediately following CR/DR marker.
+  value = value.replace(/(\d)(?=(?:CR|DR)\b)/gi, "$1 ");
+  // Separate a trailing number (often a date) from a glued word, e.g.
+  // "06/08/2026POS PURCHASE" -> "06/08/2026 POS PURCHASE". Without this the date
+  // never matches and a leading keyword (e.g. "TRANSFER") loses its word
+  // boundary, so the row's direction cannot be read.
+  value = value.replace(/(\d)(?=[A-Za-z]{2,})/g, "$1 ");
+  // Separate letters from a following money-like amount.
+  value = value.replace(/([A-Za-z])(?=(?:\d{1,3}(?:,\d{3})+|\d+\.\d{1,2}))/g, "$1 ");
+  return value;
+}
+
 export function parseFinancialRecords(text: string): ExtractedTransaction[] {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => normalizeStatementLine(line).trim())
+    .filter(Boolean);
 
   type ParsedRow = {
     date?: string;

@@ -353,3 +353,66 @@ test("never treats an opening or closing balance line as a transaction", () => {
   assert.equal(transactions[0].amount, 10000);
   assert.equal(transactions[0].type, "debit");
 });
+
+test("reads PDF rows whose columns are jammed together with no separators", () => {
+  const transactions = parseFinancialRecords([
+    "05/08/2026TRANSFER FROM EMPLOYER250,000.00700,000.00",
+    "06/08/2026POS PURCHASE10,000.00690,000.00",
+  ].join("\n"));
+
+  assert.deepEqual(
+    transactions.map(({ date, amount, type, description }) => ({ date, amount, type, description })),
+    [
+      { date: "2026-08-05", amount: 250000, type: "credit", description: "TRANSFER FROM EMPLOYER" },
+      { date: "2026-08-06", amount: 10000, type: "debit", description: "POS PURCHASE" },
+    ],
+  );
+});
+
+test("keeps the date the direction keyword and the amount when the date is glued to the keyword", () => {
+  const transactions = parseFinancialRecords("05/08/2026TRANSFER FROM EMPLOYER250,000.00700,000.00");
+
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].date, "2026-08-05");
+  assert.equal(transactions[0].amount, 250000);
+  assert.equal(transactions[0].type, "credit");
+  assert.equal(transactions[0].description, "TRANSFER FROM EMPLOYER");
+});
+
+test("reads amounts written with spaces as thousands separators", () => {
+  const transactions = parseFinancialRecords("05/08/2026 POS PURCHASE 10 000.00 690 000.00");
+
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].amount, 10000);
+  assert.equal(transactions[0].type, "debit");
+  assert.equal(transactions[0].description, "POS PURCHASE");
+});
+
+test("never splits a normal two-decimal amount when normalising a line", () => {
+  const transactions = parseFinancialRecords([
+    "05-Aug-2026 OPENING BALANCE 100,000.00",
+    "06-Aug-2026 ACME SUPERMARKET 20,000.00 80,000.00",
+  ].join("\n"));
+
+  assert.equal(transactions.length, 1);
+  assert.equal(transactions[0].amount, 20000);
+  assert.equal(transactions[0].type, "debit");
+});
+
+test("reconciles a jammed PDF statement against the closing balance", () => {
+  const transactions = parseFinancialRecords([
+    "05/08/2026OPENING BALANCE100,000.00",
+    "06/08/2026TRANSFER FROM EMPLOYER250,000.00350,000.00",
+    "07/08/2026POS PURCHASE10,000.00340,000.00",
+    "08/08/2026SALARY MAY250,000.00590,000.00",
+  ].join("\n"));
+
+  const credits = transactions.filter((t) => t.type === "credit").reduce((sum, t) => sum + t.amount, 0);
+  const debits = transactions.filter((t) => t.type === "debit").reduce((sum, t) => sum + t.amount, 0);
+
+  assert.equal(transactions.length, 3);
+  assert.equal(credits, 500000);
+  assert.equal(debits, 10000);
+  assert.equal(100000 + credits - debits, 590000);
+});
+

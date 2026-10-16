@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import pdf from "npm:pdf-parse@1.1.1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { itemsToText, type PdfTextItem } from "./pdfText.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,6 +9,20 @@ const corsHeaders = {
 };
 
 const MIN_TEXT_LENGTH = 20;
+
+interface PdfPageData {
+  getTextContent: (opts: { normalizeWhitespace: boolean; disableCombineTextItems: boolean }) => Promise<{ items: PdfTextItem[] }>;
+}
+
+/**
+ * pdf-parse's default page renderer joins same-line text items with no
+ * separator, which jams statement columns together. Rebuild each page with
+ * column-aware spacing so the amount and running balance stay separate.
+ */
+async function renderPage(pageData: PdfPageData): Promise<string> {
+  const content = await pageData.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false });
+  return itemsToText(content.items);
+}
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -51,7 +66,7 @@ async function extractTextWithPassword(bytes: Uint8Array, password: string) {
     numPages: number;
     getPage: (n: number) => Promise<{
       getTextContent: (opts: { normalizeWhitespace: boolean; disableCombineTextItems: boolean }) => Promise<{
-        items: Array<{ str?: string; transform?: number[] }>;
+        items: PdfTextItem[];
       }>;
     }>;
     destroy: () => Promise<void>;
@@ -65,16 +80,9 @@ async function extractTextWithPassword(bytes: Uint8Array, password: string) {
         normalizeWhitespace: false,
         disableCombineTextItems: false,
       });
-      // Group text items into lines the same way pdf-parse does.
-      let lastY: number | undefined;
-      for (const item of content.items) {
-        if (typeof item.str !== 'string') continue;
-        const y = item.transform?.[5];
-        if (lastY === undefined || lastY === y) text += item.str;
-        else text += '\n' + item.str;
-        lastY = y;
-      }
-      text += '\n\n';
+      // Rebuild the page with column-aware spacing (see pdfText.ts) instead of
+      // gluing every same-line text item together.
+      text += itemsToText(content.items) + '\n\n';
     }
     return { text: text.trim(), pages: doc.numPages };
   } finally {
@@ -146,7 +154,7 @@ serve(async (req) => {
     // No password yet: use the fast parser. If the PDF turns out to be locked,
     // tell the app so it can prompt the user for the password.
     try {
-      const parsed = await pdf(bytes);
+      const parsed = await pdf(bytes, { pagerender: renderPage });
       const text = String(parsed?.text ?? '').trim();
       if (text.length < MIN_TEXT_LENGTH) {
         return jsonResponse({

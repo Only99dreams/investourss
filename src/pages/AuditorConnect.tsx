@@ -676,15 +676,23 @@ const AuditorConnect = () => {
                   </div>
                 )}
                 <div>
-                  <Label htmlFor="pdf-text">Or paste statement text</Label>
+                  <Label htmlFor="pdf-text">
+                    Statement text {fileContent ? "extracted from your PDF — review or edit it" : "— or paste it here"}
+                  </Label>
                   <Textarea
                     id="pdf-text"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    rows={8}
-                    placeholder="Paste the statement content here..."
+                    value={fileContent}
+                    onChange={(e) => setFileContent(e.target.value)}
+                    rows={10}
+                    placeholder="Upload a PDF above and the text we read from it will appear here, or paste the statement content here..."
                     className="mt-1 font-mono text-xs"
                   />
+                  {fileContent && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      This is exactly what the auditor reads. If a transaction is missing or garbled,
+                      fix it here before running the audit.
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
@@ -796,7 +804,15 @@ const AuditorConnect = () => {
             )}
 
             <div className="mt-4 flex flex-wrap gap-3">
-              <Button variant="outline" size="sm" onClick={() => setText(sampleSmsAlerts)} disabled={running}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setText(sampleSmsAlerts);
+                  setFileContent(sampleSmsAlerts);
+                }}
+                disabled={running}
+              >
                 <Sparkles className="w-4 h-4 mr-2" /> Try sample data
               </Button>
             </div>
