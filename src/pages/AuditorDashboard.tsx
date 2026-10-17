@@ -19,6 +19,7 @@ import { HealthScoreGauge } from "@/components/auditor/HealthScoreGauge";
 import { CreditReadinessAssessment } from "@/components/auditor/CreditReadinessAssessment";
 import { BlurredReport } from "@/components/auditor/BlurredReport";
 import { FinancialHealthGuidance, type FinancialHealthGuidanceProps } from "@/components/auditor/FinancialHealthGuidance";
+import { AuditDataQuality, type AuditValidation } from "@/components/auditor/AuditDataQuality";
 import { ContinuousReportingSection } from "@/components/dashboard/sections/ContinuousReportingSection";
 import {
   HEALTH_STATUS_META, auditPeriodLabel, formatNaira, monthLabel,
@@ -400,6 +401,14 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
           periodStart={viewingAudit.audit_period_start}
           periodEnd={viewingAudit.audit_period_end}
           report={(viewingAudit.report_json ?? null) as FinancialHealthGuidanceProps["report"]}
+        />
+      )}
+
+      {/* How the statement was read + whether the totals reconcile */}
+      {!loading && viewingAudit && !viewingAudit.is_locked && !!viewingAudit.report_json?.validation && (
+        <AuditDataQuality
+          className="mb-8"
+          validation={viewingAudit.report_json?.validation as AuditValidation}
         />
       )}
 

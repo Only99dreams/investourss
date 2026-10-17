@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyFinancialAuditRules, assessParserConfidence, getAuditWindow, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
+import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, getAuditWindow, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
 
 test("chunks long statements without dropping or reordering source text", () => {
   const source = `first record\r\n${"x".repeat(50001)}\r\nlast record`;
@@ -492,4 +492,34 @@ test("accepts a clean row-per-line statement that reconciles with printed totals
   const parsed = parseFinancialRecords(text);
   const confidence = assessParserConfidence(text, parsed);
   assert.equal(confidence.reliable, true);
+});
+
+test("comparePrintedTotals reports matching printed totals", () => {
+  const text = [
+    "05/08/2026 SALARY 250,000.00 CR 250,000.00",
+    "06/08/2026 POS PURCHASE 10,000.00 DR 240,000.00",
+    "Total Credit 250,000.00",
+    "Total Debit 10,000.00",
+  ].join("\n");
+  const parsed = parseFinancialRecords(text);
+  const totals = comparePrintedTotals(text, parsed);
+  assert.equal(totals.printedCredit, 250000);
+  assert.equal(totals.printedDebit, 10000);
+  assert.equal(totals.parsedCredits, 250000);
+  assert.equal(totals.parsedDebits, 10000);
+  assert.equal(totals.creditMatches, true);
+  assert.equal(totals.debitMatches, true);
+});
+
+test("comparePrintedTotals reports a mismatch and leaves absent totals undefined", () => {
+  const text = [
+    "05/08/2026 SALARY 250,000.00 CR 250,000.00",
+    "Total Credit 999,999.99",
+  ].join("\n");
+  const parsed = parseFinancialRecords(text);
+  const totals = comparePrintedTotals(text, parsed);
+  assert.equal(totals.creditMatches, false);
+  // No "Total Debit" was printed, so that side cannot be judged.
+  assert.equal(totals.debitMatches, undefined);
+  assert.equal(totals.printedDebit, undefined);
 });

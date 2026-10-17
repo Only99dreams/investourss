@@ -464,6 +464,47 @@ function readPrintedTotals(text: string): { credit?: number; debit?: number } {
   return { credit, debit };
 }
 
+export interface PrintedTotalsComparison {
+  printedCredit?: number;
+  printedDebit?: number;
+  parsedCredits: number;
+  parsedDebits: number;
+  /** undefined when the statement does not print a matching total. */
+  creditMatches?: boolean;
+  debitMatches?: boolean;
+}
+
+// Compare the parser's credit/debit sums against the totals the statement
+// prints itself (its own ground truth). Returns structured detail so callers
+// can both judge reliability and show the user how the figures tally.
+export function comparePrintedTotals(
+  text: string,
+  parsedTransactions: ExtractedTransaction[],
+  tolerance = 1, // ₦1 rounding tolerance
+): PrintedTotalsComparison {
+  const printed = readPrintedTotals(text);
+  const parsedCredits = roundMoney(
+    parsedTransactions.filter((t) => t.type === "credit").reduce((sum, t) => sum + t.amount, 0),
+  );
+  const parsedDebits = roundMoney(
+    parsedTransactions.filter((t) => t.type === "debit").reduce((sum, t) => sum + t.amount, 0),
+  );
+  const creditMatches = printed.credit === undefined
+    ? undefined
+    : Math.abs(parsedCredits - printed.credit) <= tolerance;
+  const debitMatches = printed.debit === undefined
+    ? undefined
+    : Math.abs(parsedDebits - printed.debit) <= tolerance;
+  return {
+    printedCredit: printed.credit,
+    printedDebit: printed.debit,
+    parsedCredits,
+    parsedDebits,
+    creditMatches,
+    debitMatches,
+  };
+}
+
 export interface ParserConfidence {
   reliable: boolean;
   reason: "ok" | "header-fragmented" | "total-mismatch";
@@ -493,22 +534,11 @@ export function assessParserConfidence(
   }
 
   // Signal 2: the statement prints its own totals and the parser's sums do not
-  // reproduce them (tolerance covers rounding).
-  const printed = readPrintedTotals(text);
-  const parsedIncome = parsedTransactions
-    .filter((t) => t.type === "credit")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const parsedExpenses = parsedTransactions
-    .filter((t) => t.type === "debit")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const tolerance = 1; // ₦1 rounding tolerance
-  const creditMismatch = printed.credit !== undefined
-    && Math.abs(parsedIncome - printed.credit) > tolerance;
-  const debitMismatch = printed.debit !== undefined
-    && Math.abs(parsedExpenses - printed.debit) > tolerance;
-  // A mismatch is meaningful whenever the statement declares totals; it holds
-  // even if the parser read zero rows (0 vs a real printed total is a mismatch).
-  if (creditMismatch || debitMismatch) {
+  // reproduce them. A mismatch is meaningful whenever the statement declares
+  // totals; it holds even if the parser read zero rows (0 vs a real printed
+  // total is a mismatch).
+  const totals = comparePrintedTotals(text, parsedTransactions);
+  if (totals.creditMatches === false || totals.debitMatches === false) {
     return { reliable: false, reason: "total-mismatch" };
   }
 

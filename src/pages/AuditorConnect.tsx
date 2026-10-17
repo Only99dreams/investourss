@@ -468,6 +468,9 @@ const AuditorConnect = () => {
         extractionMethod: meta.extractionMethod,
         extractedCount: meta.extractedCount,
         excludedCount: meta.excludedCount,
+        // How the figures were read, whether they reconcile with the statement,
+        // and any data-quality caveats — surfaced in the report UI.
+        validation: meta.validation,
       };
 
       // 3. Save the data source

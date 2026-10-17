@@ -205,11 +205,11 @@ the exact pattern list.
 | 2 | Accept `.csv` upload end-to-end; reuse rules engine | `parse-statement`, `AuditorConnect` | done |
 | 3 | `.xlsx` parsing (SheetJS) → same table | `parse-statement` | pending |
 | 4 | PDF → table via x-clustering | `parse-statement/pdfText.ts` | done |
-| 5 | Validation + reconciliation surfaced in the report | `auditRules.ts`, report UI | pending |
+| 5 | Validation + reconciliation surfaced in the report | `auditRules.ts`, report UI | done |
 | 6 | Internal-transfer exclusion (needs product sign-off) | `auditRules.ts` | pending |
 | 7 | AI explain-only layer | `financial-audit/index.ts` | pending |
 
-### What shipped in phases 1, 2 and 4
+### What shipped in phases 1, 2, 4 and 5
 
 - `spreadsheet.ts`: `parseCsv` + `tableToTransactions` (header detection, column
   mapping, direction resolution, summary-row skipping, reconciliation).
@@ -221,17 +221,25 @@ the exact pattern list.
   password path collect page items and build one table across pages.
 - `financial-audit`: accepts `table` (2D array) or `csv` (string). When present
   and usable it sums the credit/debit rows directly (`extractionMethod:
-  "spreadsheet"`), skipping the AI entirely, and reports the reconciliation in
-  `meta`. Otherwise the existing text/AI path is unchanged.
+  "spreadsheet"`), skipping the AI entirely. Otherwise the existing text/AI path
+  is unchanged.
+- `auditRules.ts`: `comparePrintedTotals(text, transactions)` returns the
+  statement's printed credit/debit totals alongside the parser's sums and
+  whether each side matches. `assessParserConfidence` now reuses it.
+- Reconciliation + data quality in the report: the auditor returns a
+  `meta.validation` block (`method`, `reconciled`, `reconciliation`,
+  `dataQuality`, `warnings`, `notes`) which `AuditorConnect` folds into
+  `report_json`. `AuditDataQuality.tsx` renders it on the dashboard: how the
+  statement was read, whether the totals reconcile, and any rows skipped /
+  duplicated / undated.
+- Guarded cross-check: if a reconstructed table does not tally with its own
+  running balance, but the statement text reproduces the bank's printed totals,
+  the audit switches to the text parse (and says so in the notes).
 - `AuditorConnect.tsx`: uploads `.csv` (read in-browser) or `.pdf`; passes the
   parsed table/csv to the auditor; editing the text falls back to the text path.
 
 ### Known follow-ups
 
-- The table path is preferred whenever it yields rows. If a table has a balance
-  column but does not reconcile while the deterministic text parse is reliable,
-  we should prefer the text parse (guarded cross-check) — this belongs with the
-  phase-5 reconciliation work.
 - Multi-line descriptions that wrap across columns can defeat header anchoring;
   a wrapped-row heuristic is a future refinement.
 

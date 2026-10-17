@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { applyFinancialAuditRules, assessParserConfidence, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
+import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
 import { parseCsv, tableToTransactions } from "./spreadsheet.ts";
 
 const corsHeaders = {
@@ -166,6 +166,19 @@ function buildFallbackRecommendations(
 }
 
 type AiRecord = { [key: string]: unknown };
+
+interface AuditReconciliation {
+  source: "balance" | "printed-totals";
+  reconciled: boolean;
+  credits: number;
+  debits: number;
+  opening?: number;
+  closing?: number;
+  expectedClosing?: number;
+  difference?: number;
+  printedCredit?: number;
+  printedDebit?: number;
+}
 
 // Read structured input from the request: either a pre-built table (from a PDF
 // the parser reconstructed into a grid) or raw CSV text. Returns null when
@@ -399,6 +412,8 @@ serve(async (req) => {
     let aiExtractionFailed = false;
     let aiFailureMessage = "";
     let extractionMethod: "deterministic-parser" | "ai" | "spreadsheet" = "deterministic-parser";
+    let reconciliation: AuditReconciliation | null = null;
+    const validationNotes: string[] = [];
 
     if (hasSheetTransactions) {
       // Preferred path: the statement arrived as structured rows (an uploaded
@@ -410,6 +425,36 @@ serve(async (req) => {
       report = buildReportFromRules(applyFinancialAuditRules(sheetTransactions, auditMonths), accountType);
       excludedCount = report.dataQuality.excludedInvalidTransactions;
       extractionMethod = "spreadsheet";
+      reconciliation = { source: "balance", ...sheetResult!.reconciliation };
+
+      // Guarded cross-check: a reconstructed table can mis-assign a column. If
+      // the table does not tally with its own running balance, but the raw
+      // statement text reproduces the bank's printed totals, trust the text.
+      if (!reconciliation.reconciled && text.trim().length >= 10) {
+        const textTransactions = parseFinancialRecords(text);
+        const printed = comparePrintedTotals(text, textTransactions);
+        const textIsTrustworthy = textTransactions.length > 0
+          && printed.creditMatches !== false
+          && printed.debitMatches !== false
+          && (printed.creditMatches === true || printed.debitMatches === true);
+        if (textIsTrustworthy) {
+          report = buildReportFromRules(applyFinancialAuditRules(textTransactions, auditMonths), accountType);
+          extractedCount = textTransactions.length;
+          excludedCount = report.dataQuality.excludedInvalidTransactions;
+          extractionMethod = "deterministic-parser";
+          reconciliation = {
+            source: "printed-totals",
+            reconciled: true,
+            credits: printed.parsedCredits,
+            debits: printed.parsedDebits,
+            printedCredit: printed.printedCredit,
+            printedDebit: printed.printedDebit,
+          };
+          validationNotes.push(
+            "The reconstructed table did not tally with the statement's running balance, so the audit used the statement text, which matches the printed totals.",
+          );
+        }
+      }
     } else {
       // Deterministic text extraction first. The local parser reads the
       // statement text verbatim, so the same upload always produces the same
@@ -464,6 +509,37 @@ serve(async (req) => {
       }
     }
 
+    // Reconcile the final figures against the statement's own printed totals
+    // whenever it declares them. This covers the text and AI paths, and
+    // re-confirms a balance reconciliation for spreadsheets.
+    if (reconciliation === null) {
+      const printed = comparePrintedTotals(text, report.transactions);
+      if (printed.printedCredit !== undefined || printed.printedDebit !== undefined) {
+        const reconciled = printed.creditMatches !== false && printed.debitMatches !== false;
+        reconciliation = {
+          source: "printed-totals",
+          reconciled,
+          credits: printed.parsedCredits,
+          debits: printed.parsedDebits,
+          printedCredit: printed.printedCredit,
+          printedDebit: printed.printedDebit,
+        };
+        if (!reconciled) {
+          validationNotes.push(
+            "The summed credits/debits do not match the totals printed on the statement. Double-check that the whole statement was uploaded.",
+          );
+        }
+      } else {
+        validationNotes.push(
+          "The statement does not print totals to reconcile against, so the figures were taken directly from the transaction rows.",
+        );
+      }
+    } else if (!reconciliation.reconciled) {
+      validationNotes.push(
+        "The statement's running balance did not tally with the summed credits and debits; some rows may be missing or misread.",
+      );
+    }
+
     if (report.transactions.length === 0) {
       const detail = extractedCount === 0
         ? aiExtractionFailed
@@ -488,9 +564,14 @@ serve(async (req) => {
         extractionMethod,
         extractedCount,
         excludedCount,
-        ...(sheetResult
-          ? { reconciliation: sheetResult.reconciliation, sheetWarnings: sheetResult.warnings }
-          : {}),
+        validation: {
+          method: extractionMethod,
+          reconciled: reconciliation ? reconciliation.reconciled : null,
+          reconciliation,
+          dataQuality: report.dataQuality,
+          warnings: sheetResult?.warnings ?? [],
+          notes: validationNotes,
+        },
       },
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
