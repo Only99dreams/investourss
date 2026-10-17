@@ -409,6 +409,28 @@ const AuditorConnect = () => {
       if (!aiData?.success) throw new Error(aiData?.error || "AI audit failed");
 
       const report = aiData.report;
+      const meta = aiData.meta ?? {};
+
+      // Warn when the nondeterministic AI extractor had to be used: the local
+      // parser read zero rows (unusual layout), so the figures may not match the
+      // statement exactly. Re-running with a corrected/pasted text gives a
+      // deterministic, tallying result.
+      if (meta.extractionMethod === "ai") {
+        toast({
+          title: "Audit completed (AI fallback used)",
+          description: "The statement layout couldn't be read row-by-row, so AI extraction was used and totals may not match exactly. Check the extracted text above, fix any gaps, and run again for a precise tally.",
+          variant: "destructive",
+        });
+      }
+
+      // Persist extraction diagnostics so the dashboard/history shows whether
+      // the tally came from the deterministic parser or from AI fallback.
+      const reportWithMeta = {
+        ...report,
+        extractionMethod: meta.extractionMethod,
+        extractedCount: meta.extractedCount,
+        excludedCount: meta.excludedCount,
+      };
 
       // 3. Save the data source
       const { data: sourceRow, error: sourceError } = await supabase
@@ -434,18 +456,18 @@ const AuditorConnect = () => {
           user_id: user.id,
           source_id: sourceRow.id,
           status: "completed",
-          health_score: report.score,
-          health_status: report.healthStatus,
-          total_income: report.totalIncome,
-          total_expenses: report.totalExpenses,
-          cash_flow: report.cashFlow,
-          savings_rate: report.savingsRate,
-          recoverable_amount: report.recoverableAmount,
+          health_score: reportWithMeta.score,
+          health_status: reportWithMeta.healthStatus,
+          total_income: reportWithMeta.totalIncome,
+          total_expenses: reportWithMeta.totalExpenses,
+          cash_flow: reportWithMeta.cashFlow,
+          savings_rate: reportWithMeta.savingsRate,
+          recoverable_amount: reportWithMeta.recoverableAmount,
           is_free: isFree,
           is_locked: isLocked,
-          audit_period_start: report.periodStart,
-          audit_period_end: report.periodEnd,
-          report_json: report,
+          audit_period_start: reportWithMeta.periodStart,
+          audit_period_end: reportWithMeta.periodEnd,
+          report_json: reportWithMeta,
         })
         .select("id")
         .single();
