@@ -168,7 +168,7 @@ export function buildExplainPrompt(facts: InsightFacts): string {
 
   return `Explain this finished financial audit in plain language.
 
-Reporting period: ${facts.periodStart} to ${facts.periodEnd} (the whole statement).
+Reporting period (the months audited): ${facts.periodStart} to ${facts.periodEnd}.
 
 FACTS (the verified figures — the only numbers you may use):
 ${figureLines}

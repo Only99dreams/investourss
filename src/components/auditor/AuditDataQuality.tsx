@@ -59,8 +59,8 @@ function StatusBanner({ reconciled }: { reconciled: boolean | null | undefined }
     <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
       <Info className="mt-0.5 h-4 w-4 shrink-0" />
       <span>
-        This statement does not print totals we can cross-check against, so the figures were summed
-        directly from the transaction rows.
+        These figures were summed directly from the transaction rows for the audited period; there
+        were no statement totals covering that period to cross-check against.
       </span>
     </div>
   );

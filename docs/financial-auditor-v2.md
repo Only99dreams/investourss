@@ -167,13 +167,19 @@ not the default for wallets.
 Applied deterministically before calculation:
 
 - Drop non-transaction rows (headers, footers, page numbers, summary lines).
-- Require a usable direction and a positive amount; keep undated rows (they are
-  still credits/debits) and report the count.
+- Require a usable direction and a positive amount; keep undated rows when the
+  audit window covers the whole statement (they are still credits/debits) and
+  report the count, but exclude them when the statement extends beyond the
+  window because they cannot be attributed to the selected months.
 - Deduplicate only **exact** duplicate rows (same date + description + amount +
   type + reference); distinct rows that reuse a reference are kept.
 - Flag: rows with unparseable dates, zero/negative amounts, missing direction,
   and any reconciliation difference.
-- Run everything through the audit window = the whole statement.
+- Run everything through the audit window = the **selected number of months**,
+  anchored on the first month present in the statement. Total income is the sum
+  of the credit rows inside that window and total expenses is the sum of the
+  debit rows inside it; the statement's own printed totals / running balance are
+  only cross-checked when the window covers the whole statement.
 
 ## 6. Self / internal transfers
 
