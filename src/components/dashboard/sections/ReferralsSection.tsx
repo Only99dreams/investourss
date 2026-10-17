@@ -222,7 +222,7 @@ export function ReferralsSection() {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold mb-1">Share Your Referral Link</h3>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Share your referral link or code to earn followers and 30% commission automatically.
+                    Share your referral link or code to earn followers and 40% commission automatically.
                   </p>
 
                   {referralCode ? (
@@ -346,15 +346,15 @@ export function ReferralsSection() {
               </div>
                   <div className="grid grid-cols-3 gap-4 mt-6 text-sm">
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <p className="font-semibold">30%</p>
+                      <p className="font-semibold">40%</p>
                       <p className="text-muted-foreground">First-time</p>
                     </div>
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <p className="font-semibold">15%</p>
+                      <p className="font-semibold">20%</p>
                       <p className="text-muted-foreground">Recurring</p>
                     </div>
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <p className="font-semibold">5%</p>
+                      <p className="font-semibold">10%</p>
                       <p className="text-muted-foreground">Indirect</p>
                     </div>
                   </div>
@@ -373,8 +373,8 @@ export function ReferralsSection() {
                     </div>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-3 text-center">
-                    Direct commissions on first-time purchases (30%) and repurchases/renewals (15%).
-                    5% indirect bonus on purchases by your followers&apos; own referrals. Rates apply to
+                    Direct commissions on first-time purchases (40%) and repurchases/renewals (20%).
+                    10% indirect bonus on purchases by your followers&apos; own referrals. Rates apply to
                     the actual price (VAT excluded).
                   </p>
             </CardContent>

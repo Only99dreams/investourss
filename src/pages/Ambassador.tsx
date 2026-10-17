@@ -31,7 +31,7 @@ const HowItWorksSteps = [
   {
     title: "Join the Ambassadors",
     description:
-      "Purchase a Platform Credit Pack (₦1,700) or Subscription (₦7,200) and gain access to Investours AI tools.",
+      "Purchase a Platform Credit Pack (₦1,700) or Subscription (₦7,650) and gain access to Investours AI tools.",
   },
   {
     title: "Teach Businesses & Individuals",
@@ -46,7 +46,7 @@ const HowItWorksSteps = [
   {
     title: "Earn Monthly Income",
     description:
-      "Receive 30% first-time commission and 15% recurring commission from active subscriptions.",
+      "Receive 40% first-time commission and 20% recurring commission from active subscriptions.",
   },
   {
     title: "Meet Your Portfolio Value",
@@ -277,7 +277,7 @@ const AmbassadorApplyPage = () => {
           </h2>
           <p className="text-center text-muted-foreground mb-6 max-w-2xl mx-auto">
             Build your Financial Health Portfolio — any combination of active businesses and individuals.
-            Not compulsorily as in the table below. Earn first-time (30%) and recurring (15%) commissions
+            Not compulsorily as in the table below. Earn first-time (40%) and recurring (20%) commissions
             at every stage. Qualify for Rewards (EVERY 90 DAYS)!
           </p>
           <div className="overflow-x-auto rounded-xl border border-border bg-card">

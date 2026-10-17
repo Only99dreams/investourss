@@ -124,7 +124,7 @@ export function SavedPlansSection() {
                 </p>
                 <p className="text-sm text-amber-700 mt-1.5 italic">
                   Unlock <Lock className="w-3 h-3 inline-block align-text-top" /> Download (PDF) with{" "}
-                  <strong className="not-italic">₦7,200 Premium Plan for a Month</strong>
+                  <strong className="not-italic">₦7,650 Premium Plan for a Month</strong>
                 </p>
               </div>
               <Button size="sm" variant="default" onClick={() => navigate("/pricing")}>
