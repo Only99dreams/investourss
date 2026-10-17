@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 type SourceType = "sms" | "email" | "pdf" | "open_banking";
 
 const SOURCES: { type: SourceType; label: string; icon: typeof MessageSquare; hint: string; soon?: boolean }[] = [
-  { type: "pdf", label: "PDF Statement", icon: FileUp, hint: "Upload a PDF bank statement" },
+  { type: "pdf", label: "PDF Statement", icon: FileUp, hint: "Upload a PDF or CSV bank statement" },
   { type: "open_banking", label: "Open Banking", icon: Landmark, hint: "Connect your bank securely", soon: true },
   { type: "email", label: "Email Notifications", icon: Mail, hint: "Paste or upload email statement", soon: true },
   { type: "sms", label: "SMS Alert", icon: MessageSquare, hint: "Paste your bank SMS alerts", soon: true },
@@ -84,6 +84,12 @@ const AuditorConnect = () => {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
   const [fileContent, setFileContent] = useState("");
+  // Structured rows parsed from a PDF (see the parse-statement edge function) or
+  // a CSV upload. When present the auditor sums these columns directly instead
+  // of re-reading the text, so the totals can't drift.
+  const [fileTable, setFileTable] = useState<string[][] | null>(null);
+  // How the current upload arrived, so we know which structured payload to send.
+  const [uploadKind, setUploadKind] = useState<"pdf" | "csv" | null>(null);
   const [running, setRunning] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   // Most banks issue a statement every month, so the default audit window is
@@ -212,17 +218,48 @@ const AuditorConnect = () => {
     if (file.size > 10 * 1024 * 1024) {
       toast({
         title: "File too large",
-        description: "Please upload a PDF under 10MB.",
+        description: "Please upload a statement under 10MB.",
         variant: "destructive",
       });
       return;
     }
+    const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
     setFileName(file.name);
     setFileContent("");
+    setFileTable(null);
     setNeedsPdfPassword(false);
     setPendingPdfPath("");
     setPasswordError(null);
     setPdfPassword("");
+
+    // A CSV/spreadsheet is read straight into rows: no PDF reconstruction and no
+    // AI. The columns are summed deterministically by the auditor.
+    if (isCsv) {
+      setUploadKind("csv");
+      setParsingPdf(true);
+      try {
+        const content = await file.text();
+        if (!content.trim()) throw new Error("That spreadsheet looks empty.");
+        setFileContent(content);
+        toast({
+          title: "Spreadsheet loaded!",
+          description: "Review the data below, then run your audit. Income and expenses are totalled straight from the columns.",
+        });
+      } catch (err) {
+        console.error(err);
+        setFileContent("");
+        toast({
+          title: "Could not read spreadsheet",
+          description: err instanceof Error ? err.message : "Please try another file.",
+          variant: "destructive",
+        });
+      } finally {
+        setParsingPdf(false);
+      }
+      return;
+    }
+
+    setUploadKind("pdf");
     setParsingPdf(true);
     try {
       const path = `${user.id}/${crypto.randomUUID()}.pdf`;
@@ -243,6 +280,7 @@ const AuditorConnect = () => {
       if (!data?.success) throw new Error(data?.error || "Failed to parse the PDF");
 
       setFileContent(data.text);
+      setFileTable(Array.isArray(data.table) && data.table.length > 0 ? data.table : null);
       toast({
         title: "PDF parsed!",
         description: `Extracted ${data.pages ?? 1} page(s). Review the text below, then run your audit.`,
@@ -250,6 +288,7 @@ const AuditorConnect = () => {
     } catch (err) {
       console.error(err);
       setFileContent("");
+      setFileTable(null);
       toast({
         title: "Could not read PDF",
         description:
@@ -287,6 +326,7 @@ const AuditorConnect = () => {
       if (!data?.success) throw new Error(data?.error || "Failed to parse the PDF");
 
       setFileContent(data.text);
+      setFileTable(Array.isArray(data.table) && data.table.length > 0 ? data.table : null);
       setNeedsPdfPassword(false);
       setPendingPdfPath("");
       setPdfPassword("");
@@ -395,14 +435,22 @@ const AuditorConnect = () => {
         if (creditError) throw creditError;
       }
 
-      // 2. Run the audit analysis (deterministic, calculated from the extracted text)
+      // 2. Run the audit analysis. Structured uploads (a CSV, or a PDF we
+      // reconstructed into a table) are sent as rows so the auditor sums the
+      // credit/debit columns directly; otherwise we send the text.
+      const auditBody: Record<string, unknown> = {
+        text: activeText,
+        sourceType,
+        accountType: "individual",
+        auditMonths: statementPeriod,
+      };
+      if (sourceType === "pdf") {
+        if (uploadKind === "csv") auditBody.csv = activeText;
+        else if (fileTable) auditBody.table = fileTable;
+      }
+
       const { data: aiData, error: aiError } = await supabase.functions.invoke("financial-audit", {
-        body: {
-          text: activeText,
-          sourceType,
-          accountType: "individual",
-          auditMonths: statementPeriod,
-        },
+        body: auditBody,
       });
 
       if (aiError) throw new Error(await functionErrorMessage(aiError));
@@ -623,18 +671,23 @@ const AuditorConnect = () => {
             ) : sourceType === "pdf" ? (
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="pdf">Upload PDF statement</Label>
-                  <Input id="pdf" type="file" accept=".pdf,.txt" onChange={handleFileUpload} disabled={parsingPdf} />
+                  <Label htmlFor="pdf">Upload statement (PDF or CSV)</Label>
+                  <Input id="pdf" type="file" accept=".pdf,.txt,.csv" onChange={handleFileUpload} disabled={parsingPdf} />
                 </div>
                 {parsingPdf && (
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Extracting text from your PDF...
+                    <Loader2 className="w-3 h-3 animate-spin" /> Reading your statement...
                   </p>
                 )}
                 {fileName && !parsingPdf && <Badge variant="outline">{fileName}</Badge>}
                 {fileContent && !parsingPdf && (
                   <p className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Text extracted — ready to audit.
+                    <CheckCircle2 className="w-3 h-3" />
+                    {uploadKind === "csv"
+                      ? "Spreadsheet loaded — columns will be totalled directly."
+                      : fileTable
+                        ? "Table extracted — credits and debits will be totalled directly."
+                        : "Text extracted — ready to audit."}
                   </p>
                 )}
                 {needsPdfPassword && (
@@ -693,7 +746,12 @@ const AuditorConnect = () => {
                   <Textarea
                     id="pdf-text"
                     value={fileContent}
-                    onChange={(e) => setFileContent(e.target.value)}
+                    onChange={(e) => {
+                      // Editing the text invalidates the parsed table, so the
+                      // auditor falls back to reading the edited text.
+                      setFileContent(e.target.value);
+                      setFileTable(null);
+                    }}
                     rows={10}
                     placeholder="Upload a PDF above and the text we read from it will appear here, or paste the statement content here..."
                     className="mt-1 font-mono text-xs"

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { applyFinancialAuditRules } from "./auditRules.ts";
 import { classifyHeader, detectHeader, parseCsv, tableToTransactions } from "./spreadsheet.ts";
+import { itemsToTable } from "../parse-statement/pdfText.ts";
 
 // ---------------------------------------------------------------------------
 // parseCsv
@@ -197,4 +198,47 @@ test("feeds the rules engine consistent income and expenses", () => {
   assert.equal(report.totalIncome, 75000);
   assert.equal(report.totalExpenses, 55000);
   assert.equal(report.transactions.length, 4);
+});
+
+test("a CSV upload flows through parseCsv into consistent totals", () => {
+  const csv = [
+    "Date,Description,Debit,Credit,Balance",
+    '2026-08-01,Opening Balance,,,"100,000.00"',
+    '2026-08-02,SALARY PAYMENT,,"50,000.00","150,000.00"',
+    '2026-08-03,POS PURCHASE,"20,000.00",,"130,000.00"',
+  ].join("\n");
+
+  const sheet = tableToTransactions(parseCsv(csv));
+  assert.equal(sheet.reconciliation.reconciled, true);
+
+  const report = applyFinancialAuditRules(sheet.transactions, 1, new Date("2026-09-01T12:00:00Z"));
+  assert.equal(report.totalIncome, 50000);
+  assert.equal(report.totalExpenses, 20000);
+});
+
+test("a PDF reconstructed into a table yields consistent totals", () => {
+  // The same table as the pdfText tests, expressed as PDF text items.
+  const items = [
+    { str: "Date", transform: [1, 0, 0, 10, 40, 700], width: 22, height: 10 },
+    { str: "Description", transform: [1, 0, 0, 10, 110, 700], width: 55, height: 10 },
+    { str: "Debit", transform: [1, 0, 0, 10, 330, 700], width: 25, height: 10 },
+    { str: "Credit", transform: [1, 0, 0, 10, 400, 700], width: 28, height: 10 },
+    { str: "Balance", transform: [1, 0, 0, 10, 470, 700], width: 38, height: 10 },
+    { str: "01/08/2026", transform: [1, 0, 0, 10, 40, 690], width: 52, height: 10 },
+    { str: "OPENING BALANCE", transform: [1, 0, 0, 10, 110, 690], width: 80, height: 10 },
+    { str: "100,000.00", transform: [1, 0, 0, 10, 470, 690], width: 56, height: 10 },
+    { str: "02/08/2026", transform: [1, 0, 0, 10, 40, 680], width: 52, height: 10 },
+    { str: "SALARY PAYMENT", transform: [1, 0, 0, 10, 110, 680], width: 78, height: 10 },
+    { str: "50,000.00", transform: [1, 0, 0, 10, 404, 680], width: 52, height: 10 },
+    { str: "150,000.00", transform: [1, 0, 0, 10, 470, 680], width: 56, height: 10 },
+    { str: "03/08/2026", transform: [1, 0, 0, 10, 40, 670], width: 52, height: 10 },
+    { str: "POS PURCHASE", transform: [1, 0, 0, 10, 110, 670], width: 70, height: 10 },
+    { str: "20,000.00", transform: [1, 0, 0, 10, 330, 670], width: 50, height: 10 },
+    { str: "130,000.00", transform: [1, 0, 0, 10, 470, 670], width: 56, height: 10 },
+  ];
+
+  const sheet = tableToTransactions(itemsToTable(items));
+  const report = applyFinancialAuditRules(sheet.transactions, 1, new Date("2026-09-01T12:00:00Z"));
+  assert.equal(report.totalIncome, 50000);
+  assert.equal(report.totalExpenses, 20000);
 });

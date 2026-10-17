@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { applyFinancialAuditRules, assessParserConfidence, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
+import { parseCsv, tableToTransactions } from "./spreadsheet.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -165,6 +166,24 @@ function buildFallbackRecommendations(
 }
 
 type AiRecord = { [key: string]: unknown };
+
+// Read structured input from the request: either a pre-built table (from a PDF
+// the parser reconstructed into a grid) or raw CSV text. Returns null when
+// neither is present. The caller sums the resulting credit/debit rows with the
+// rules engine; no AI touches the numbers.
+function readSpreadsheetInput(body: Record<string, unknown>) {
+  try {
+    if (Array.isArray(body.table) && body.table.length > 0) {
+      return tableToTransactions(body.table as (string | number)[][]);
+    }
+    if (typeof body.csv === "string" && body.csv.trim().length > 0) {
+      return tableToTransactions(parseCsv(body.csv));
+    }
+  } catch (err) {
+    console.warn('spreadsheet input could not be read:', err);
+  }
+  return null;
+}
 
 function clampReport(r: AiRecord, accountType: string, months: number, sourceText: string) {
   const rawTransactions = Array.isArray(r.transactions) ? r.transactions : [];
@@ -359,9 +378,17 @@ serve(async (req) => {
     const { text = '', sourceType = 'sms', accountType = 'individual' } = body;
     const auditMonths = normalizeAuditMonths(body.auditMonths);
 
-    if (!text || text.trim().length < 10) {
+    // Structured input (an uploaded CSV/XLSX, or a PDF reconstructed into a
+    // table) is read deterministically: the rules engine sums the credit and
+    // debit rows directly and no AI touches the numbers.
+    const sheetResult = readSpreadsheetInput(body);
+    const sheetTransactions = sheetResult?.transactions ?? [];
+    const hasSheetTransactions = sheetTransactions.length > 0;
+
+    if ((!text || text.trim().length < 10) && !hasSheetTransactions) {
+      const detail = sheetResult && sheetResult.warnings.length > 0 ? ` ${sheetResult.warnings.join(' ')}` : '';
       return new Response(
-        JSON.stringify({ success: false, error: 'Please provide financial records to audit (min 10 characters).' }),
+        JSON.stringify({ success: false, error: `Please provide financial records to audit (min 10 characters).${detail}` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -371,56 +398,70 @@ serve(async (req) => {
     let excludedCount = 0;
     let aiExtractionFailed = false;
     let aiFailureMessage = "";
-    let extractionMethod: "deterministic-parser" | "ai" = "deterministic-parser";
+    let extractionMethod: "deterministic-parser" | "ai" | "spreadsheet" = "deterministic-parser";
 
-    // Deterministic extraction first. The local parser reads the statement text
-    // verbatim, so the same upload always produces the same transactions and the
-    // same income/expense totals — this is what makes the report tally with the
-    // statement and stops the figures from changing between runs.
-    //
-    // However, PDF statements are often extracted COLUMN-GROUPED (all the dates,
-    // then descriptions, then debits, then credits — one column after another
-    // instead of one row at a time). The row parser cannot read that layout and
-    // would sum stray bare numbers into wrong totals. Rather than hardcoding
-    // bank-specific column labels, we judge the parse structurally: header lines
-    // with almost no date+amount rows, or a disagreement with the statement's own
-    // printed Total Credit/Total Debit. When the deterministic read is unreliable
-    // we hand the raw text to the AI extractor, which reconstructs the real
-    // credit/debit rows. Income/expenses are always summed from credit/debit rows.
-    const parsedTransactions = parseFinancialRecords(text);
-    const confidence = assessParserConfidence(text, parsedTransactions);
-    const useAi = parsedTransactions.length === 0 || !confidence.reliable;
-    if (useAi) {
-      try {
-        const extractedTransactions = await extractTransactionsWithAI(text, sourceType, accountType, auditMonths);
-        extractedCount = extractedTransactions.length;
-        report = clampReport({ transactions: extractedTransactions }, accountType, auditMonths, text);
-        excludedCount = report.dataQuality.excludedInvalidTransactions;
-        extractionMethod = "ai";
-      } catch (err) {
-        // AI gateway failure -> deterministic fallback so the audit still completes.
-        const e = err as { status?: number; message?: string };
-        if (e?.status === 429) {
-          return new Response(JSON.stringify({ success: false, error: e.message }), {
-            status: e.status,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+    if (hasSheetTransactions) {
+      // Preferred path: the statement arrived as structured rows (an uploaded
+      // CSV/XLSX, or a PDF the parser reconstructed into a grid). The rules
+      // engine sums the credit and debit columns directly — deterministic, no
+      // AI, and it reconciles against the statement's own running balance when
+      // one is present.
+      extractedCount = sheetTransactions.length;
+      report = buildReportFromRules(applyFinancialAuditRules(sheetTransactions, auditMonths), accountType);
+      excludedCount = report.dataQuality.excludedInvalidTransactions;
+      extractionMethod = "spreadsheet";
+    } else {
+      // Deterministic text extraction first. The local parser reads the
+      // statement text verbatim, so the same upload always produces the same
+      // transactions and the same income/expense totals — this is what makes the
+      // report tally with the statement and stops the figures from changing
+      // between runs.
+      //
+      // However, PDF statements are often extracted COLUMN-GROUPED (all the
+      // dates, then descriptions, then debits, then credits — one column after
+      // another instead of one row at a time). The row parser cannot read that
+      // layout and would sum stray bare numbers into wrong totals. Rather than
+      // hardcoding bank-specific column labels, we judge the parse structurally:
+      // header lines with almost no date+amount rows, or a disagreement with the
+      // statement's own printed Total Credit/Total Debit. When the deterministic
+      // read is unreliable we hand the raw text to the AI extractor, which
+      // reconstructs the real credit/debit rows. Income/expenses are always
+      // summed from credit/debit rows.
+      const parsedTransactions = parseFinancialRecords(text);
+      const confidence = assessParserConfidence(text, parsedTransactions);
+      const useAi = parsedTransactions.length === 0 || !confidence.reliable;
+      if (useAi) {
+        try {
+          const extractedTransactions = await extractTransactionsWithAI(text, sourceType, accountType, auditMonths);
+          extractedCount = extractedTransactions.length;
+          report = clampReport({ transactions: extractedTransactions }, accountType, auditMonths, text);
+          excludedCount = report.dataQuality.excludedInvalidTransactions;
+          extractionMethod = "ai";
+        } catch (err) {
+          // AI gateway failure -> deterministic fallback so the audit still completes.
+          const e = err as { status?: number; message?: string };
+          if (e?.status === 429) {
+            return new Response(JSON.stringify({ success: false, error: e.message }), {
+              status: e.status,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          console.warn('AI analysis failed, using fallback parser:', e?.message || e);
+          aiExtractionFailed = true;
+          aiFailureMessage = typeof e?.message === "string" ? e.message.slice(0, 300) : "Unknown Groq GPT-OSS API error";
+          // When the statement is column-grouped the local parser reads the
+          // split columns as stray numbers, so its "rows" would be misleading.
+          // Report zero rows rather than silently returning wrong totals.
+          const usable = confidence.reliable ? parsedTransactions : [];
+          extractedCount = usable.length;
+          report = buildReportFromRules(applyFinancialAuditRules(usable, auditMonths), accountType);
+          excludedCount = report.dataQuality.excludedInvalidTransactions;
         }
-        console.warn('AI analysis failed, using fallback parser:', e?.message || e);
-        aiExtractionFailed = true;
-        aiFailureMessage = typeof e?.message === "string" ? e.message.slice(0, 300) : "Unknown Groq GPT-OSS API error";
-        // When the statement is column-grouped the local parser reads the split
-        // columns as stray numbers, so its "rows" would be misleading. Report zero
-        // rows rather than silently returning wrong totals.
-        const usable = confidence.reliable ? parsedTransactions : [];
-        extractedCount = usable.length;
-        report = buildReportFromRules(applyFinancialAuditRules(usable, auditMonths), accountType);
+      } else {
+        extractedCount = parsedTransactions.length;
+        report = buildReportFromRules(applyFinancialAuditRules(parsedTransactions, auditMonths), accountType);
         excludedCount = report.dataQuality.excludedInvalidTransactions;
       }
-    } else {
-      extractedCount = parsedTransactions.length;
-      report = buildReportFromRules(applyFinancialAuditRules(parsedTransactions, auditMonths), accountType);
-      excludedCount = report.dataQuality.excludedInvalidTransactions;
     }
 
     if (report.transactions.length === 0) {
@@ -443,7 +484,14 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       report,
-      meta: { extractionMethod, extractedCount, excludedCount },
+      meta: {
+        extractionMethod,
+        extractedCount,
+        excludedCount,
+        ...(sheetResult
+          ? { reconciliation: sheetResult.reconciliation, sheetWarnings: sheetResult.warnings }
+          : {}),
+      },
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -35,7 +35,7 @@ interface Run {
   eol: boolean;
 }
 
-export function itemsToText(items: PdfTextItem[]): string {
+function buildRuns(items: PdfTextItem[]): Run[] {
   const runs: Run[] = [];
   for (const item of items ?? []) {
     if (!item || typeof item.str !== "string" || item.str === "") continue;
@@ -52,49 +52,159 @@ export function itemsToText(items: PdfTextItem[]): string {
       eol: Boolean(item.hasEOL),
     });
   }
-  if (runs.length === 0) return "";
+  return runs;
+}
 
-  // Top-to-bottom, then left-to-right. PDF y increases upwards, so a larger y
-  // is higher on the page.
+// Group runs into visual rows. Top-to-bottom, then left-to-right. PDF y
+// increases upwards, so a larger y is higher on the page.
+function groupIntoRows(runs: Run[]): Run[][] {
+  if (runs.length === 0) return [];
   const ordered = runs.slice().sort((a, b) => b.y - a.y || a.x - b.x);
 
-  const rows: { y: number; runs: Run[] }[] = [];
-  let current: { y: number; runs: Run[] } | null = null;
+  const rows: Run[][] = [];
+  let current: Run[] | null = null;
+  let currentY = 0;
   let previousEndedLine = false;
   for (const run of ordered) {
     const tolerance = Math.max(1.5, run.height * 0.5);
-    const sameRow = current !== null && !previousEndedLine && Math.abs(current.y - run.y) <= tolerance;
+    const sameRow = current !== null && !previousEndedLine && Math.abs(currentY - run.y) <= tolerance;
     if (!sameRow) {
-      current = { y: run.y, runs: [] };
+      current = [];
+      currentY = run.y;
       rows.push(current);
     }
-    current!.runs.push(run);
+    current!.push(run);
     previousEndedLine = run.eol;
   }
+  return rows;
+}
 
-  const lines = rows.map((row) => {
-    const sorted = row.runs.slice().sort((a, b) => a.x - b.x);
-    let line = "";
-    let previousEndX: number | undefined;
-    let previousHeight = sorted[0]?.height ?? 10;
-    for (const run of sorted) {
-      if (previousEndX !== undefined) {
-        const gap = run.x - previousEndX;
-        // A small gap is intra-word kerning; a larger gap is a word/column
-        // boundary and must become a space.
-        const threshold = Math.max(0.75, Math.min(previousHeight, run.height) * 0.15);
-        if (gap > threshold) line += " ";
-      }
-      line += run.str;
-      previousEndX = run.x + run.width;
-      previousHeight = run.height;
+// Join a row's runs left-to-right, inserting a space at column/word boundaries
+// (a small gap is intra-word kerning; a larger gap is a boundary).
+function joinRuns(row: Run[]): string {
+  const sorted = row.slice().sort((a, b) => a.x - b.x);
+  let line = "";
+  let previousEndX: number | undefined;
+  let previousHeight = sorted[0]?.height ?? 10;
+  for (const run of sorted) {
+    if (previousEndX !== undefined) {
+      const gap = run.x - previousEndX;
+      const threshold = Math.max(0.75, Math.min(previousHeight, run.height) * 0.15);
+      if (gap > threshold) line += " ";
     }
-    return line.replace(/[ \t]+/g, " ").trim();
-  });
+    line += run.str;
+    previousEndX = run.x + run.width;
+    previousHeight = run.height;
+  }
+  return line.replace(/[ \t]+/g, " ").trim();
+}
 
+export function itemsToText(items: PdfTextItem[]): string {
+  const lines = groupIntoRows(buildRuns(items)).map((row) => joinRuns(row));
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 // <<< itemsToText
+
+// >>> itemsToTable
+interface ColumnAnchor {
+  x: number;
+  end: number;
+}
+
+// Vocabulary that names a statement column. Kept generic (no bank names).
+const HEADER_TOKEN = /\b(date|time|description|narration|particulars|details|memo|remarks|balance|debit|debits|credit|credits|amount|withdrawal|withdrawals|deposit|deposits|reference|ref|type|direction|dr|cr)\b/i;
+const MONEY_TOKEN = /\b(balance|debit|debits|credit|credits|amount|withdrawal|withdrawals|deposit|deposits|dr|cr)\b/i;
+
+function headerScore(row: Run[]): number {
+  let score = 0;
+  for (const run of row) if (HEADER_TOKEN.test(run.str)) score += 1;
+  return score;
+}
+
+// A header row names at least two columns and includes money vocabulary (or a
+// date + description pair). This is what stops a title or a stray data row from
+// being mistaken for the column definition.
+function isHeaderRow(row: Run[]): boolean {
+  if (headerScore(row) < 2) return false;
+  const text = row.map((run) => run.str).join(" ");
+  return MONEY_TOKEN.test(text) || (/\bdate\b/i.test(text) && /(description|narration|particulars|details)/i.test(text));
+}
+
+// Merge header runs that are separated by a word gap into single column labels
+// (e.g. "Transaction" + "Date" must become one anchor, not two).
+function headerAnchors(row: Run[]): ColumnAnchor[] {
+  const sorted = row.slice().sort((a, b) => a.x - b.x);
+  const anchors: ColumnAnchor[] = [];
+  for (const run of sorted) {
+    const previous = anchors[anchors.length - 1];
+    const threshold = Math.max(0.75, run.height * 0.15);
+    if (previous && run.x - previous.end <= threshold) {
+      previous.end = Math.max(previous.end, run.x + run.width);
+    } else {
+      anchors.push({ x: run.x, end: run.x + run.width });
+    }
+  }
+  return anchors;
+}
+
+function findAnchors(rows: Run[][]): ColumnAnchor[] | null {
+  let best: Run[] | null = null;
+  let bestScore = 0;
+  const limit = Math.min(rows.length, 30);
+  for (let i = 0; i < limit; i++) {
+    if (!isHeaderRow(rows[i])) continue;
+    const score = headerScore(rows[i]);
+    if (score > bestScore) {
+      bestScore = score;
+      best = rows[i];
+    }
+  }
+  return best ? headerAnchors(best) : null;
+}
+
+// Assign every run in a row to its nearest column anchor (by left edge) and
+// join the runs that land in the same column.
+function buildTable(rows: Run[][], anchors: ColumnAnchor[]): string[][] {
+  return rows.map((row) => {
+    const buckets: Run[][] = anchors.map(() => []);
+    for (const run of row) {
+      let best = 0;
+      let bestDistance = Infinity;
+      for (let i = 0; i < anchors.length; i++) {
+        const distance = Math.abs(run.x - anchors[i].x);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = i;
+        }
+      }
+      buckets[best].push(run);
+    }
+    return buckets.map((bucket) => joinRuns(bucket));
+  });
+}
+
+// Build one table across every page. Columns are anchored on the first page
+// that carries a header, then applied to all pages so continuation pages without
+// a repeated header still line up.
+export function pagesToTable(pages: PdfTextItem[][]): string[][] {
+  const pagesOfRows = pages.map((items) => groupIntoRows(buildRuns(items)));
+  let anchors: ColumnAnchor[] | null = null;
+  for (const rows of pagesOfRows) {
+    anchors = findAnchors(rows);
+    if (anchors) break;
+  }
+  if (!anchors) {
+    // No header anywhere: fall back to one cell per row so the caller can use
+    // the plain-text parser instead.
+    return pagesOfRows.flat().map((row) => [joinRuns(row)]);
+  }
+  return pagesOfRows.flatMap((rows) => buildTable(rows, anchors));
+}
+
+export function itemsToTable(items: PdfTextItem[]): string[][] {
+  return pagesToTable([items]);
+}
+// <<< itemsToTable
 
 interface PdfPageData {
   getTextContent: (opts: { normalizeWhitespace: boolean; disableCombineTextItems: boolean }) => Promise<{ items: PdfTextItem[] }>;
@@ -103,10 +213,12 @@ interface PdfPageData {
 /**
  * pdf-parse's default page renderer joins same-line text items with no
  * separator, which jams statement columns together. Rebuild each page with
- * column-aware spacing so the amount and running balance stay separate.
+ * column-aware spacing so the amount and running balance stay separate, and
+ * collect the page's raw items so we can also build a deterministic table.
  */
-async function renderPage(pageData: PdfPageData): Promise<string> {
+async function renderPageInto(pageData: PdfPageData, pages: PdfTextItem[][]): Promise<string> {
   const content = await pageData.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false });
+  pages.push(content.items ?? []);
   return itemsToText(content.items);
 }
 
@@ -129,6 +241,18 @@ function isPasswordException(err: unknown): boolean {
   return e.name === 'PasswordException' || /password/i.test(e.message ?? '');
 }
 
+interface PdfPageText {
+  getTextContent: (opts: { normalizeWhitespace: boolean; disableCombineTextItems: boolean }) => Promise<{
+    items: PdfTextItem[];
+  }>;
+}
+
+interface PdfDocument {
+  numPages: number;
+  getPage: (n: number) => Promise<PdfPageText>;
+  destroy: () => Promise<void>;
+}
+
 /**
  * Unlock a password-protected PDF and extract its text.
  *
@@ -146,20 +270,13 @@ async function extractTextWithPassword(bytes: Uint8Array, password: string) {
   PDFJS.disableWorker = true;
 
   const task = PDFJS.getDocument({ data: bytes, password }) as
-    | Promise<unknown>
-    | { promise: Promise<any> };
-  const doc = await ((task as { promise?: Promise<any> }).promise ?? task) as {
-    numPages: number;
-    getPage: (n: number) => Promise<{
-      getTextContent: (opts: { normalizeWhitespace: boolean; disableCombineTextItems: boolean }) => Promise<{
-        items: PdfTextItem[];
-      }>;
-    }>;
-    destroy: () => Promise<void>;
-  };
+    | Promise<PdfDocument>
+    | { promise: Promise<PdfDocument> };
+  const doc = (await ((task as { promise?: Promise<PdfDocument> }).promise ?? task)) as PdfDocument;
 
   try {
     let text = '';
+    const pageItems: PdfTextItem[][] = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
       const content = await page.getTextContent({
@@ -167,10 +284,12 @@ async function extractTextWithPassword(bytes: Uint8Array, password: string) {
         disableCombineTextItems: false,
       });
       // Rebuild the page with column-aware spacing (see pdfText.ts) instead of
-      // gluing every same-line text item together.
+      // gluing every same-line text item together, and keep the raw items so we
+      // can also build a deterministic table.
+      pageItems.push(content.items ?? []);
       text += itemsToText(content.items) + '\n\n';
     }
-    return { text: text.trim(), pages: doc.numPages };
+    return { text: text.trim(), pages: doc.numPages, table: pagesToTable(pageItems) };
   } finally {
     try {
       await doc.destroy();
@@ -216,14 +335,14 @@ serve(async (req) => {
     // it with pdf.js and read the text directly.
     if (suppliedPassword.length > 0) {
       try {
-        const { text, pages } = await extractTextWithPassword(bytes, suppliedPassword);
+        const { text, pages, table } = await extractTextWithPassword(bytes, suppliedPassword);
         if (text.length < MIN_TEXT_LENGTH) {
           return jsonResponse({
             success: false,
             error: 'No readable text found after unlocking this PDF. It may be a scanned image — try a text/PDF export from your banking app, or paste the statement text manually.',
           }, 422);
         }
-        return jsonResponse({ success: true, text: text.slice(0, 100000), pages });
+        return jsonResponse({ success: true, text: text.slice(0, 100000), pages, table: table.slice(0, 5000) });
       } catch (err) {
         if (isPasswordException(err)) {
           // 200 so the app can treat this as a normal branch rather than a failure.
@@ -240,7 +359,8 @@ serve(async (req) => {
     // No password yet: use the fast parser. If the PDF turns out to be locked,
     // tell the app so it can prompt the user for the password.
     try {
-      const parsed = await pdf(bytes, { pagerender: renderPage });
+      const pageItems: PdfTextItem[][] = [];
+      const parsed = await pdf(bytes, { pagerender: (pageData: PdfPageData) => renderPageInto(pageData, pageItems) });
       const text = String(parsed?.text ?? '').trim();
       if (text.length < MIN_TEXT_LENGTH) {
         return jsonResponse({
@@ -248,7 +368,8 @@ serve(async (req) => {
           error: 'No readable text found in this PDF. It may be a scanned image — try a text/PDF export from your banking app, or paste the statement text manually.',
         }, 422);
       }
-      return jsonResponse({ success: true, text: text.slice(0, 100000), pages: parsed?.numpages ?? 1 });
+      const table = pagesToTable(pageItems);
+      return jsonResponse({ success: true, text: text.slice(0, 100000), pages: parsed?.numpages ?? 1, table: table.slice(0, 5000) });
     } catch (err) {
       if (isPasswordException(err)) {
         // 200 so the app can treat this as a normal branch rather than a failure.
