@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyFinancialAuditRules, getAuditWindow, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
+import { applyFinancialAuditRules, assessParserConfidence, getAuditWindow, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
 
 test("chunks long statements without dropping or reordering source text", () => {
   const source = `first record\r\n${"x".repeat(50001)}\r\nlast record`;
@@ -416,3 +416,43 @@ test("reconciles a jammed PDF statement against the closing balance", () => {
   assert.equal(100000 + credits - debits, 590000);
 });
 
+
+
+test("flags a column-grouped statement as unreliable to parse", () => {
+  // A wallet export whose table columns were split by the PDF extractor: many
+  // header cells, but the amounts/dates live in separate column blocks so the
+  // row parser cannot build real transaction rows.
+  const text = [
+    "Trans. Time", "Value Date", "Description", "Debit(NGN)", "Credit(NGN)", "Balance After",
+    "02 Aug 2026 22:26:07", "02 Aug 2026", "OWealth Withdrawal",
+    "100.00", "0.00", "100.00",
+    "Total Debit", "284,922.80", "Total Credit", "284,922.80",
+  ].join("\n");
+  const parsed = parseFinancialRecords(text);
+  const confidence = assessParserConfidence(text, parsed);
+  assert.equal(confidence.reliable, false);
+});
+
+test("flags a statement whose parsed totals disagree with the printed totals", () => {
+  // Rows parse fine, but the statement's own printed totals do not match what
+  // the parser summed -> the layout was misread.
+  const text = [
+    "05/08/2026 SALARY 250,000.00 CR 250,000.00",
+    "Total Credit 999,999.99",
+  ].join("\n");
+  const parsed = parseFinancialRecords(text);
+  const confidence = assessParserConfidence(text, parsed);
+  assert.equal(confidence.reliable, false);
+});
+
+test("accepts a clean row-per-line statement that reconciles with printed totals", () => {
+  const text = [
+    "05/08/2026 SALARY 250,000.00 CR 250,000.00",
+    "06/08/2026 POS PURCHASE 10,000.00 DR 240,000.00",
+    "Total Credit 250,000.00",
+    "Total Debit 10,000.00",
+  ].join("\n");
+  const parsed = parseFinancialRecords(text);
+  const confidence = assessParserConfidence(text, parsed);
+  assert.equal(confidence.reliable, true);
+});

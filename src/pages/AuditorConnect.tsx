@@ -411,8 +411,10 @@ const AuditorConnect = () => {
       const report = aiData.report;
       const meta = aiData.meta ?? {};
 
-      // The totals are always calculated deterministically from the extracted
-      // statement text (no AI), so the figures tally with the statement.
+      // Income/expenses are summed from the credit/debit rows the extractor
+      // read. Clean row-per-line statements use the deterministic parser;
+      // column-grouped wallet exports are reconstructed by the AI reader, so
+      // the credit/debit totals tally with the statement either way.
       const reportWithMeta = {
         ...report,
         extractionMethod: meta.extractionMethod,

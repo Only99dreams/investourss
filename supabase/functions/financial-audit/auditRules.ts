@@ -37,6 +37,14 @@ const DEFAULT_CHUNK_SIZE = 12000;
 const MAX_NUMERIC_15_2_EXCLUSIVE = 10_000_000_000_000;
 const LEAKAGE_DESCRIPTION = /\b(bank fee|bank charge|service charge|maintenance fee|commission|stamp duty|vat)\b/i;
 
+// A summary/aggregate line reports a run's closing figure rather than a single
+// transaction, e.g. "Closing Balance 90,000.00" or "Total Debit 284,922.80".
+// Every bank statement includes these; the row parser must not count them as
+// transactions and the detector must not treat them as real rows.
+// Forward declaration: used by parseFinancialRecords (below) and defined with
+// the detector helpers further down.
+function isSummaryLine(line: string): boolean;
+
 function categoryFromDescription(description: string): string {
   const value = description.toLowerCase();
   if (LEAKAGE_DESCRIPTION.test(value)) return "bank charges";
@@ -238,6 +246,11 @@ export function parseFinancialRecords(text: string): ExtractedTransaction[] {
   const rows: ParsedRow[] = [];
 
   for (const originalLine of lines) {
+    // Skip printed summary/aggregate lines (Total/Closing/Opening balances and
+    // totals). They are not transactions; counting them would inflate income
+    // and expenses and make the sums disagree with the statement.
+    if (isSummaryLine(originalLine)) continue;
+
     const transactionId = /\b(?:txn(?:\s*id)?|transaction(?:\s*id)?|reference|ref)\s*[:#-]?\s*([A-Z0-9-]+)/i.exec(originalLine)?.[1];
 
     // Capture a labelled running balance before it is stripped from the line.
@@ -362,6 +375,145 @@ export function parseFinancialRecords(text: string): ExtractedTransaction[] {
   }
 
   return transactions;
+}
+
+// ---------------------------------------------------------------------------
+// Parser-confidence helpers.
+//
+// A statement PDF is often extracted COLUMN-GROUPED (all the dates, then all
+// the descriptions, then all the debit amounts, then all the credit amounts,
+// one column after another) rather than one full row at a time. The row-based
+// parser above cannot read that layout: it sees stray bare numbers with no date
+// or direction and produces wrong totals. The wording of the column headers
+// differs per bank (GTB, Zenith, UBA, Moniepoint, Kuda, PalmPay...), so instead
+// of hardcoding bank-specific labels we detect the broken layout by two generic,
+// structural signals:
+//
+//   1. HEADER FRAGMENTATION — the statement declares many table-column headers
+//      (Date / Description / Debit / Credit / Balance / Amount / Narration ...)
+//      but very few lines carry a date and an amount together (i.e. a real
+//      transaction row). Many headers + almost no rows = columns were split.
+//   2. PRINTED-TOTAL MISMATCH — most statements print their own "Total Credit"
+//      and "Total Debit". If the parser's summed credits/debits disagree with
+//      those printed figures, the parser misread the rows.
+//
+// Either signal alone means "do not trust the deterministic totals; hand the
+// raw text to the AI extractor". This works for any bank layout, not just one
+// statement type.
+// ---------------------------------------------------------------------------
+const TABLE_HEADER_WORDS = [
+  "date", "value date", "trans. time", "trans time", "transaction date", "posting date",
+  "description", "narration", "particulars", "details", "transaction details", "remarks",
+  "debit", "credit", "debits", "credits", "amount", "withdrawal", "deposit",
+  "balance", "balance after", "running balance", "closing balance", "available balance",
+  "channel", "reference", "transaction reference", "txn", "dr", "cr",
+];
+
+// A line that is just a header cell: only header words / punctuation / currency
+// symbols, no digits other than trivial ones, and quite short.
+function isHeaderLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length > 40) return false;
+  const stripped = trimmed.toLowerCase().replace(/[₦$.,()/:_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!stripped) return false;
+  // Reject anything that looks like a real amount-bearing row.
+  if (/\d{2,}/.test(stripped)) return false;
+  const words = stripped.split(" ").filter(Boolean);
+  if (words.length === 0 || words.length > 4) return false;
+  return words.every((word) => TABLE_HEADER_WORDS.includes(word));
+}
+
+// A line that plausibly holds a real transaction: carries a recognisable date
+// AND a money-like amount.
+const ROW_DATE_PATTERN = /\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}[-\s][A-Za-z]{3,9}[-\s,]{0,2}\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{2,4})\b/;
+const ROW_AMOUNT_PATTERN = /(?:₦|NGN)?\s*\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|(?:₦|NGN)?\s*\d+\.\d{2}/;
+
+function looksLikeRowLine(line: string): boolean {
+  return ROW_DATE_PATTERN.test(line) && ROW_AMOUNT_PATTERN.test(line);
+}
+
+// A summary/aggregate line reports a run's closing figure rather than a single
+// transaction, e.g. "Closing Balance 90,000.00" or "Total Debit 284,922.80".
+// Every bank statement includes these, the row parser must not count them as
+// transactions, and the detector must not treat them as real rows.
+const SUMMARY_LINE_PATTERN = /\b(?:total|closing|opening|sub-?total|balance b\/f|balance c\/f|carried forward)\b/i;
+
+function isSummaryLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length > 48) return false;
+  if (!SUMMARY_LINE_PATTERN.test(trimmed)) return false;
+  // A genuine transaction row carries a date; a summary line does not.
+  return !ROW_DATE_PATTERN.test(trimmed);
+}
+
+// Read a statement's own printed totals (e.g. "Total Credit ... ₦149,058.43"
+// or "Credit(s)₦149,058.43"). Returns the credit/debit figures the bank itself
+// declares, which we use as ground truth to sanity-check the parser.
+function readPrintedTotals(text: string): { credit?: number; debit?: number } {
+  const find = (labels: RegExp): number | undefined => {
+    // Label, then up to ~30 chars, then an amount on the same or next line.
+    const match = labels.exec(text);
+    if (!match) return undefined;
+    const tail = text.slice(match.index + match[0].length, match.index + match[0].length + 60);
+    const amountMatch = /(?:₦|NGN)?\s*([+-]?[\d,]+(?:\.\d{1,2})?)/.exec(tail);
+    if (!amountMatch) return undefined;
+    const value = Number(amountMatch[1].replace(/[,\s]/g, ""));
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const credit = find(/\btotal\s+credits?\b|\bcredits?\s*\(₦\)|\btotal\s+credit\b/i);
+  const debit = find(/\btotal\s+debits?\b|\bdebits?\s*\(₦\)|\btotal\s+debit\b/i);
+  return { credit, debit };
+}
+
+export interface ParserConfidence {
+  reliable: boolean;
+  reason: "ok" | "header-fragmented" | "total-mismatch";
+}
+
+// Decide whether the deterministic row parser produced a trustworthy reading of
+// the statement. Purely structural and bank-agnostic — no per-bank labels.
+export function assessParserConfidence(
+  text: string,
+  parsedTransactions: ExtractedTransaction[],
+): ParserConfidence {
+  const lines = text.split(/\r?\n/);
+  let headerLines = 0;
+  let rowLines = 0;
+  for (const line of lines) {
+    if (isHeaderLine(line)) headerLines += 1;
+    // Summary lines (Total/Closing/Openings) are genuine single-row content the
+    // row parser should read, so they count toward real rows too.
+    else if (looksLikeRowLine(line) || isSummaryLine(line)) rowLines += 1;
+  }
+
+  // Signal 1: the export declares a table (several column headers) but the
+  // lines carry almost no real rows to match them — the columns were split into
+  // separate blocks. This is the classic column-grouped PDF extraction.
+  if (headerLines >= 3 && rowLines <= Math.max(2, Math.floor(headerLines / 3))) {
+    return { reliable: false, reason: "header-fragmented" };
+  }
+
+  // Signal 2: the statement prints its own totals and the parser's sums do not
+  // reproduce them (tolerance covers rounding).
+  const printed = readPrintedTotals(text);
+  const parsedIncome = parsedTransactions
+    .filter((t) => t.type === "credit")
+    .reduce((sum, t) => sum + t.amount, 0);
+  const parsedExpenses = parsedTransactions
+    .filter((t) => t.type === "debit")
+    .reduce((sum, t) => sum + t.amount, 0);
+  const tolerance = 1; // ₦1 rounding tolerance
+  const creditMismatch = printed.credit !== undefined
+    && Math.abs(parsedIncome - printed.credit) > tolerance;
+  const debitMismatch = printed.debit !== undefined
+    && Math.abs(parsedExpenses - printed.debit) > tolerance;
+  // A mismatch is meaningful whenever the statement declares totals; it holds
+  // even if the parser read zero rows (0 vs a real printed total is a mismatch).
+  if (creditMismatch || debitMismatch) {
+    return { reliable: false, reason: "total-mismatch" };
+  }
+
+  return { reliable: true, reason: "ok" };
 }
 
 export function getAuditWindow(
