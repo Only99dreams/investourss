@@ -48,3 +48,32 @@ export async function parseSpreadsheetFile(
   const table = rowsToTable(rows);
   return { table, preview: tableToPreview(table) };
 }
+
+// Turn CSV/TSV text into the same table shape so it can be shown in the
+// spreadsheet preview. SheetJS is reused (already lazy-loaded for workbooks) so
+// quoted fields, embedded commas/newlines and a leading BOM are handled the same
+// way the auditor's own CSV reader handles them.
+export async function parseDelimitedTable(content: string): Promise<SheetTable> {
+  if (!content.trim()) return [];
+  const imported = await import("xlsx");
+  const XLSX = (imported as { default?: typeof imported }).default ?? imported;
+  const workbook = XLSX.read(content, { type: "string", raw: true });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) return [];
+  const sheet = workbook.Sheets[firstSheetName];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: "" });
+  return rowsToTable(rows);
+}
+
+// Save a converted table as a real .xlsx workbook so the user can open the
+// statement in Excel. `baseName` (usually the uploaded file name) is reused for
+// the download, with the spreadsheet extension swapped in.
+export async function downloadTableAsExcel(table: SheetTable, baseName: string): Promise<void> {
+  const imported = await import("xlsx");
+  const XLSX = (imported as { default?: typeof imported }).default ?? imported;
+  const sheet = XLSX.utils.aoa_to_sheet(table);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "Statement");
+  const stem = (baseName || "statement").replace(/\.(pdf|csv|tsv|xlsx|xls|txt)$/i, "");
+  XLSX.writeFile(workbook, `${stem || "statement"}.xlsx`);
+}

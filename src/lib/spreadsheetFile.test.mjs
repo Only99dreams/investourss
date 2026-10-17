@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import XLSX from "xlsx";
-import { parseSpreadsheetFile, rowsToTable, toSpreadsheetCell } from "./spreadsheetFile.ts";
+import { parseSpreadsheetFile, parseDelimitedTable, rowsToTable, toSpreadsheetCell } from "./spreadsheetFile.ts";
 import { tableToTransactions } from "../../supabase/functions/financial-audit/spreadsheet.ts";
 import { applyFinancialAuditRules } from "../../supabase/functions/financial-audit/auditRules.ts";
 
@@ -56,4 +56,30 @@ test("an uploaded xlsx workbook becomes the shared transaction table", async () 
   const report = applyFinancialAuditRules(result.transactions, 1, new Date("2026-09-01T12:00:00Z"));
   assert.equal(report.totalIncome, 50000);
   assert.equal(report.totalExpenses, 20000);
+});
+
+test("CSV text becomes a preview table that totals the same way", async () => {
+  const csv = [
+    "Date,Description,Debit,Credit,Balance",
+    "2026-08-01,Opening Balance,,,100000",
+    '2026-08-02,"SALARY, PAYMENT",,50000,150000',
+    "2026-08-03,POS PURCHASE,20000,,130000",
+  ].join("\n");
+
+  const table = await parseDelimitedTable(csv);
+
+  assert.equal(table.length, 4);
+  assert.deepEqual(table[0], ["Date", "Description", "Debit", "Credit", "Balance"]);
+  // A quoted field keeps its embedded comma instead of splitting the row.
+  assert.equal(table[2][1], "SALARY, PAYMENT");
+
+  const result = tableToTransactions(table);
+  const report = applyFinancialAuditRules(result.transactions, 1, new Date("2026-09-01T12:00:00Z"));
+  assert.equal(report.totalIncome, 50000);
+  assert.equal(report.totalExpenses, 20000);
+});
+
+test("empty delimited text produces no preview rows", async () => {
+  assert.deepEqual(await parseDelimitedTable(""), []);
+  assert.deepEqual(await parseDelimitedTable("   \n  "), []);
 });

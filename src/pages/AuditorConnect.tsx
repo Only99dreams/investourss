@@ -17,8 +17,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import { Footer } from "@/components/ui/Footer";
+import { SpreadsheetPreview } from "@/components/auditor/SpreadsheetPreview";
 import { DEFAULT_ACCESS, sampleSmsAlerts, type AuditAccess } from "@/lib/auditor";
-import { parseSpreadsheetFile } from "@/lib/spreadsheetFile";
+import { parseSpreadsheetFile, parseDelimitedTable, downloadTableAsExcel } from "@/lib/spreadsheetFile";
 import { cn } from "@/lib/utils";
 
 type SourceType = "sms" | "email" | "pdf" | "open_banking";
@@ -101,6 +102,7 @@ const AuditorConnect = () => {
   const [oauthConn, setOauthConn] = useState<{ provider: "gmail" | "outlook"; email: string; refreshToken: string } | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [parsingPdf, setParsingPdf] = useState(false);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
   // Locked-PDF handling. The password lives only in memory for the duration of
   // the unlock request and is never persisted.
   const [pdfPassword, setPdfPassword] = useState("");
@@ -246,9 +248,18 @@ const AuditorConnect = () => {
         const content = await file.text();
         if (!content.trim()) throw new Error("That spreadsheet looks empty.");
         setFileContent(content);
+        // Build the same rows the auditor will read so the user can preview the
+        // conversion. If this fails we simply fall back to the raw text view.
+        try {
+          const previewTable = await parseDelimitedTable(content);
+          setFileTable(previewTable.length > 0 ? previewTable : null);
+        } catch (previewErr) {
+          console.error(previewErr);
+          setFileTable(null);
+        }
         toast({
           title: "Spreadsheet loaded!",
-          description: "Review the data below, then run your audit. Income and expenses are totalled straight from the columns.",
+          description: "Review the converted rows below, then proceed. Income and expenses are totalled straight from the columns.",
         });
       } catch (err) {
         console.error(err);
@@ -274,7 +285,7 @@ const AuditorConnect = () => {
         setFileContent(preview);
         toast({
           title: "Spreadsheet loaded!",
-          description: `Read ${table.length} row(s). Income and expenses are totalled straight from the columns.`,
+          description: `Read ${table.length} row(s). Review the converted rows below, then proceed.`,
         });
       } catch (err) {
         console.error(err);
@@ -315,7 +326,7 @@ const AuditorConnect = () => {
       setFileTable(Array.isArray(data.table) && data.table.length > 0 ? data.table : null);
       toast({
         title: "PDF parsed!",
-        description: `Extracted ${data.pages ?? 1} page(s). Review the text below, then run your audit.`,
+        description: `Extracted ${data.pages ?? 1} page(s). Review the converted spreadsheet below, then proceed.`,
       });
     } catch (err) {
       console.error(err);
@@ -364,7 +375,7 @@ const AuditorConnect = () => {
       setPdfPassword("");
       toast({
         title: "PDF unlocked!",
-        description: `Extracted ${data.pages ?? 1} page(s). Review the text below, then run your audit.`,
+        description: `Extracted ${data.pages ?? 1} page(s). Review the converted spreadsheet below, then proceed.`,
       });
     } catch (err) {
       console.error(err);
@@ -379,6 +390,25 @@ const AuditorConnect = () => {
     setPendingPdfPath("");
     setPdfPassword("");
     setPasswordError(null);
+  };
+
+  // Write the converted table out as a real .xlsx so the user can open the
+  // statement in Excel and check the conversion offline before auditing.
+  const handleDownloadExcel = async () => {
+    if (!fileTable || fileTable.length === 0) return;
+    setDownloadingExcel(true);
+    try {
+      await downloadTableAsExcel(fileTable, fileName || "statement");
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "Could not build the Excel file",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingExcel(false);
+    }
   };
 
   const fetchBankEmails = async () => {
@@ -412,7 +442,7 @@ const AuditorConnect = () => {
       setText(data.text);
       setFetchResult({
         ok: true,
-        message: `Fetched ${data.fetched} bank message(s). Review and click "Start Audit Now" below.`,
+        message: `Fetched ${data.fetched} bank message(s). Review and click "Proceed to Audit" below.`,
       });
     } catch (err) {
       console.error(err);
@@ -719,11 +749,9 @@ const AuditorConnect = () => {
                 {fileContent && !parsingPdf && (
                   <p className="text-xs text-green-600 flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3" />
-                    {uploadKind === "csv"
-                      ? "Spreadsheet loaded — columns will be totalled directly."
-                      : fileTable
-                        ? "Table extracted — credits and debits will be totalled directly."
-                        : "Text extracted — ready to audit."}
+                    {fileTable
+                      ? "Spreadsheet ready — review it below, then proceed."
+                      : "Text extracted — ready to audit."}
                   </p>
                 )}
                 {needsPdfPassword && (
@@ -775,30 +803,66 @@ const AuditorConnect = () => {
                     </p>
                   </div>
                 )}
-                <div>
-                  <Label htmlFor="pdf-text">
-                    Statement text {fileContent ? "extracted from your PDF — review or edit it" : "— or paste it here"}
-                  </Label>
-                  <Textarea
-                    id="pdf-text"
-                    value={fileContent}
-                    onChange={(e) => {
-                      // Editing the text invalidates the parsed table, so the
-                      // auditor falls back to reading the edited text.
-                      setFileContent(e.target.value);
-                      setFileTable(null);
-                    }}
-                    rows={10}
-                    placeholder="Upload a PDF above and the text we read from it will appear here, or paste the statement content here..."
-                    className="mt-1 font-mono text-xs"
-                  />
-                  {fileContent && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      This is exactly what the auditor reads. If a transaction is missing or garbled,
-                      fix it here before running the audit.
-                    </p>
-                  )}
-                </div>
+                {fileTable && fileTable.length > 0 ? (
+                  <>
+                    <SpreadsheetPreview
+                      table={fileTable}
+                      fileName={fileName}
+                      onDownload={handleDownloadExcel}
+                      downloading={downloadingExcel}
+                    />
+                    {uploadKind !== "xlsx" && (
+                      <details className="rounded-lg border bg-muted/20 p-3">
+                        <summary className="text-xs font-medium cursor-pointer text-muted-foreground">
+                          View or edit the raw text instead
+                        </summary>
+                        <div className="mt-3">
+                          <Textarea
+                            id="pdf-text"
+                            value={fileContent}
+                            onChange={(e) => {
+                              // Editing the text invalidates the converted table,
+                              // so the auditor falls back to reading the text.
+                              setFileContent(e.target.value);
+                              setFileTable(null);
+                            }}
+                            rows={10}
+                            className="font-mono text-xs"
+                          />
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Editing the text switches the audit back to reading the text instead of the
+                            converted spreadsheet.
+                          </p>
+                        </div>
+                      </details>
+                    )}
+                  </>
+                ) : (
+                  <div>
+                    <Label htmlFor="pdf-text">
+                      Statement text {fileContent ? "extracted from your file — review or edit it" : "— or paste it here"}
+                    </Label>
+                    <Textarea
+                      id="pdf-text"
+                      value={fileContent}
+                      onChange={(e) => {
+                        // Editing the text invalidates the parsed table, so the
+                        // auditor falls back to reading the edited text.
+                        setFileContent(e.target.value);
+                        setFileTable(null);
+                      }}
+                      rows={10}
+                      placeholder="Upload a statement above and the text we read from it will appear here, or paste the statement content here..."
+                      className="mt-1 font-mono text-xs"
+                    />
+                    {fileContent && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        This is exactly what the auditor reads. If a transaction is missing or garbled,
+                        fix it here before proceeding.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div>
@@ -957,11 +1021,11 @@ const AuditorConnect = () => {
             <div className="flex flex-col sm:flex-row gap-3">
               <Button size="lg" className="flex-1" onClick={runAudit} disabled={!canRun}>
                 <RefreshCw className="w-4 h-4 mr-2" />
-                Start Audit Now
+                Proceed to Audit
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Your audit totals the credits and debits for the selected period
+              The audit totals the credits and debits in the converted spreadsheet for the selected period
             </p>
           </div>
         )}
