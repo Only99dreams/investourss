@@ -10,6 +10,10 @@ import { cn } from "@/lib/utils";
  */
 export interface SpreadsheetPreviewProps {
   table: (string | number)[][];
+  /** Overrides the default "Converted spreadsheet" heading. */
+  title?: string;
+  /** Overrides the default row/column summary line. */
+  description?: string;
   /** Original file name, used for the Excel download. */
   fileName?: string;
   onDownload?: () => void;
@@ -33,6 +37,8 @@ function columnLabel(index: number): string {
 
 export function SpreadsheetPreview({
   table,
+  title,
+  description,
   fileName,
   onDownload,
   downloading = false,
@@ -50,12 +56,13 @@ export function SpreadsheetPreview({
           <div className="space-y-1">
             <CardTitle className="text-base flex items-center gap-2">
               <Table2 className="w-4 h-4 text-primary" />
-              Converted spreadsheet
+              {title ?? "Converted spreadsheet"}
             </CardTitle>
             <CardDescription>
-              {table.length.toLocaleString()} row{table.length === 1 ? "" : "s"}
-              {columns > 0 ? ` × ${columns} column${columns === 1 ? "" : "s"}` : ""}. This is what the
-              audit will total — check it before you proceed.
+              {description
+                ?? `${table.length.toLocaleString()} row${table.length === 1 ? "" : "s"}${
+                  columns > 0 ? ` × ${columns} column${columns === 1 ? "" : "s"}` : ""
+                }. This is what the audit will total — check it before you proceed.`}
             </CardDescription>
           </div>
           {onDownload && (

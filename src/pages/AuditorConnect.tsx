@@ -18,8 +18,14 @@ import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import { Footer } from "@/components/ui/Footer";
 import { SpreadsheetPreview } from "@/components/auditor/SpreadsheetPreview";
-import { DEFAULT_ACCESS, sampleSmsAlerts, type AuditAccess } from "@/lib/auditor";
-import { parseSpreadsheetFile, parseDelimitedTable, downloadTableAsExcel } from "@/lib/spreadsheetFile";
+import { DEFAULT_ACCESS, sampleSmsAlerts, formatNaira, type AuditAccess } from "@/lib/auditor";
+import {
+  parseSpreadsheetFile,
+  parseDelimitedTable,
+  downloadTableAsExcel,
+  buildCleanedStatement,
+  type CleanedStatement,
+} from "@/lib/spreadsheetFile";
 import { cn } from "@/lib/utils";
 
 type SourceType = "sms" | "email" | "pdf" | "open_banking";
@@ -103,6 +109,11 @@ const AuditorConnect = () => {
   const [connecting, setConnecting] = useState(false);
   const [parsingPdf, setParsingPdf] = useState(false);
   const [downloadingExcel, setDownloadingExcel] = useState(false);
+  // The converted table rebuilt with explicit Debit/Credit columns, so the user
+  // can check the cleaned numbers before proceeding.
+  const [cleanedStatement, setCleanedStatement] = useState<CleanedStatement | null>(null);
+  const [cleaningStatement, setCleaningStatement] = useState(false);
+  const [previewMode, setPreviewMode] = useState<"cleaned" | "raw">("cleaned");
   // Locked-PDF handling. The password lives only in memory for the duration of
   // the unlock request and is never persisted.
   const [pdfPassword, setPdfPassword] = useState("");
@@ -210,6 +221,26 @@ const AuditorConnect = () => {
     setPdfPassword("");
     setPasswordError(null);
   }, [sourceType]);
+
+  // Rebuild the converted rows with explicit Debit/Credit columns whenever a
+  // new table arrives or the audit period changes. Uses the audit's own rules,
+  // so what the user reviews is exactly what gets totalled.
+  useEffect(() => {
+    let cancelled = false;
+    if (!fileTable || fileTable.length === 0) {
+      setCleanedStatement(null);
+      return () => { cancelled = true; };
+    }
+    setCleaningStatement(true);
+    buildCleanedStatement(fileTable, statementPeriod)
+      .then((result) => { if (!cancelled) setCleanedStatement(result); })
+      .catch((err) => {
+        console.error(err);
+        if (!cancelled) setCleanedStatement(null);
+      })
+      .finally(() => { if (!cancelled) setCleaningStatement(false); });
+    return () => { cancelled = true; };
+  }, [fileTable, statementPeriod]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -393,12 +424,16 @@ const AuditorConnect = () => {
   };
 
   // Write the converted table out as a real .xlsx so the user can open the
-  // statement in Excel and check the conversion offline before auditing.
+  // statement in Excel and check the conversion offline before auditing. The
+  // cleaned Debit/Credit table is what gets written by default.
   const handleDownloadExcel = async () => {
-    if (!fileTable || fileTable.length === 0) return;
+    const cleaned = previewMode === "cleaned" ? cleanedStatement : null;
+    const tableToExport = cleaned ? cleaned.rows : fileTable;
+    if (!tableToExport || tableToExport.length === 0) return;
+    const stem = (fileName || "statement").replace(/\.[^.]+$/, "");
     setDownloadingExcel(true);
     try {
-      await downloadTableAsExcel(fileTable, fileName || "statement");
+      await downloadTableAsExcel(tableToExport, `${stem || "statement"}${cleaned ? "-cleaned" : ""}`);
     } catch (err) {
       console.error(err);
       toast({
@@ -805,8 +840,73 @@ const AuditorConnect = () => {
                 )}
                 {fileTable && fileTable.length > 0 ? (
                   <>
+                    {cleanedStatement && (
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-medium">Converted spreadsheet</p>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant={previewMode === "cleaned" ? "default" : "outline"}
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setPreviewMode("cleaned")}
+                          >
+                            Cleaned Debit / Credit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={previewMode === "raw" ? "default" : "outline"}
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setPreviewMode("raw")}
+                          >
+                            As extracted
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {previewMode === "cleaned" && cleanedStatement && !cleaningStatement && (
+                      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs space-y-1">
+                        <div className="flex flex-wrap gap-x-5 gap-y-1">
+                          <span className="font-medium text-red-600">
+                            Debit (money out): {formatNaira(cleanedStatement.totalDebit)}
+                          </span>
+                          <span className="font-medium text-green-600">
+                            Credit (money in): {formatNaira(cleanedStatement.totalCredit)}
+                          </span>
+                        </div>
+                        <p className="text-muted-foreground">
+                          {cleanedStatement.transactionCount} transaction(s) in the audit window ·{" "}
+                          {cleanedStatement.periodStart} to {cleanedStatement.periodEnd}
+                          {!cleanedStatement.coversWholeStatement
+                            ? " · totals cover only the selected period"
+                            : ""}
+                          .
+                        </p>
+                        {cleanedStatement.warnings.length > 0 && (
+                          <ul className="text-muted-foreground list-disc pl-4">
+                            {cleanedStatement.warnings.map((warning) => (
+                              <li key={warning}>{warning}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                    {cleaningStatement && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Cleaning the converted rows...
+                      </p>
+                    )}
                     <SpreadsheetPreview
-                      table={fileTable}
+                      table={previewMode === "cleaned" && cleanedStatement ? cleanedStatement.rows : fileTable}
+                      title={
+                        previewMode === "raw" || !cleanedStatement
+                          ? "Converted statement (as extracted)"
+                          : "Cleaned statement — one row per transaction"
+                      }
+                      description={
+                        previewMode === "raw" || !cleanedStatement
+                          ? "The rows exactly as they were read from your file."
+                          : "Every amount sits in one Debit or Credit column, with a TOTAL row — the audit counts exactly these rows."
+                      }
                       fileName={fileName}
                       onDownload={handleDownloadExcel}
                       downloading={downloadingExcel}

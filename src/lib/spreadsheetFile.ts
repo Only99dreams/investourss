@@ -77,3 +77,67 @@ export async function downloadTableAsExcel(table: SheetTable, baseName: string):
   const stem = (baseName || "statement").replace(/\.(pdf|csv|tsv|xlsx|xls|txt)$/i, "");
   XLSX.writeFile(workbook, `${stem || "statement"}.xlsx`);
 }
+
+export interface CleanedStatement {
+  /** Header row, one row per audited transaction, then a labelled TOTAL row. */
+  rows: SheetTable;
+  totalDebit: number;
+  totalCredit: number;
+  transactionCount: number;
+  periodStart: string;
+  periodEnd: string;
+  auditMonths: number;
+  statementMonthsCovered: number;
+  /** Extraction warnings (ignored summary rows, unreadable dates, …). */
+  warnings: string[];
+  /** True when the window covers the whole statement (totals match the sheet). */
+  coversWholeStatement: boolean;
+}
+
+/**
+ * Rebuild a converted statement as a clean, canonical table with explicit
+ * Debit and Credit columns — one row per transaction the audit will count, plus
+ * a labelled TOTAL row. Amounts are plain numbers (no currency symbols or
+ * signs) so every figure clearly sits in the right column and adds up.
+ *
+ * The extraction/reconciliation rules live in the audit Edge Function; they are
+ * dynamically imported here so (a) they stay out of the initial bundle and
+ * (b) the preview is built with exactly the rules the audit itself uses.
+ */
+export async function buildCleanedStatement(
+  table: SheetTable,
+  auditMonths: number,
+  referenceDate: Date = new Date(),
+): Promise<CleanedStatement> {
+  const [{ tableToTransactions }, { applyFinancialAuditRules }] = await Promise.all([
+    import("../../supabase/functions/financial-audit/spreadsheet.ts"),
+    import("../../supabase/functions/financial-audit/auditRules.ts"),
+  ]);
+
+  const parsed = tableToTransactions(table);
+  const report = applyFinancialAuditRules(parsed.transactions, auditMonths, referenceDate);
+
+  const rows: SheetTable = [["Date", "Description", "Debit", "Credit"]];
+  for (const transaction of report.transactions) {
+    rows.push([
+      transaction.date ?? "",
+      transaction.description,
+      transaction.type === "debit" ? transaction.amount : "",
+      transaction.type === "credit" ? transaction.amount : "",
+    ]);
+  }
+  rows.push(["TOTAL", "", report.totalExpenses, report.totalIncome]);
+
+  return {
+    rows,
+    totalDebit: report.totalExpenses,
+    totalCredit: report.totalIncome,
+    transactionCount: report.transactions.length,
+    periodStart: report.periodStart,
+    periodEnd: report.periodEnd,
+    auditMonths: report.auditMonths,
+    statementMonthsCovered: report.statementMonthsCovered,
+    warnings: parsed.warnings,
+    coversWholeStatement: report.auditMonths >= report.statementMonthsCovered,
+  };
+}

@@ -181,6 +181,23 @@ Applied deterministically before calculation:
   debit rows inside it; the statement's own printed totals / running balance are
   only cross-checked when the window covers the whole statement.
 
+### 5a. Review gate (upload page)
+
+Before an audit runs, the converted statement is shown to the user as a
+spreadsheet and the run button is "Proceed to Audit". The preview has two views:
+
+- **Cleaned Debit / Credit** (default): one row per transaction the audit will
+  count, with the amount placed in a single **Debit** or **Credit** column and a
+  labelled `TOTAL` row, plus a header line showing the windowed Debit/Credit
+  totals. Summary/opening/closing rows are removed.
+- **As extracted**: the raw converted rows, so any extraction problem is visible.
+
+The cleaned view is built with the *same* rules the audit uses
+(`tableToTransactions` → `applyFinancialAuditRules`), so what the user reviews is
+exactly what gets totalled. Those modules are dynamically imported on the client
+to stay out of the initial bundle. "Download Excel" writes the currently shown
+view as an `.xlsx` (the cleaned view by default).
+
 ## 6. Self / internal transfers
 
 Net cash flow is **not** profit. Transfers between the user's own accounts
