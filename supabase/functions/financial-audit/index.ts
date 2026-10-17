@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
 import { parseCsv, tableToTransactions } from "./spreadsheet.ts";
+import {
+  buildExplainPrompt,
+  buildInsightFacts,
+  EXPLAIN_SYSTEM_PROMPT,
+  sanitizeInsights,
+  type SanitizedInsights,
+} from "./insights.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,6 +28,12 @@ const MAX_RATE_LIMIT_DELAY_MS = 55_000;
 // the chunk a couple of times before falling back to the weaker local parser.
 const MAX_EMPTY_EXTRACTION_RETRIES = 2;
 const EMPTY_EXTRACTION_RETRY_MS = 1500;
+// The AI interpretation layer runs after the figures are final. It is additive
+// and best-effort: a shorter budget keeps it from eating the edge function's
+// wall clock, and it is skipped entirely if the audit already took too long.
+const EXPLAIN_TIMEOUT_MS = 20_000;
+const EXPLAIN_MAX_TOKENS = 2048;
+const EXPLAIN_SKIP_AFTER_MS = 100_000;
 
 function getRateLimitDelayMs(response: Response): number | null {
   const retryAfter = response.headers.get("retry-after");
@@ -213,12 +226,11 @@ function clampReport(r: AiRecord, accountType: string, months: number, sourceTex
   return buildReportFromRules(applyFinancialAuditRules(verifiedTransactions, months), accountType);
 }
 
-async function callAI(
-  text: string,
-  sourceType: string,
-  accountType: string,
-  auditMonths: number,
+async function callGroq(
+  systemPrompt: string,
+  userPrompt: string,
   signal: AbortSignal,
+  options: { maxCompletionTokens?: number } = {},
 ) {
   // Meta Muse configuration (disabled)
   // const MODEL_API_KEY = Deno.env.get("MODEL_API_KEY");
@@ -240,18 +252,18 @@ async function callAI(
       body: JSON.stringify({
         // model: "muse-spark-1.3",
         model: "openai/gpt-oss-120b",
-        max_completion_tokens: MAX_COMPLETION_TOKENS,
-        // Deterministic extraction so the same statement produces the same
-        // transactions (and therefore the same totals) on every run.
+        max_completion_tokens: options.maxCompletionTokens ?? MAX_COMPLETION_TOKENS,
+        // Deterministic output so the same statement produces the same result
+        // (and therefore the same totals/wordings) on every run.
         temperature: 0,
         // gpt-oss is a reasoning model: max_completion_tokens covers both the
         // hidden reasoning and the JSON answer. Keep reasoning low so the token
-        // budget is spent on transactions instead of being truncated mid-output.
+        // budget is spent on the answer instead of being truncated mid-output.
         reasoning_effort: "low",
         response_format: { type: "json_object" },
         messages: [
-          { role: "developer", content: SYSTEM_PROMPT },
-          { role: "user", content: buildUserPrompt({ text, sourceType, accountType, auditMonths }) },
+          { role: "developer", content: systemPrompt },
+          { role: "user", content: userPrompt },
         ],
       }),
     },
@@ -285,6 +297,43 @@ async function callAI(
     return JSON.parse(content.slice(start, end + 1));
   } catch {
     throw { retryable: true, message: "AI returned invalid JSON" };
+  }
+}
+
+async function callAI(
+  text: string,
+  sourceType: string,
+  accountType: string,
+  auditMonths: number,
+  signal: AbortSignal,
+) {
+  return callGroq(
+    SYSTEM_PROMPT,
+    buildUserPrompt({ text, sourceType, accountType, auditMonths }),
+    signal,
+  );
+}
+
+// The explain-only layer: send the verified figures to the AI and keep only the
+// prose whose numbers are all traceable back to those figures.
+async function explainReport(
+  report: ReturnType<typeof buildReportFromRules>,
+  notes: string[],
+): Promise<{ insights: SanitizedInsights | null; droppedFigures: number; status: string }> {
+  const facts = buildInsightFacts(report, notes);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EXPLAIN_TIMEOUT_MS);
+  try {
+    const raw = await callGroq(
+      EXPLAIN_SYSTEM_PROMPT,
+      buildExplainPrompt(facts),
+      controller.signal,
+      { maxCompletionTokens: EXPLAIN_MAX_TOKENS },
+    );
+    const { insights, droppedFigures } = sanitizeInsights(raw, facts);
+    return { insights, droppedFigures, status: insights ? "generated" : "failed" };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -387,6 +436,7 @@ serve(async (req) => {
   }
 
   try {
+    const startedAt = Date.now();
     const body = await req.json();
     const { text = '', sourceType = 'sms', accountType = 'individual' } = body;
     const auditMonths = normalizeAuditMonths(body.auditMonths);
@@ -557,6 +607,34 @@ serve(async (req) => {
       });
     }
 
+    // Additive AI interpretation of the FINAL figures. The AI only explains the
+    // numbers the rules engine already produced — every figure in its prose is
+    // verified against the report and anything untraceable is dropped. If the AI
+    // is unavailable or slow, the report is still complete without this layer.
+    let insightStatus = "skipped";
+    let insightDroppedFigures = 0;
+    if (!Deno.env.get("GROQ_API_KEY")) {
+      insightStatus = "unavailable";
+    } else if (Date.now() - startedAt >= EXPLAIN_SKIP_AFTER_MS) {
+      insightStatus = "skipped";
+    } else {
+      try {
+        const explained = await explainReport(report, [
+          ...(sheetResult?.warnings ?? []),
+          ...validationNotes,
+        ]);
+        insightStatus = explained.status;
+        insightDroppedFigures = explained.droppedFigures;
+        if (explained.insights) {
+          report = { ...report, insights: explained.insights };
+        }
+      } catch (err) {
+        const e = err as { message?: string };
+        console.warn("AI explanation failed; the report is still complete:", e?.message || err);
+        insightStatus = "failed";
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       report,
@@ -571,6 +649,10 @@ serve(async (req) => {
           dataQuality: report.dataQuality,
           warnings: sheetResult?.warnings ?? [],
           notes: validationNotes,
+          aiExplanation: {
+            status: insightStatus,
+            droppedFigures: insightDroppedFigures,
+          },
         },
       },
     }), {

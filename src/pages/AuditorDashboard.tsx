@@ -20,6 +20,7 @@ import { CreditReadinessAssessment } from "@/components/auditor/CreditReadinessA
 import { BlurredReport } from "@/components/auditor/BlurredReport";
 import { FinancialHealthGuidance, type FinancialHealthGuidanceProps } from "@/components/auditor/FinancialHealthGuidance";
 import { AuditDataQuality, type AuditValidation } from "@/components/auditor/AuditDataQuality";
+import { AiInterpretation, type AuditInsights } from "@/components/auditor/AiInterpretation";
 import { ContinuousReportingSection } from "@/components/dashboard/sections/ContinuousReportingSection";
 import {
   HEALTH_STATUS_META, auditPeriodLabel, formatNaira, monthLabel,
@@ -409,6 +410,14 @@ export const AuditorDashboard = ({ embedded = false }: AuditorDashboardProps) =>
         <AuditDataQuality
           className="mb-8"
           validation={viewingAudit.report_json?.validation as AuditValidation}
+        />
+      )}
+
+      {/* AI interpretation — additive prose over the verified figures */}
+      {!loading && viewingAudit && !viewingAudit.is_locked && !!viewingAudit.report_json?.insights && (
+        <AiInterpretation
+          className="mb-8"
+          insights={viewingAudit.report_json?.insights as AuditInsights}
         />
       )}
 

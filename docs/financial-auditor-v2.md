@@ -207,7 +207,7 @@ the exact pattern list.
 | 4 | PDF → table via x-clustering | `parse-statement/pdfText.ts` | done |
 | 5 | Validation + reconciliation surfaced in the report | `auditRules.ts`, report UI | done |
 | 6 | Internal-transfer exclusion (needs product sign-off) | `auditRules.ts` | pending |
-| 7 | AI explain-only layer | `financial-audit/index.ts` | pending |
+| 7 | AI explain-only layer | `financial-audit/insights.ts` | done |
 
 ### What shipped in phases 1–5
 
@@ -242,6 +242,33 @@ the exact pattern list.
   the audit switches to the text parse (and says so in the notes).
 - `AuditorConnect.tsx`: uploads `.csv` (read in-browser) or `.pdf`; passes the
   parsed table/csv to the auditor; editing the text falls back to the text path.
+
+### What shipped in phase 7 (AI explain-only)
+
+- `insights.ts` (new): `buildInsightFacts(report, notes)` turns the finished
+  report into a compact FACTS payload — totals, cash flow, savings rate, score,
+  category/income shares (computed deterministically, never by the AI), the
+  monthly breakdown and the reconciliation status. `buildExplainPrompt(facts)`
+  renders it, and `EXPLAIN_SYSTEM_PROMPT` carries the hard rules (only FACTS
+  numbers, no arithmetic, cash flow is not profit, a flag is never confirmed
+  fraud, say when a figure is missing).
+- `sanitizeInsights(raw, facts)` verifies the AI's prose **after** it returns:
+  every number in the output must be traceable to a fact (money to the cent,
+  percentages within rounding, counts/scales allowed). A sentence or bullet that
+  cites an invented or recalculated figure is dropped, not shown. `textMatchesFacts`
+  and `extractNumberTokens` expose the check for testing.
+- `financial-audit/index.ts`: `callAI` was split into a shared `callGroq(...)`
+  plus a thin extraction wrapper, and a new best-effort `explainReport(...)` runs
+  **after** the figures are final. The explanation is skipped when the audit has
+  already used most of the edge function's wall clock and never fails the audit;
+  `report.insights` and `meta.validation.aiExplanation` (`status`, `droppedFigures`)
+  carry the result.
+- `AiInterpretation.tsx` (new): renders `report_json.insights` on the dashboard
+  (summary + what's working / watch out for / next steps + data-quality notes) as
+  an additive section labelled as explaining the verified figures.
+- Tests: `insights.test.mjs` covers facts building, prompt contents, number
+  allow-listing (real vs invented figures, percentage tolerance, dates,
+  structural integers), sentence/bullet dropping and empty/failed responses.
 
 ### Known follow-ups
 

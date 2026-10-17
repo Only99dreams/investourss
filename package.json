@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:audit-rules": "node --experimental-strip-types --test supabase/functions/financial-audit/auditRules.test.mjs supabase/functions/parse-statement/pdfText.test.mjs supabase/functions/financial-audit/spreadsheet.test.mjs src/lib/spreadsheetFile.test.mjs"
+    "test:audit-rules": "node --experimental-strip-types --test supabase/functions/financial-audit/auditRules.test.mjs supabase/functions/parse-statement/pdfText.test.mjs supabase/functions/financial-audit/spreadsheet.test.mjs src/lib/spreadsheetFile.test.mjs supabase/functions/financial-audit/insights.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
