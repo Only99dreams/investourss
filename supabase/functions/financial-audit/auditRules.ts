@@ -32,7 +32,6 @@ export interface FinancialAuditRulesResult {
   dataQuality: { excludedInvalidTransactions: number; duplicateRowsIgnored: number; undatedTransactions: number; excludedUndatedTransactions: number };
 }
 
-const VALID_MONTHS = [1, 3, 6];
 const DEFAULT_CHUNK_SIZE = 12000;
 const MAX_NUMERIC_15_2_EXCLUSIVE = 10_000_000_000_000;
 const LEAKAGE_DESCRIPTION = /\b(bank fee|bank charge|service charge|maintenance fee|commission|stamp duty|vat)\b/i;
@@ -516,12 +515,33 @@ export function assessParserConfidence(
   return { reliable: true, reason: "ok" };
 }
 
+// Number of calendar months a statement spans, from its earliest to its latest
+// dated transaction (at least 1). The audit uses this so it always covers the
+// whole uploaded statement rather than trimming it to a fixed month count.
+export function monthsCoveredByStatement(
+  dates: (string | undefined)[],
+  referenceDate = new Date(),
+): number {
+  const referenceDay = referenceDate.toISOString().slice(0, 10);
+  const valid = dates
+    .filter((date): date is string => validIsoDate(date) && date <= referenceDay)
+    .sort();
+  if (valid.length === 0) return 1;
+  const first = valid[0];
+  const last = valid[valid.length - 1];
+  const firstYear = Number(first.slice(0, 4));
+  const firstMonth = Number(first.slice(5, 7));
+  const lastYear = Number(last.slice(0, 4));
+  const lastMonth = Number(last.slice(5, 7));
+  return Math.max(1, (lastYear - firstYear) * 12 + (lastMonth - firstMonth) + 1);
+}
+
 export function getAuditWindow(
   dates: (string | undefined)[],
   months: number,
   referenceDate = new Date(),
 ): { periodStart: string; periodEnd: string; auditMonths: number } {
-  const auditMonths = VALID_MONTHS.includes(months) ? months : 1;
+  const auditMonths = Number.isFinite(months) && months >= 1 ? Math.floor(months) : 1;
   const referenceDay = referenceDate.toISOString().slice(0, 10);
   // Anchor the audit on the FIRST month present in the statement so an uploaded
   // statement (e.g. January to December) is always audited from the earliest
@@ -647,19 +667,24 @@ function sumBy<T>(items: T[], key: (item: T) => string, amount: (item: T) => num
 
 export function applyFinancialAuditRules(
   rawTransactions: unknown[],
-  requestedMonths: number,
+  // Kept for call-site compatibility (the frontend still sends a period). The
+  // audit always covers the whole statement, so this value is not used to trim.
+  _requestedMonths: number,
   referenceDate = new Date(),
 ): FinancialAuditRulesResult {
   const normalized = normalizeTransactions(rawTransactions);
-  const window = getAuditWindow(normalized.transactions.map((transaction) => transaction.date), requestedMonths, referenceDate);
-  // Every credit/debit row inside the audited period must count toward income and
-  // expenses — the totals are simply the sum of the credit rows and the debit
-  // rows. A row with no date cannot be placed in the window, but dropping it
-  // loses money from the totals, so it is only dropped when the statement
-  // clearly spans beyond the selected period (some dated row falls outside the
-  // window). When the window already covers every dated row — the normal case
-  // for a monthly statement — undated rows belong to the same period and are
-  // kept, so a row the extractor could not date is never silently dropped.
+  // The audit covers the WHOLE uploaded statement: total income is the sum of
+  // every credit row and total expenses is the sum of every debit row. The
+  // statement is not trimmed to a fixed month window, so no credit/debit row is
+  // left out of the totals. The reported period spans the statement's own first
+  // through last month.
+  const statementDates = normalized.transactions.map((transaction) => transaction.date);
+  const statementMonths = monthsCoveredByStatement(statementDates, referenceDate);
+  const window = getAuditWindow(statementDates, statementMonths, referenceDate);
+  // Every credit/debit row is counted toward income and expenses. A row with no
+  // date cannot be placed precisely, but dropping it would lose money from the
+  // totals, so it is only excluded when it genuinely cannot belong to the audited
+  // period (i.e. the period does not already cover the whole statement).
   const windowDatedTransactions = normalized.transactions.filter(
     (transaction): transaction is FinancialTransaction & { date: string } => Boolean(transaction.date),
   );

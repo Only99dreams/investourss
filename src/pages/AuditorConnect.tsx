@@ -587,7 +587,7 @@ const AuditorConnect = () => {
           <CardContent className="p-6">
             <div className="flex flex-wrap items-center gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="statement-period">Statement period</Label>
+                <Label htmlFor="statement-period">Bank emails to fetch</Label>
                 <select
                   id="statement-period"
                   value={statementPeriod}
@@ -600,9 +600,8 @@ const AuditorConnect = () => {
                 </select>
               </div>
               <p className="text-xs text-muted-foreground flex-1 min-w-[200px]">
-                {statementPeriod === 1
-                  ? "Your free audit covers the first month in your statement (starting from its earliest transaction)."
-                  : `Auditing ${statementPeriod} months starting from the first month in your statement.`}
+                How many months of bank alerts to fetch when connecting Gmail. Your audit
+                always totals every credit and debit in your entire uploaded statement.
               </p>
             </div>
           </CardContent>
@@ -868,7 +867,7 @@ const AuditorConnect = () => {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-2">
-              Auditing {statementPeriod} month{statementPeriod === 1 ? "" : "s"} starting from the first month in your statement
+              Your audit totals every credit and debit in your statement
             </p>
           </div>
         )}

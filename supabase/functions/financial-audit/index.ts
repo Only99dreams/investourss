@@ -78,7 +78,7 @@ Rules:
 - IGNORE balance figures: running balance, closing balance, available balance, opening balance, subtotals, headers, footers, page numbers and account numbers. Never treat a balance as a transaction amount.
 - Use the transaction's own amount, copied exactly (do not round, convert, or derive it from a balance).
 - If a row has separate debit and credit columns, report the amount from the column that matches that transaction's direction and ignore the other column.
-- Do not omit transactions because they are old. The application audits the requested duration starting from the first (earliest) month present in the statement.
+- Do not omit transactions because they are old. Extract every transaction in the record; the application totals the entire statement (all credits and all debits).
 - Do not invent, merge, or deduplicate transactions. Only deduplicate exact repeated source IDs.
 - Do not infer missing dates, amounts, or directions. Include only transactions whose direction is explicit in the source.
 - Write every amount as a positive number (e.g. 10000, never -10000); direction is expressed only in "type".
@@ -92,9 +92,7 @@ Return only valid JSON with this shape and no other keys:
 {"transactions":[{"date":"yyyy-mm-dd or empty","description":"...","amount":0,"type":"credit or debit","category":"...","transactionId":"exact source ID or empty"}]}`;
 
 function buildUserPrompt(input: { text: string; sourceType: string; accountType: string; auditMonths?: number }): string {
-  const months = input.auditMonths ?? DEFAULT_AUDIT_MONTHS;
-  return `Selected audit duration: ${months} month${months === 1 ? "" : "s"}.
-Extract every transaction present in this complete record chunk. Do not compare dates with today's date or omit older entries; the application selects the requested duration starting from the earliest valid transaction month across all chunks. Copy source IDs exactly when present.
+  return `Extract every transaction present in this complete record chunk. Do not compare dates with today's date or omit older entries; the application totals the entire statement (every credit and every debit). Copy source IDs exactly when present.
 
 Financial data source: ${input.sourceType}
 Account type: ${input.accountType || 'individual'}

@@ -87,7 +87,10 @@ test("audits a January-to-December statement from January for a 1-month audit", 
   );
 });
 
-test("derives totals and score inputs from only normalized in-window transactions", () => {
+test("sums every credit row and every debit row across the whole statement", () => {
+  // The audit is not trimmed to the first N months: income is the sum of all
+  // credit rows and expenses the sum of all debit rows, however many months the
+  // statement spans.
   const report = applyFinancialAuditRules([
     { transactionId: "salary-1", date: "2025-01-30", description: "Salary", amount: 1000, type: "credit" },
     { transactionId: "fee-1", date: "2025-02-25", description: "Bank fee", amount: 20, type: "debit" },
@@ -95,14 +98,17 @@ test("derives totals and score inputs from only normalized in-window transaction
   ], 3, new Date("2025-06-30T12:00:00Z"));
 
   assert.equal(report.totalIncome, 1000);
-  assert.equal(report.totalExpenses, 20);
-  assert.equal(report.cashFlow, 980);
-  assert.equal(report.savingsRate, 98);
+  assert.equal(report.totalExpenses, 920);
+  assert.equal(report.cashFlow, 80);
+  assert.equal(report.savingsRate, 8);
   assert.equal(report.score, report.healthScore);
-  assert.equal(report.transactions.length, 2);
+  assert.equal(report.transactions.length, 3);
+  assert.equal(report.periodStart, "2025-01-01");
+  assert.equal(report.periodEnd, "2025-06-30");
   assert.deepEqual(report.monthlyObservations, [
     { month: "2025-01", income: 1000, outflows: 0, source: "calculated", verification: "unverified" },
     { month: "2025-02", income: 0, outflows: 20, source: "calculated", verification: "unverified" },
+    { month: "2025-06", income: 0, outflows: 900, source: "calculated", verification: "unverified" },
   ]);
   assert.equal(report.recoverableAmount, 0);
   assert.deepEqual(report.recoverable, []);
@@ -171,28 +177,18 @@ test("excludes amounts and selected-period totals beyond NUMERIC(15,2) capacity"
   assert.equal(report.dataQuality.excludedInvalidTransactions, 2);
 });
 
-test("keeps undated rows when the window covers the whole statement, drops them when it does not", () => {
-  // A monthly statement: every dated row sits inside the selected window, so an
-  // undated credit belongs to the same period and must stay in the totals.
-  const samePeriod = applyFinancialAuditRules([
+test("keeps undated rows so no credit/debit row is lost from the totals", () => {
+  // The audit covers the whole statement, so an undated credit/debit row still
+  // belongs to it and must count. Dropping it would understate the totals.
+  const mixed = applyFinancialAuditRules([
     { date: "2025-02-10", description: "Salary", amount: 1000, type: "credit" },
-    { description: "Undated transfer", amount: 5000, type: "credit" },
-  ], 1, new Date("2025-02-28T12:00:00Z"));
-
-  assert.equal(samePeriod.totalIncome, 6000);
-  assert.equal(samePeriod.dataQuality.excludedUndatedTransactions, 0);
-  assert.equal(samePeriod.dataQuality.undatedTransactions, 1);
-
-  // A multi-month statement audited for one month: a dated row falls outside the
-  // window, so undated rows cannot be placed and are excluded.
-  const spansBeyondWindow = applyFinancialAuditRules([
-    { date: "2025-01-10", description: "January salary", amount: 1000, type: "credit" },
     { date: "2025-06-10", description: "June salary", amount: 9000, type: "credit" },
     { description: "Undated transfer", amount: 5000, type: "credit" },
   ], 1, new Date("2025-06-30T12:00:00Z"));
 
-  assert.equal(spansBeyondWindow.totalIncome, 1000);
-  assert.equal(spansBeyondWindow.dataQuality.excludedUndatedTransactions, 1);
+  assert.equal(mixed.totalIncome, 15000);
+  assert.equal(mixed.dataQuality.excludedUndatedTransactions, 0);
+  assert.equal(mixed.dataQuality.undatedTransactions, 1);
 
   const allUndated = applyFinancialAuditRules([
     { description: "Undated credit", amount: 200, type: "credit" },
