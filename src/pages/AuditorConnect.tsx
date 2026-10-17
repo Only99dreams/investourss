@@ -395,7 +395,7 @@ const AuditorConnect = () => {
         if (creditError) throw creditError;
       }
 
-      // 2. Run the AI audit analysis
+      // 2. Run the audit analysis (deterministic, calculated from the extracted text)
       const { data: aiData, error: aiError } = await supabase.functions.invoke("financial-audit", {
         body: {
           text: activeText,
@@ -406,25 +406,13 @@ const AuditorConnect = () => {
       });
 
       if (aiError) throw new Error(await functionErrorMessage(aiError));
-      if (!aiData?.success) throw new Error(aiData?.error || "AI audit failed");
+      if (!aiData?.success) throw new Error(aiData?.error || "Audit failed");
 
       const report = aiData.report;
       const meta = aiData.meta ?? {};
 
-      // Warn when the nondeterministic AI extractor had to be used: the local
-      // parser read zero rows (unusual layout), so the figures may not match the
-      // statement exactly. Re-running with a corrected/pasted text gives a
-      // deterministic, tallying result.
-      if (meta.extractionMethod === "ai") {
-        toast({
-          title: "Audit completed (AI fallback used)",
-          description: "The statement layout couldn't be read row-by-row, so AI extraction was used and totals may not match exactly. Check the extracted text above, fix any gaps, and run again for a precise tally.",
-          variant: "destructive",
-        });
-      }
-
-      // Persist extraction diagnostics so the dashboard/history shows whether
-      // the tally came from the deterministic parser or from AI fallback.
+      // The totals are always calculated deterministically from the extracted
+      // statement text (no AI), so the figures tally with the statement.
       const reportWithMeta = {
         ...report,
         extractionMethod: meta.extractionMethod,
