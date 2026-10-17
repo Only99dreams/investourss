@@ -203,14 +203,19 @@ the exact pattern list.
 | 0 | This plan | `docs/` | done |
 | 1 | `tableToTransactions` + `parseCsv`, unit-tested | `financial-audit/spreadsheet.ts` | done |
 | 2 | Accept `.csv` upload end-to-end; reuse rules engine | `parse-statement`, `AuditorConnect` | done |
-| 3 | `.xlsx` parsing (SheetJS) → same table | `parse-statement` | pending |
+| 3 | `.xlsx` parsing (SheetJS) → same table | `src/lib/spreadsheetFile.ts` | done |
 | 4 | PDF → table via x-clustering | `parse-statement/pdfText.ts` | done |
 | 5 | Validation + reconciliation surfaced in the report | `auditRules.ts`, report UI | done |
 | 6 | Internal-transfer exclusion (needs product sign-off) | `auditRules.ts` | pending |
 | 7 | AI explain-only layer | `financial-audit/index.ts` | pending |
 
-### What shipped in phases 1, 2, 4 and 5
+### What shipped in phases 1–5
 
+- `.xlsx` (and `.xls`) uploads: `src/lib/spreadsheetFile.ts` lazily loads
+  SheetJS only when a workbook is uploaded (it stays code-split, ~424 kB), reads
+  the first sheet, turns dates into ISO strings and numbers into numerics, drops
+  blank rows, and reuses the same `table` path as CSV/PDF. An editable text
+  preview still backs the textarea.
 - `spreadsheet.ts`: `parseCsv` + `tableToTransactions` (header detection, column
   mapping, direction resolution, summary-row skipping, reconciliation).
 - `pdfText.ts`: `itemsToText` (unchanged behaviour) plus `itemsToTable` /

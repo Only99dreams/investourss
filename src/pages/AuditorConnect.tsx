@@ -18,12 +18,13 @@ import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import { Footer } from "@/components/ui/Footer";
 import { DEFAULT_ACCESS, sampleSmsAlerts, type AuditAccess } from "@/lib/auditor";
+import { parseSpreadsheetFile } from "@/lib/spreadsheetFile";
 import { cn } from "@/lib/utils";
 
 type SourceType = "sms" | "email" | "pdf" | "open_banking";
 
 const SOURCES: { type: SourceType; label: string; icon: typeof MessageSquare; hint: string; soon?: boolean }[] = [
-  { type: "pdf", label: "PDF Statement", icon: FileUp, hint: "Upload a PDF or CSV bank statement" },
+  { type: "pdf", label: "Statement File", icon: FileUp, hint: "Upload a PDF, CSV or Excel bank statement" },
   { type: "open_banking", label: "Open Banking", icon: Landmark, hint: "Connect your bank securely", soon: true },
   { type: "email", label: "Email Notifications", icon: Mail, hint: "Paste or upload email statement", soon: true },
   { type: "sms", label: "SMS Alert", icon: MessageSquare, hint: "Paste your bank SMS alerts", soon: true },
@@ -85,11 +86,11 @@ const AuditorConnect = () => {
   const [fileName, setFileName] = useState("");
   const [fileContent, setFileContent] = useState("");
   // Structured rows parsed from a PDF (see the parse-statement edge function) or
-  // a CSV upload. When present the auditor sums these columns directly instead
-  // of re-reading the text, so the totals can't drift.
-  const [fileTable, setFileTable] = useState<string[][] | null>(null);
+  // a CSV/Excel upload. When present the auditor sums these columns directly
+  // instead of re-reading the text, so the totals can't drift.
+  const [fileTable, setFileTable] = useState<(string | number)[][] | null>(null);
   // How the current upload arrived, so we know which structured payload to send.
-  const [uploadKind, setUploadKind] = useState<"pdf" | "csv" | null>(null);
+  const [uploadKind, setUploadKind] = useState<"pdf" | "csv" | "xlsx" | null>(null);
   const [running, setRunning] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   // Most banks issue a statement every month, so the default audit window is
@@ -224,6 +225,10 @@ const AuditorConnect = () => {
       return;
     }
     const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
+    const isXlsx = file.name.toLowerCase().endsWith(".xlsx")
+      || file.name.toLowerCase().endsWith(".xls")
+      || file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      || file.type === "application/vnd.ms-excel";
     setFileName(file.name);
     setFileContent("");
     setFileTable(null);
@@ -232,8 +237,8 @@ const AuditorConnect = () => {
     setPasswordError(null);
     setPdfPassword("");
 
-    // A CSV/spreadsheet is read straight into rows: no PDF reconstruction and no
-    // AI. The columns are summed deterministically by the auditor.
+    // A CSV/Excel spreadsheet is read straight into rows: no PDF reconstruction
+    // and no AI. The columns are summed deterministically by the auditor.
     if (isCsv) {
       setUploadKind("csv");
       setParsingPdf(true);
@@ -250,6 +255,33 @@ const AuditorConnect = () => {
         setFileContent("");
         toast({
           title: "Could not read spreadsheet",
+          description: err instanceof Error ? err.message : "Please try another file.",
+          variant: "destructive",
+        });
+      } finally {
+        setParsingPdf(false);
+      }
+      return;
+    }
+
+    if (isXlsx) {
+      setUploadKind("xlsx");
+      setParsingPdf(true);
+      try {
+        const { table, preview } = await parseSpreadsheetFile(file);
+        if (table.length === 0) throw new Error("That workbook looks empty.");
+        setFileTable(table);
+        setFileContent(preview);
+        toast({
+          title: "Spreadsheet loaded!",
+          description: `Read ${table.length} row(s). Income and expenses are totalled straight from the columns.`,
+        });
+      } catch (err) {
+        console.error(err);
+        setFileContent("");
+        setFileTable(null);
+        toast({
+          title: "Could not read workbook",
           description: err instanceof Error ? err.message : "Please try another file.",
           variant: "destructive",
         });
@@ -674,8 +706,8 @@ const AuditorConnect = () => {
             ) : sourceType === "pdf" ? (
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="pdf">Upload statement (PDF or CSV)</Label>
-                  <Input id="pdf" type="file" accept=".pdf,.txt,.csv" onChange={handleFileUpload} disabled={parsingPdf} />
+                  <Label htmlFor="pdf">Upload statement (PDF, CSV or Excel)</Label>
+                  <Input id="pdf" type="file" accept=".pdf,.txt,.csv,.xlsx,.xls" onChange={handleFileUpload} disabled={parsingPdf} />
                 </div>
                 {parsingPdf && (
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
