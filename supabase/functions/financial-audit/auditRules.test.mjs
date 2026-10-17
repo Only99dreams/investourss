@@ -121,6 +121,20 @@ test("deduplicates only repeated source IDs and retains repeated real transactio
   assert.equal(report.dataQuality.duplicateRowsIgnored, 1);
 });
 
+test("keeps distinct transactions that reuse the same reference", () => {
+  // Wallet exports repeat a channel/reference code across many rows. Those are
+  // different transactions and must both count; only exact duplicate rows are
+  // collapsed.
+  const report = applyFinancialAuditRules([
+    { transactionId: "NIP-001", date: "2025-02-10", description: "Auto-save", amount: 200, type: "debit" },
+    { transactionId: "NIP-001", date: "2025-02-11", description: "Auto-save", amount: 300, type: "debit" },
+  ], 1, new Date("2025-02-28T12:00:00Z"));
+
+  assert.equal(report.transactions.length, 2);
+  assert.equal(report.totalExpenses, 500);
+  assert.equal(report.dataQuality.duplicateRowsIgnored, 0);
+});
+
 test("derives categories from source descriptions, not model category labels", () => {
   const report = applyFinancialAuditRules([
     { date: "2025-02-10", description: "Monthly bank fee", amount: 10, type: "debit", category: "shopping" },
@@ -157,15 +171,28 @@ test("excludes amounts and selected-period totals beyond NUMERIC(15,2) capacity"
   assert.equal(report.dataQuality.excludedInvalidTransactions, 2);
 });
 
-test("keeps undated rows only when the whole dataset is undated", () => {
-  const mixed = applyFinancialAuditRules([
+test("keeps undated rows when the window covers the whole statement, drops them when it does not", () => {
+  // A monthly statement: every dated row sits inside the selected window, so an
+  // undated credit belongs to the same period and must stay in the totals.
+  const samePeriod = applyFinancialAuditRules([
     { date: "2025-02-10", description: "Salary", amount: 1000, type: "credit" },
     { description: "Undated transfer", amount: 5000, type: "credit" },
   ], 1, new Date("2025-02-28T12:00:00Z"));
 
-  assert.equal(mixed.totalIncome, 1000);
-  assert.equal(mixed.dataQuality.excludedUndatedTransactions, 1);
-  assert.equal(mixed.dataQuality.undatedTransactions, 0);
+  assert.equal(samePeriod.totalIncome, 6000);
+  assert.equal(samePeriod.dataQuality.excludedUndatedTransactions, 0);
+  assert.equal(samePeriod.dataQuality.undatedTransactions, 1);
+
+  // A multi-month statement audited for one month: a dated row falls outside the
+  // window, so undated rows cannot be placed and are excluded.
+  const spansBeyondWindow = applyFinancialAuditRules([
+    { date: "2025-01-10", description: "January salary", amount: 1000, type: "credit" },
+    { date: "2025-06-10", description: "June salary", amount: 9000, type: "credit" },
+    { description: "Undated transfer", amount: 5000, type: "credit" },
+  ], 1, new Date("2025-06-30T12:00:00Z"));
+
+  assert.equal(spansBeyondWindow.totalIncome, 1000);
+  assert.equal(spansBeyondWindow.dataQuality.excludedUndatedTransactions, 1);
 
   const allUndated = applyFinancialAuditRules([
     { description: "Undated credit", amount: 200, type: "credit" },
@@ -176,6 +203,20 @@ test("keeps undated rows only when the whole dataset is undated", () => {
   assert.equal(allUndated.totalExpenses, 50);
   assert.equal(allUndated.dataQuality.excludedUndatedTransactions, 0);
   assert.equal(allUndated.dataQuality.undatedTransactions, 2);
+});
+
+test("counts a credit/debit row that has no description", () => {
+  // The extractor can return a real row without a description (e.g. a
+  // column-grouped statement whose description column did not pair up). The
+  // money still moved, so it must stay in income/expenses.
+  const report = applyFinancialAuditRules([
+    { date: "2025-02-10", description: "", amount: 2500, type: "credit" },
+    { date: "2025-02-11", amount: 400, type: "debit" },
+  ], 1, new Date("2025-02-28T12:00:00Z"));
+
+  assert.equal(report.totalIncome, 2500);
+  assert.equal(report.totalExpenses, 400);
+  assert.equal(report.dataQuality.excludedInvalidTransactions, 0);
 });
 
 test("counts signed amounts by their explicit direction, not their sign", () => {

@@ -549,7 +549,7 @@ function normalizeTransactions(raw: unknown[]): {
   duplicateRowsIgnored: number;
   undatedTransactions: number;
 } {
-  const seenIds = new Set<string>();
+  const seenSignatures = new Set<string>();
   let excludedInvalidTransactions = 0;
   let duplicateRowsIgnored = 0;
   let undatedTransactions = 0;
@@ -576,12 +576,16 @@ function normalizeTransactions(raw: unknown[]): {
     const hasDate = value.date !== undefined && value.date !== null && value.date !== "";
     const date = coerceIsoDate(value.date);
     const roundedAmount = roundMoney(magnitude);
+    // A row is only invalid when it carries no direction, no usable amount, or a
+    // date the extractor mangled. An empty description is NOT a reason to drop a
+    // row: the money still moved, so it must still count toward income or
+    // expenses. This is how a credit/debit row from a column-grouped statement
+    // (where the description column may not pair up) stays in the totals.
     if (
       !type
       || !Number.isFinite(amount)
       || magnitude === 0
       || roundedAmount >= MAX_NUMERIC_15_2_EXCLUSIVE
-      || !description
       || (hasDate && !date)
     ) {
       excludedInvalidTransactions += 1;
@@ -591,18 +595,26 @@ function normalizeTransactions(raw: unknown[]): {
 
     const rawId = value.transactionId;
     const transactionId = typeof rawId === "string" && rawId.trim() ? rawId.trim() : undefined;
-    if (transactionId && seenIds.has(transactionId)) {
-      duplicateRowsIgnored += 1;
-      continue;
+    const resolvedDescription = description || "Transaction";
+    // Only drop a row that is an EXACT duplicate of one already kept. Deduping on
+    // the source ID alone silently deleted distinct transactions that happen to
+    // share a reference (common on wallet exports where many rows carry the same
+    // channel/ref code), which understated income and expenses.
+    if (transactionId) {
+      const signature = [transactionId, date ?? "", resolvedDescription, roundedAmount, type].join("\u0000");
+      if (seenSignatures.has(signature)) {
+        duplicateRowsIgnored += 1;
+        continue;
+      }
+      seenSignatures.add(signature);
     }
-    if (transactionId) seenIds.add(transactionId);
 
     transactions.push({
       date,
-      description,
+      description: resolvedDescription,
       amount: roundedAmount,
       type,
-      category: categoryFromDescription(description),
+      category: categoryFromDescription(resolvedDescription),
       transactionId,
     });
   }
@@ -640,16 +652,26 @@ export function applyFinancialAuditRules(
 ): FinancialAuditRulesResult {
   const normalized = normalizeTransactions(rawTransactions);
   const window = getAuditWindow(normalized.transactions.map((transaction) => transaction.date), requestedMonths, referenceDate);
-  // Undated rows can't be placed inside a dated audit window. Keeping them would
-  // silently inflate the audited month's totals (and make them disagree with the
-  // dated monthly breakdown), so they are only kept when the entire dataset is
-  // undated and the window has nothing better to anchor on.
-  const hasDatedTransactions = normalized.transactions.some((transaction) => Boolean(transaction.date));
+  // Every credit/debit row inside the audited period must count toward income and
+  // expenses — the totals are simply the sum of the credit rows and the debit
+  // rows. A row with no date cannot be placed in the window, but dropping it
+  // loses money from the totals, so it is only dropped when the statement
+  // clearly spans beyond the selected period (some dated row falls outside the
+  // window). When the window already covers every dated row — the normal case
+  // for a monthly statement — undated rows belong to the same period and are
+  // kept, so a row the extractor could not date is never silently dropped.
+  const windowDatedTransactions = normalized.transactions.filter(
+    (transaction): transaction is FinancialTransaction & { date: string } => Boolean(transaction.date),
+  );
+  const hasDatedTransactions = windowDatedTransactions.length > 0;
+  const allDatedInsideWindow = windowDatedTransactions.every(
+    (transaction) => transaction.date >= window.periodStart && transaction.date <= window.periodEnd,
+  );
   let excludedUndatedTransactions = 0;
   const selectedTransactions = normalized.transactions
     .filter((transaction) => {
       if (transaction.date) return transaction.date >= window.periodStart && transaction.date <= window.periodEnd;
-      if (hasDatedTransactions) {
+      if (hasDatedTransactions && !allDatedInsideWindow) {
         excludedUndatedTransactions += 1;
         return false;
       }
