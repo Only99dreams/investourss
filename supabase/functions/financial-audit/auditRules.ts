@@ -80,17 +80,17 @@ export function splitFinancialRecords(text: string, maxCharacters = DEFAULT_CHUN
   return chunks;
 }
 
-function roundMoney(value: number): number {
+export function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function validIsoDate(value: unknown): value is string {
+export function validIsoDate(value: unknown): value is string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-function normalizeAmount(value: unknown): number {
+export function normalizeAmount(value: unknown): number {
   if (typeof value === "number") return value;
   if (typeof value !== "string") return Number.NaN;
   const normalized = value
@@ -173,7 +173,7 @@ function parseSourceDate(value: string): string | undefined {
 // full "2025-02-10T00:00:00Z". A row with a real, recoverable date should not be
 // thrown away (that would silently drop money from the totals), so try to parse
 // whatever date is present before treating it as missing.
-function coerceIsoDate(value: unknown): string | undefined {
+export function coerceIsoDate(value: unknown): string | undefined {
   if (validIsoDate(value)) return value;
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
