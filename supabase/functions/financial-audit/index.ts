@@ -300,6 +300,15 @@ async function callGroq(
   }
 }
 
+export interface AiExtractionTrace {
+  /** Chunks the statement was split into. */
+  total: number;
+  /** How each chunk was read: by the model, or by the local parser after the model failed. */
+  chunks: { index: number; source: "ai" | "local"; rows: number }[];
+}
+
+let aiExtractionTrace: AiExtractionTrace | null = null;
+
 async function callAI(
   text: string,
   sourceType: string,
@@ -345,6 +354,11 @@ async function extractTransactionsWithAI(
 ): Promise<unknown[]> {
   const chunks = splitFinancialRecords(text);
   const results: unknown[][] = Array.from({ length: chunks.length }, () => []);
+  // Recorded per run so a report can show how many rows were read by the model
+  // versus by the deterministic parser. Two audits of one statement should read
+  // the same rows the same way; when they do not, this says where.
+  const trace: AiExtractionTrace = { total: chunks.length, chunks: [] };
+  aiExtractionTrace = trace;
   const controller = new AbortController();
   let timedOut = false;
   const timeout = setTimeout(() => {
@@ -401,7 +415,9 @@ async function extractTransactionsWithAI(
       };
 
       try {
-        results[index] = await extractChunk(chunks[index]);
+        const transactions = await extractChunk(chunks[index]);
+        trace.chunks.push({ index, source: "ai", rows: transactions.length });
+        results[index] = transactions;
       } catch (error) {
         const e = error as { status?: number; message?: string };
         // Rate limits and the global timeout should abort the whole run.
@@ -409,6 +425,7 @@ async function extractTransactionsWithAI(
         // A single unrecoverable chunk (e.g. truncation) must not discard the
         // transactions already extracted from the other chunks.
         console.warn(`AI extraction failed for chunk ${index}, using local parser:`, e?.message || e);
+        trace.chunks.push({ index, source: "local", rows: parseFinancialRecords(chunks[index]).length });
         results[index] = parseFinancialRecords(chunks[index]);
       }
     }
@@ -464,6 +481,9 @@ serve(async (req) => {
     let extractionMethod: "deterministic-parser" | "ai" | "spreadsheet" = "deterministic-parser";
     let reconciliation: AuditReconciliation | null = null;
     const validationNotes: string[] = [];
+    // Reset per request: a completed run reports the trace, a failed one does not
+    // carry over the previous request's.
+    aiExtractionTrace = null;
 
     if (hasSheetTransactions) {
       // Preferred path: the statement arrived as structured rows (an uploaded
@@ -532,6 +552,21 @@ serve(async (req) => {
           report = clampReport({ transactions: extractedTransactions }, accountType, auditMonths, text);
           excludedCount = report.dataQuality.excludedInvalidTransactions;
           extractionMethod = "ai";
+          // Say so, per chunk, in the notes: the same statement must be read the
+          // same way on every run, and this is the record that proves whether it
+          // was. A chunk read by the model on one run and by the local parser on
+          // the next is the one thing that can move the figures.
+          const viaModel = (aiExtractionTrace?.chunks ?? []).filter((chunk) => chunk.source === "ai").length;
+          const totalChunks = aiExtractionTrace?.total ?? 0;
+          if (totalChunks > 1 || viaModel < totalChunks) {
+            validationNotes.push(
+              `The statement text could not be read reliably row-by-row, so ${viaModel} of ${totalChunks} text chunk(s) were read by the AI extractor (the rest by the local parser). Income and expenses are still summed only from credit/debit rows.`,
+            );
+          } else {
+            validationNotes.push(
+              `The statement text could not be read reliably row-by-row, so its ${totalChunks} text chunk(s) were read by the AI extractor. Income and expenses are still summed only from credit/debit rows.`,
+            );
+          }
         } catch (err) {
           // AI gateway failure -> deterministic fallback so the audit still completes.
           const e = err as { status?: number; message?: string };
@@ -663,6 +698,7 @@ serve(async (req) => {
             status: insightStatus,
             droppedFigures: insightDroppedFigures,
           },
+          aiExtraction: aiExtractionTrace,
         },
       },
     }), {
