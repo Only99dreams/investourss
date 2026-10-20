@@ -21,6 +21,20 @@ The Python port is **byte-for-byte equivalent to the TypeScript app**
 runs one battery of inputs through both implementations and fails on any
 difference, so a statement audited here gives the same figures as the web app.
 
+Both sides are also held to one shared fixture, `tools/expected-rules.txt`, which
+is the file to update if the arithmetic ever changes on purpose:
+
+```
+tools\pyenv\python.exe -m unittest discover -s tools\tests   # Python side
+npm run test:audit-rules                                     # TypeScript side
+```
+
+One thing Python does not share with the app: `assessParserConfidence`, the
+heuristic that decides whether a text read is trustworthy enough to skip the AI
+extractor. The desktop tool has no AI to fall back to, so it always keeps the
+deterministic rows it read — and it reports them, which is what makes it the
+reference to check the app's OpenCV upload against.
+
 ## Run it
 
 ```

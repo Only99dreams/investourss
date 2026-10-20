@@ -1,0 +1,25 @@
+# The figures the shared audit fixture must produce, whichever port reads it.
+#
+# The Python port (tools/statement_audit/audit_rules.py) and the TypeScript rules
+# (supabase/functions/financial-audit/auditRules.ts) are two translations of the
+# same table, so this file is the single set of figures both are held to:
+#
+#   Python:     tools\pyenv\python.exe -m unittest discover -s tools\tests
+#   TypeScript: npm run test:audit-rules
+#
+# Fixture: four plain rows for January 2025.
+#   2025-01-05  Salary              500,000.00  credit
+#   2025-01-10  Rent payment        120,000.00  debit
+#   2025-01-11  Bank fee              2,000.00  debit   (a leakage)
+#   2025-01-12  Transfer to John     58,000.00  debit
+#
+# Income 500,000.00 - expenses 180,000.00 = cash flow 320,000.00, a 64% savings
+# rate; cash flow positive (+15) and savings >= 20% (+10) on the 55-point base
+# gives 80, and one leakage costs 2 points, so the score is 78 ("good").
+rulesVersion = 1.0.0
+totalIncome = 500000.00
+totalExpenses = 180000.00
+cashFlow = 320000.00
+savingsRate = 64.00
+score = 78
+healthStatus = good

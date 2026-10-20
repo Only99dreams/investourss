@@ -529,3 +529,40 @@ test("comparePrintedTotals reports a mismatch and leaves absent totals undefined
   assert.equal(totals.debitMatches, undefined);
   assert.equal(totals.printedDebit, undefined);
 });
+
+// The Python port sums the same statement on the desktop side, so both ports are
+// held to the figures in tools/expected-rules.txt. This half guards the file the
+// app actually shows; tools/tests/test_rules_parity.py guards Python against the
+// same file, so an arithmetic change on either side is caught straight away.
+test("the shared parity fixture produces the documented figures", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  const { dirname, resolve } = await import("node:path");
+
+  const here = dirname(fileURLToPath(import.meta.url));
+  const raw = await readFile(resolve(here, "../../../tools/expected-rules.txt"), "utf8");
+  const expected = Object.fromEntries(
+    raw.split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#") && line.includes("="))
+      .map((line) => {
+        const at = line.indexOf("=");
+        return [line.slice(0, at).trim(), line.slice(at + 1).trim()];
+      }),
+  );
+
+  const report = applyFinancialAuditRules([
+    { date: "2025-01-05", description: "Salary", amount: 500000, type: "credit" },
+    { date: "2025-01-10", description: "Rent payment", amount: 120000, type: "debit" },
+    { date: "2025-01-11", description: "Bank fee", amount: 2000, type: "debit" },
+    { date: "2025-01-12", description: "Transfer to John", amount: 58000, type: "debit" },
+  ], 1);
+
+  assert.equal(report.rulesVersion, expected.rulesVersion);
+  assert.equal(report.totalIncome, Number(expected.totalIncome));
+  assert.equal(report.totalExpenses, Number(expected.totalExpenses));
+  assert.equal(report.cashFlow, Number(expected.cashFlow));
+  assert.equal(report.savingsRate, Number(expected.savingsRate));
+  assert.equal(report.score, Number(expected.score));
+  assert.equal(report.healthStatus, expected.healthStatus);
+});
