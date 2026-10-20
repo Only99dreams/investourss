@@ -134,8 +134,22 @@ fail** — the built-in Deno parser answers instead, so wiring this up can never
 break the auditor.
 
 Note: `.csv` / `.xlsx` uploads are read in the browser by SheetJS (there is no
-page to look at), and the audit arithmetic stays in the Edge Function, whose
-rules the Python port is proven identical to.
+page to look at), so they do not pass through the service — only PDF uploads do.
+The audit arithmetic stays in the Edge Function, whose rules the Python port is
+proven identical to.
+
+### Reading a statement on a PC, outside the app
+
+`audit-statement.cmd` runs the same reader and spreadsheet rules on a file, so a
+statement can be checked without uploading it:
+
+```
+tools\audit-statement.cmd "C:\path\to\statement.pdf"
+```
+
+It writes a `<name>-audit\` folder beside the PDF (a workbook and a CSV) and
+prints the totals — the figures to compare against the app when auditing the
+same statement by hand.
 
 ### Run it
 
