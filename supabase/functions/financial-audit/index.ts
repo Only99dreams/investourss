@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
+import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, parseFinancialRecords, rowsAreFinal, splitFinancialRecords } from "./auditRules.ts";
 import { parseCsv, tableToTransactions } from "./spreadsheet.ts";
 import {
   buildExplainPrompt,
@@ -457,6 +457,9 @@ serve(async (req) => {
     const body = await req.json();
     const { text = '', sourceType = 'sms', accountType = 'individual' } = body;
     const auditMonths = normalizeAuditMonths(body.auditMonths);
+    // Which reader produced `body.table`: "opencv" when the OpenCV service read
+    // the page, absent for a CSV/XLSX the browser parsed.
+    const tableReader = typeof body.tableReader === "string" ? body.tableReader : "";
 
     // Structured input (an uploaded CSV/XLSX, or a PDF reconstructed into a
     // table) is read deterministically: the rules engine sums the credit and
@@ -497,10 +500,45 @@ serve(async (req) => {
       extractionMethod = "spreadsheet";
       reconciliation = { source: "balance", ...sheetResult!.reconciliation };
 
-      // Guarded cross-check: a reconstructed table can mis-assign a column. If
-      // the table does not tally with its own running balance, but the raw
-      // statement text reproduces the bank's printed totals, trust the text.
-      if (!reconciliation.reconciled && text.trim().length >= 10) {
+      // The reader handed us rows that are a real reading of the statement, so
+      // they ARE the answer. The figures are whatever the columns sum to; the AI
+      // extractor is never asked to re-read (it could change the totals, and the
+      // same upload must always give the same numbers). Any disagreement is
+      // reported with the figures instead of silently changing them.
+      if (rowsAreFinal(tableReader)) {
+        const by = tableReader === "opencv" ? "The OpenCV reader read this statement" : "The uploaded spreadsheet was already a table";
+        const printed = text.trim().length >= 10 ? comparePrintedTotals(text, []) : null;
+        const againstBalance = reconciliation.reconciled;
+        const againstPrinted = printed
+          ? printed.creditMatches === true || printed.debitMatches === true
+          : null;
+        if (againstBalance) {
+          reconciliation = { ...reconciliation, source: "balance", reconciled: true };
+          validationNotes.push(
+            `${by}, and its rows tally with their own running balance, so the figures are exactly what the columns sum to.`,
+          );
+        } else if (againstPrinted === true) {
+          reconciliation = {
+            source: "printed-totals",
+            reconciled: true,
+            credits: printed!.parsedCredits,
+            debits: printed!.parsedDebits,
+            printedCredit: printed!.printedCredit,
+            printedDebit: printed!.printedDebit,
+          };
+          validationNotes.push(
+            `${by}, and its summed credits and debits match the totals the statement prints.`,
+          );
+        } else {
+          validationNotes.push(
+            `${by}; the figures are what its columns sum to. The rows could not be cross-checked against a running balance or the statement's printed totals, so confirm the conversion below looks right.`,
+          );
+        }
+      } else if (!reconciliation.reconciled && text.trim().length >= 10) {
+        // Guarded cross-check for tables read without OpenCV: a reconstructed
+        // table can mis-assign a column. If the table does not tally with its
+        // own running balance, but the raw statement text reproduces the bank's
+        // printed totals, trust the text.
         const textTransactions = parseFinancialRecords(text);
         const printed = comparePrintedTotals(text, textTransactions);
         const textIsTrustworthy = textTransactions.length > 0

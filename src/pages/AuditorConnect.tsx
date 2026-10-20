@@ -98,6 +98,11 @@ const AuditorConnect = () => {
   const [fileTable, setFileTable] = useState<(string | number)[][] | null>(null);
   // How the current upload arrived, so we know which structured payload to send.
   const [uploadKind, setUploadKind] = useState<"pdf" | "csv" | "xlsx" | null>(null);
+  // Which reader produced `fileTable` ("opencv" when the OpenCV service read the
+  // page, "pdf-parse" for the text-only fallback). Sent to the auditor so it
+  // knows whether the rows are a real reading of the page — and therefore must
+  // not be replaced by the AI extractor.
+  const [fileTableReader, setFileTableReader] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   // Most banks issue a statement every month, so the default audit window is
@@ -265,6 +270,7 @@ const AuditorConnect = () => {
     setFileName(file.name);
     setFileContent("");
     setFileTable(null);
+    setFileTableReader(null);
     setNeedsPdfPassword(false);
     setPendingPdfPath("");
     setPasswordError(null);
@@ -284,9 +290,11 @@ const AuditorConnect = () => {
         try {
           const previewTable = await parseDelimitedTable(content);
           setFileTable(previewTable.length > 0 ? previewTable : null);
+          setFileTableReader("browser-spreadsheet");
         } catch (previewErr) {
           console.error(previewErr);
           setFileTable(null);
+          setFileTableReader(null);
         }
         toast({
           title: "Spreadsheet loaded!",
@@ -313,6 +321,9 @@ const AuditorConnect = () => {
         const { table, preview } = await parseSpreadsheetFile(file);
         if (table.length === 0) throw new Error("That workbook looks empty.");
         setFileTable(table);
+        // An Excel workbook is already a grid, so no reader had to reconstruct
+        // it: its rows are trustworthy on their own.
+        setFileTableReader("browser-spreadsheet");
         setFileContent(preview);
         toast({
           title: "Spreadsheet loaded!",
@@ -355,6 +366,7 @@ const AuditorConnect = () => {
 
       setFileContent(data.text);
       setFileTable(Array.isArray(data.table) && data.table.length > 0 ? data.table : null);
+      setFileTableReader(typeof data.reader === "string" ? data.reader : null);
       toast({
         title: "PDF parsed!",
         description: `Extracted ${data.pages ?? 1} page(s)${
@@ -365,6 +377,7 @@ const AuditorConnect = () => {
       console.error(err);
       setFileContent("");
       setFileTable(null);
+      setFileTableReader(null);
       toast({
         title: "Could not read PDF",
         description:
@@ -403,6 +416,7 @@ const AuditorConnect = () => {
 
       setFileContent(data.text);
       setFileTable(Array.isArray(data.table) && data.table.length > 0 ? data.table : null);
+      setFileTableReader(typeof data.reader === "string" ? data.reader : null);
       setNeedsPdfPassword(false);
       setPendingPdfPath("");
       setPdfPassword("");
@@ -547,7 +561,13 @@ const AuditorConnect = () => {
       };
       if (sourceType === "pdf") {
         if (uploadKind === "csv") auditBody.csv = activeText;
-        else if (fileTable) auditBody.table = fileTable;
+        else if (fileTable) {
+          auditBody.table = fileTable;
+          // Tell the auditor what read the page. When OpenCV read it, these rows
+          // ARE the statement — the auditor keeps them instead of letting the AI
+          // extractor replace them, so the same upload always gives one answer.
+          if (fileTableReader) auditBody.tableReader = fileTableReader;
+        }
       }
 
       const { data: aiData, error: aiError } = await supabase.functions.invoke("financial-audit", {
@@ -929,6 +949,7 @@ const AuditorConnect = () => {
                               // so the auditor falls back to reading the text.
                               setFileContent(e.target.value);
                               setFileTable(null);
+                              setFileTableReader(null);
                             }}
                             rows={10}
                             className="font-mono text-xs"
@@ -954,6 +975,7 @@ const AuditorConnect = () => {
                         // auditor falls back to reading the edited text.
                         setFileContent(e.target.value);
                         setFileTable(null);
+                        setFileTableReader(null);
                       }}
                       rows={10}
                       placeholder="Upload a statement above and the text we read from it will appear here, or paste the statement content here..."

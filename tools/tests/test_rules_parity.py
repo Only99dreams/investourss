@@ -59,6 +59,15 @@ class RulesParityTest(unittest.TestCase):
         self.assertEqual(report.score, int(values["score"]))
         self.assertEqual(report.healthStatus, values["healthStatus"])
 
+    def test_the_port_agrees_on_which_readers_produce_final_rows(self) -> None:
+        # The same table the TypeScript suite asserts, so the desktop tool and
+        # the app classify a reader identically. A real reader's rows are kept;
+        # a text-reconstructed table may still be cross-checked.
+        for reader in ("opencv", "browser-spreadsheet"):
+            self.assertTrue(audit_rules.rows_are_final(reader), reader)
+        for reader in ("", "pdf-parse", "unknown-reader"):
+            self.assertFalse(audit_rules.rows_are_final(reader), reader)
+
 
 # Deliberately plain four rows: a salary credit, a rent debit, a bank charge
 # (the leakage category) and a transfer debit. Nothing here depends on layout,

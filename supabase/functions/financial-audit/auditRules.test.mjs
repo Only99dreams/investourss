@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, getAuditWindow, parseFinancialRecords, splitFinancialRecords } from "./auditRules.ts";
+import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, getAuditWindow, parseFinancialRecords, rowsAreFinal, splitFinancialRecords } from "./auditRules.ts";
 
 test("chunks long statements without dropping or reordering source text", () => {
   const source = `first record\r\n${"x".repeat(50001)}\r\nlast record`;
@@ -565,4 +565,21 @@ test("the shared parity fixture produces the documented figures", async () => {
   assert.equal(report.savingsRate, Number(expected.savingsRate));
   assert.equal(report.score, Number(expected.score));
   assert.equal(report.healthStatus, expected.healthStatus);
+});
+
+// The figures must not depend on whether a model happened to be reachable, so
+// when a real reader produced the rows the auditor keeps them. These are the
+// readers that count as real: the OpenCV service, and the browser for a file
+// that was already a spreadsheet.
+test("rows from a real reader are final and never re-read by AI", () => {
+  assert.equal(rowsAreFinal("opencv"), true);
+  assert.equal(rowsAreFinal("browser-spreadsheet"), true);
+});
+
+test("a table reconstructed from text without a real reader is not final", () => {
+  // No reader, an older client, or the pdf-parse text fallback: the caller may
+  // still cross-check these rows against the statement text.
+  assert.equal(rowsAreFinal(""), false);
+  assert.equal(rowsAreFinal("pdf-parse"), false);
+  assert.equal(rowsAreFinal("unknown-reader"), false);
 });

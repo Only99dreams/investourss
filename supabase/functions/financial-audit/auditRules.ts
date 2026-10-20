@@ -547,6 +547,25 @@ export function assessParserConfidence(
   return { reliable: true, reason: "ok" };
 }
 
+/**
+ * Whether the rows in a request must be trusted verbatim.
+ *
+ * A PDF the OpenCV service read arrives as rows, and those rows ARE the
+ * statement — re-reading their text with the AI extractor could change the
+ * totals, so the auditor keeps them instead. A CSV/XLSX the browser parsed also
+ * arrives as rows that nothing needs to re-read.
+ *
+ * The one table that is not final on its own is one reconstructed from text
+ * without OpenCV, where a column can be mis-assigned; the caller may then fall
+ * back to the statement text. Hence `false` for those.
+ *
+ * This lives in auditRules.ts, not index.ts, so it can be unit-tested without
+ * the Deno-only imports the edge function needs.
+ */
+export function rowsAreFinal(tableReader: string): boolean {
+  return tableReader === "opencv" || tableReader === "browser-spreadsheet";
+}
+
 // Number of calendar months a statement spans, from its earliest to its latest
 // dated transaction (at least 1). The audit uses this so it always covers the
 // whole uploaded statement rather than trimming it to a fixed month count.
