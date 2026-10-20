@@ -154,7 +154,8 @@ curl -X POST --data-binary "@statement.pdf" http://127.0.0.1:8787/parse
 ### Deploy it
 
 Any container host works (Render, Fly, Railway, a VPS…). A `Dockerfile` with
-Tesseract included is provided:
+Tesseract included is provided, and `render.yaml` at the repo root pins the
+Docker paths for Render (repo root → `tools/Dockerfile`, build context `tools`):
 
 ```
 docker build -f tools/Dockerfile -t statement-parser tools

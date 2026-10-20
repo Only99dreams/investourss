@@ -1,0 +1,19 @@
+# The OpenCV statement reader as a hosted service (see tools/README.md).
+#
+# Render reads this when you connect the repository as a Blueprint ("New" ->
+# "Blueprint"), which fills in the Docker paths for you. If you instead create
+# a Web Service by hand, set Dockerfile Path to `tools/Dockerfile` and the
+# build context directory to `tools`.
+services:
+  - type: web
+    name: statement-parser
+    runtime: docker
+    dockerfilePath: tools/Dockerfile
+    dockerContext: tools
+    healthCheckPath: /health
+    envVars:
+      # The shared secret: Render asks for the value when you approve the
+      # Blueprint, and you reuse the same string as OPENCV_PARSER_TOKEN in
+      # Supabase.
+      - key: PARSER_TOKEN
+        sync: false
