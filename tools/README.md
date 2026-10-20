@@ -120,6 +120,10 @@ never a silently wrong number:
   the date and the amount are unaffected. Follow-up.
 * **Two tables on one page.** The page's ruling is detected once, so a second
   table on the same page is not framed separately.
+* **A statement the text parser cannot read at all.** For a PDF read *without*
+  OpenCV (the `pdf-parse` fallback), the web auditor still falls back to the AI
+  extractor when the text read looks unreliable — that path has no page reading to
+  trust. Statements read by OpenCV never take it: their rows are kept as-is.
 
 ## The app reads every upload with OpenCV
 
@@ -146,6 +150,13 @@ password prompt is driven by the service's `PASSWORD_REQUIRED` /
 is installed on the service. **If the service is unreachable the upload does not
 fail** — the built-in Deno parser answers instead, so wiring this up can never
 break the auditor.
+
+When OpenCV read the page, its rows are **final**: the auditor sums the
+credit/debit columns and nothing re-reads them, so the same upload gives the same
+figures every time. If those rows do not tally with the statement's running
+balance or its printed totals, the report says so in its notes — it does not swap
+in different rows. That is what makes the app line up with
+`tools\audit-statement.cmd` on the same statement.
 
 Note: `.csv` / `.xlsx` uploads are read in the browser by SheetJS (there is no
 page to look at), so they do not pass through the service — only PDF uploads do.

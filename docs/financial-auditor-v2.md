@@ -200,11 +200,19 @@ arithmetic stays where it is (identical rules, §4).
 * **Every upload** is read by OpenCV, including locked PDFs (the service answers
   `PASSWORD_REQUIRED` / `INCORRECT_PASSWORD`, which is what drives the app's
   password prompt) and multi-page statements.
+* **OpenCV's rows are final.** When the reader that produced the table is OpenCV,
+  the auditor keeps those rows as-is. A model is never asked to re-read them, so
+  the same upload always yields the same figures — nothing non-deterministic sits
+  between the PDF and the totals. Disagreements with the running balance or the
+  statement's printed totals are *reported* in the notes with the figures, not
+  used to swap in different rows. (`rowsAreFinal` in `auditRules.ts` decides this;
+  a table reconstructed from text *without* OpenCV can still be cross-checked
+  against the statement text, as before.)
 * **Never a hard dependency.** If the service is unset, slow or erroring the
   function falls back to the built-in pdf-parse path, so an upload cannot fail
   because of it. Verified for a wrong token (401) and an unreachable host.
 * `.csv` / `.xlsx` uploads are structured already and are read in the browser;
-  there is no page to look at.
+  there is no page to look at. Their rows are final for the same reason.
 
 ## 5. Validation & cleaning rules
 
@@ -294,16 +302,22 @@ the exact pattern list.
 - `financial-audit`: accepts `table` (2D array) or `csv` (string). When present
   and usable it sums the credit/debit rows directly (`extractionMethod:
   "spreadsheet"`), skipping the AI entirely. Otherwise the existing text/AI path
-  is unchanged.
+  is unchanged. The request may also carry `tableReader` ("opencv" /
+  "browser-spreadsheet"); when it names a real reader the rows are kept verbatim
+  and never handed to the AI (see §4b).
 - `auditRules.ts`: `comparePrintedTotals(text, transactions)` returns the
   statement's printed credit/debit totals alongside the parser's sums and
   whether each side matches. `assessParserConfidence` now reuses it.
+  `rowsAreFinal(tableReader)` says whether a request's rows are a real reading of
+  the page and must therefore be trusted as-is.
 - Reconciliation + data quality in the report: the auditor returns a
   `meta.validation` block (`method`, `reconciled`, `reconciliation`,
-  `dataQuality`, `warnings`, `notes`) which `AuditorConnect` folds into
-  `report_json`. `AuditDataQuality.tsx` renders it on the dashboard: how the
+  `dataQuality`, `warnings`, `notes`, `aiExtraction`) which `AuditorConnect` folds
+  into `report_json`. `AuditDataQuality.tsx` renders it on the dashboard: how the
   statement was read, whether the totals reconcile, and any rows skipped /
-  duplicated / undated.
+  duplicated / undated. `aiExtraction` records, per text chunk, whether the model
+  or the local parser supplied the rows — the record to compare when two audits of
+  one statement are expected to match.
 - Guarded cross-check: if a reconstructed table does not tally with its own
   running balance, but the statement text reproduces the bank's printed totals,
   the audit switches to the text parse (and says so in the notes).
