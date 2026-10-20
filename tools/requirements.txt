@@ -1,0 +1,16 @@
+# Statement audit pipeline (tools/statement_audit)
+#
+# Installed into tools/pyenv with:
+#   tools\pyenv\python.exe -m pip install -r tools\requirements.txt
+#
+# PDFium (pypdfium2) is used instead of PyMuPDF because the wheels are
+# self-contained, so this runs on a machine with no Visual C++ redistributable.
+
+pypdfium2>=5,<6          # PDF rendering + text-layer character boxes
+opencv-python-headless>=4.9   # rule-line / table-structure detection
+numpy>=1.26              # image buffers
+openpyxl>=3.1            # .xlsx writing and reading
+pytesseract>=0.3.13      # optional: OCR for scanned pages (needs the Tesseract binary)
+
+# Tests only:
+fpdf2>=2.7               # builds synthetic statement PDFs for the tests

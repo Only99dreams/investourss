@@ -28,3 +28,15 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Statement audit pipeline (tools/) — the portable Python runtime and the files
+# it downloads/generates are not source, so they stay out of the repository.
+tools/pyenv/
+tools/get-pip.py
+tools/python-embed.zip
+__pycache__/
+*.py[cod]
+
+# Audit output (workbooks, reports, debug page images)
+tools/**/*-audit/
+tools/**/audit-output/

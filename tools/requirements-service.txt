@@ -1,0 +1,8 @@
+# Runtime dependencies for the parser service that its Dockerfile installs.
+# The audit CLI / tests use tools/requirements.txt instead (it adds openpyxl and
+# fpdf2, which the service does not need).
+
+pypdfium2>=5,<6          # PDF rendering + text-layer character boxes
+opencv-python-headless>=4.9   # rule-line / table-structure detection
+numpy>=1.26              # image buffers
+pytesseract>=0.3.13      # optional: OCR for scanned pages (Tesseract binary)

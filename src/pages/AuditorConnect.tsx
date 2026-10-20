@@ -357,7 +357,9 @@ const AuditorConnect = () => {
       setFileTable(Array.isArray(data.table) && data.table.length > 0 ? data.table : null);
       toast({
         title: "PDF parsed!",
-        description: `Extracted ${data.pages ?? 1} page(s). Review the converted spreadsheet below, then proceed.`,
+        description: `Extracted ${data.pages ?? 1} page(s)${
+          data.reader === "opencv" ? " with the OpenCV reader" : ""
+        }. Review the converted spreadsheet below, then proceed.`,
       });
     } catch (err) {
       console.error(err);
@@ -406,7 +408,9 @@ const AuditorConnect = () => {
       setPdfPassword("");
       toast({
         title: "PDF unlocked!",
-        description: `Extracted ${data.pages ?? 1} page(s). Review the converted spreadsheet below, then proceed.`,
+        description: `Extracted ${data.pages ?? 1} page(s)${
+          data.reader === "opencv" ? " with the OpenCV reader" : ""
+        }. Review the converted spreadsheet below, then proceed.`,
       });
     } catch (err) {
       console.error(err);

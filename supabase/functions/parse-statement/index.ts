@@ -229,6 +229,91 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// The OpenCV reader.
+//
+// Deno cannot load OpenCV, so when OPENCV_PARSER_URL is configured every
+// uploaded statement is handed to the Python parser service
+// (tools/parser_service.py), which rasterises the page and finds the ruling and
+// cells with OpenCV. It answers in this function's own contract, so everything
+// downstream — the preview, the spreadsheet rules and the audit — is unchanged.
+//
+// If the service is unset, slow or erroring, the pdf-parse path below takes
+// over silently: an upload must never fail because of this service.
+// ---------------------------------------------------------------------------
+const OPENCV_PARSER_URL = (Deno.env.get('OPENCV_PARSER_URL') ?? '').replace(/\/+$/, '');
+const OPENCV_PARSER_TOKEN = Deno.env.get('OPENCV_PARSER_TOKEN') ?? '';
+const OPENCV_TIMEOUT_MS = Number(Deno.env.get('OPENCV_PARSER_TIMEOUT_MS') ?? '90000');
+
+interface ReaderResult {
+  success?: boolean;
+  text?: string;
+  pages?: number;
+  table?: unknown;
+  reader?: string;
+  method?: string;
+  warnings?: unknown;
+  code?: string;
+  error?: string;
+}
+
+async function parseWithOpenCv(bytes: Uint8Array, password: string): Promise<ReaderResult | null> {
+  if (!OPENCV_PARSER_URL) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OPENCV_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${OPENCV_PARSER_URL}/parse`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/pdf',
+        ...(password ? { 'X-Pdf-Password': password } : {}),
+        ...(OPENCV_PARSER_TOKEN ? { Authorization: `Bearer ${OPENCV_PARSER_TOKEN}` } : {}),
+      },
+      body: bytes,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      console.error('opencv parser returned HTTP', response.status);
+      return null;
+    }
+    const result = (await response.json()) as ReaderResult;
+    return result && typeof result === 'object' ? result : null;
+  } catch (error) {
+    console.error('opencv parser unavailable, falling back to pdf-parse:', error);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Pass the reader's answer through in the shape the app already reads, or null
+ * when the built-in parser should answer instead (nothing readable, or a
+ * malformed reply). A locked file keeps driving the app's password flow.
+ */
+function readerResponse(result: ReaderResult): Response | null {
+  if (result.success === false) {
+    if (result.code === 'PASSWORD_REQUIRED' || result.code === 'INCORRECT_PASSWORD') {
+      return jsonResponse({ success: false, code: result.code, error: result.error });
+    }
+    return null;
+  }
+  const text = typeof result.text === 'string' ? result.text : '';
+  const table = Array.isArray(result.table) ? result.table : [];
+  if (result.success !== true || text.length < MIN_TEXT_LENGTH || table.length === 0) {
+    return null;
+  }
+  return jsonResponse({
+    success: true,
+    text: text.slice(0, 100000),
+    pages: typeof result.pages === 'number' ? result.pages : 1,
+    table: table.slice(0, 5000),
+    reader: 'opencv',
+    method: typeof result.method === 'string' ? result.method : undefined,
+    warnings: Array.isArray(result.warnings) ? result.warnings.slice(0, 20) : [],
+  });
+}
+
 /**
  * pdf-parse never forwards a password to pdf.js, so a locked statement throws
  * a PasswordException (name "PasswordException", with a message such as
@@ -330,6 +415,15 @@ serve(async (req) => {
 
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const suppliedPassword = typeof password === 'string' ? password : '';
+
+    // Every upload goes through the OpenCV reader first when it is configured.
+    // The reader answers in this function's own contract, so a locked file, a
+    // scan and a normal statement all keep their existing behaviour.
+    const read = await parseWithOpenCv(bytes, suppliedPassword);
+    if (read) {
+      const answered = readerResponse(read);
+      if (answered) return answered;
+    }
 
     // A password was supplied, so the file is (almost certainly) locked. Unlock
     // it with pdf.js and read the text directly.

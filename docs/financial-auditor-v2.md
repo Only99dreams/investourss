@@ -162,6 +162,50 @@ This deterministically repairs column-grouped exports **without an LLM**, which
 is the whole point. The AI reader becomes a last-resort fallback behind a flag,
 not the default for wallets.
 
+### 4a. Desktop pipeline (`tools/`) — PDF → Excel → audit, in Python
+
+The same deterministic path is also implemented locally, so an auditor can drop
+in any statement PDF and get the workbook without uploading it. See
+`tools/README.md`.
+
+* **OpenCV "sees" the table.** Each page is rendered with PDFium
+  (`pypdfium2`) and Otsu-thresholded; long-kernel morphology separates the
+  horizontal and vertical rule lines. When both are found, cells are exact
+  rectangles, so right-aligned amounts and centred headers land in the right
+  column (`method: grid`). When there is no grid, columns are anchored on the
+  statement's own header row exactly as in §4 above, and a statement with
+  neither falls back to the line parser (`method: text`).
+* **Cell text** comes from the PDF text layer (per-character boxes grouped into
+  words); a page without a text layer is read with Tesseract when it is
+  installed.
+* **Same rules, same figures.** `tools/statement_audit/audit_rules.py` and
+  `spreadsheet.py` are ports of the TypeScript modules named in §4/§5, and a
+  test (`tools/tests/test_typescript_parity.py`) runs one battery through both
+  and fails on any difference.
+* **Output** is `<name>.audit.xlsx` (Summary / Debit-Credit / As extracted, per
+  §5a) plus `<name>.audit.json` with the extraction metadata, reconciliation,
+  printed-total comparison and parser confidence.
+
+### 4b. Web uploads go through OpenCV too
+
+Deno (the Edge Function runtime) cannot load OpenCV, so the reader runs as a
+small HTTP service next to the app rather than inside it. `tools/parser_service.py`
+exposes `POST /parse` (raw PDF bytes in, the parse-statement contract out:
+`success`, `text`, `pages`, `table`, plus `reader`/`method`/`warnings`), and the
+`parse-statement` edge function calls it *before* its own parser whenever
+`OPENCV_PARSER_URL` is configured. The table it returns is the same shape the
+preview, `tableToTransactions` and the audit already consume, so the audit
+arithmetic stays where it is (identical rules, §4).
+
+* **Every upload** is read by OpenCV, including locked PDFs (the service answers
+  `PASSWORD_REQUIRED` / `INCORRECT_PASSWORD`, which is what drives the app's
+  password prompt) and multi-page statements.
+* **Never a hard dependency.** If the service is unset, slow or erroring the
+  function falls back to the built-in pdf-parse path, so an upload cannot fail
+  because of it. Verified for a wrong token (401) and an unreachable host.
+* `.csv` / `.xlsx` uploads are structured already and are read in the browser;
+  there is no page to look at.
+
 ## 5. Validation & cleaning rules
 
 Applied deterministically before calculation:
@@ -310,6 +354,8 @@ the exact pattern list.
 
 ## 10. Non-goals
 
-- OCR of scanned statements (out of scope; ask for a text/CSV export).
+- OCR of scanned statements in the **web app** (out of scope there; ask for a
+  text/CSV export). The local pipeline in §4a does read scanned pages with
+  Tesseract when it is installed on the machine.
 - AI doing any arithmetic.
 - Changing the free/paid access model (unrelated to this work).
