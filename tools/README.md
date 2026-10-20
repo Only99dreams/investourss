@@ -144,6 +144,11 @@ tools\pyenv\python.exe tools\parser_service.py --port 8787
 curl -X POST --data-binary "@statement.pdf" http://127.0.0.1:8787/parse
 ```
 
+Open `http://127.0.0.1:8787/check` in a browser to try it by hand: `/health`,
+then pick a PDF and read it with OpenCV. The same page sits at
+`https://your-host/check` on the deployed service. It asks for the token only
+if one is configured (a deployed service always should be).
+
 | option | env | meaning |
 | --- | --- | --- |
 | `--host` | `PARSER_HOST` | bind address (default `0.0.0.0`) |

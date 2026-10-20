@@ -112,6 +112,105 @@ def parse_pdf(data: bytes, password: str = "", dpi: int = DEFAULT_DPI) -> dict:
     }
 
 
+# A single self-contained page served at GET /check, so the service can be
+# tried from a browser: pick a file, press the button, see what OpenCV read.
+# No external assets - it must work on an air-gapped host.
+CHECK_PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Statement parser - check</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.25rem; margin-bottom: .25rem; }
+  .sub { opacity: .7; margin-top: 0; }
+  label { display: block; font-weight: 600; margin: 1rem 0 .25rem; }
+  input { width: 100%; box-sizing: border-box; padding: .5rem .6rem;
+          font: inherit; border: 1px solid #888; border-radius: 6px;
+          background: transparent; color: inherit; }
+  button { margin-top: 1rem; padding: .55rem 1.1rem; font: inherit; font-weight: 600;
+           border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+  #health { background: #334155; color: #fff; }
+  #read   { background: #2563eb; color: #fff; }
+  #out    { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, monospace;
+            font-size: .85rem; border: 1px solid #8886; border-radius: 6px;
+            padding: .75rem; min-height: 6rem; display: none; }
+  #out.on { display: block; }
+  .ok   { color: #16a34a; font-weight: 700; }
+  .bad  { color: #dc2626; font-weight: 700; }
+  .warn { color: #d97706; font-weight: 700; }
+  #note { margin-top: .75rem; }
+</style>
+</head>
+<body>
+<h1>Statement parser</h1>
+<p class="sub">Health check and a live parse, in the browser.</p>
+
+<label>Service URL</label>
+<input id="url" placeholder="http://127.0.0.1:8787">
+
+<label>PARSER_TOKEN (optional here; the app sends it)</label>
+<input id="token" type="password" autocomplete="off">
+
+<label>Statement PDF</label>
+<input id="file" type="file" accept="application/pdf,.pdf">
+
+<button id="health">Check /health</button>
+<button id="read">Read with OpenCV</button>
+
+<p id="note"></p>
+<pre id="out"></pre>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const base = () => ($("url").value.trim() || location.origin).replace(/\\/+$/, "");
+const note = (cls, text) => { $("note").className = cls; $("note").textContent = text; };
+const show = (obj) => { $("out").classList.add("on"); $("out").textContent =
+  typeof obj === "string" ? obj : JSON.stringify(obj, null, 2); };
+
+$("url").value = location.origin;
+
+$("health").onclick = async () => {
+  note("", "Checking...");
+  try {
+    const r = await fetch(base() + "/health");
+    const j = await r.json();
+    show(j);
+    note(j.ok ? "ok" : "bad", j.ok ? (j.ocr ? "OK - OCR available" : "OK - no OCR on this host") : "not ok");
+  } catch (e) { note("bad", "Request failed: " + e.message); }
+};
+
+$("read").onclick = async () => {
+  const f = $("file").files[0];
+  if (!f) return note("bad", "Choose a PDF first.");
+  note("", "Reading " + f.name + " ...");
+  $("read").disabled = true;
+  try {
+    const headers = { "Content-Type": "application/pdf" };
+    const t = $("token").value.trim();
+    if (t) headers["Authorization"] = "Bearer " + t;
+    const r = await fetch(base() + "/parse", { method: "POST", headers,
+      body: new Uint8Array(await f.arrayBuffer()) });
+    const text = await r.text();
+    let j; try { j = JSON.parse(text); } catch { j = null; }
+    if (!j) { show(text.slice(0, 400)); return note("bad", r.status + " - not JSON (" + r.statusText + ")"); }
+    show(j);
+    if (r.status === 401) return note("bad", "401 - wrong or missing PARSER_TOKEN");
+    if (j.success === false) return note("bad", (j.code || "ERROR") + " - " + (j.error || "failed"));
+    note("ok", "reader=" + j.reader + " method=" + j.method + " pages=" + j.pages +
+         " rows=" + (j.table ? j.table.length : 0));
+  } catch (e) { note("bad", "Request failed: " + e.message); }
+  finally { $("read").disabled = false; }
+};
+</script>
+</body>
+</html>
+"""
+
+
 class ParserHandler(BaseHTTPRequestHandler):
     """One thread per connection; each parse is independent."""
 
@@ -136,7 +235,26 @@ class ParserHandler(BaseHTTPRequestHandler):
         if self._path() == "/health":
             self._send({"ok": True, "ocr": tesseract_available(), "dpi": self.dpi})
             return
+        if self._path() == "/check":
+            # A self-contained page for checking the service in a browser.
+            body = CHECK_PAGE.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         self._send({"error": "Not found."}, 404)
+
+    def do_OPTIONS(self) -> None:  # noqa: N802 - http.server naming
+        """CORS preflight, so any browser page may call the API too."""
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Pdf-Password")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_POST(self) -> None:  # noqa: N802 - http.server naming
         if self._path() != "/parse":

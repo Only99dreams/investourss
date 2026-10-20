@@ -128,6 +128,27 @@ class ParserServiceTest(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertIn("error", payload)
 
+    def test_check_page_is_served_for_browsers(self) -> None:
+        # GET /check is the in-browser console: health, then a real parse.
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/check", timeout=30) as r:
+            body = r.read().decode("utf-8")
+            self.assertEqual(r.status, 200)
+            self.assertIn("text/html", r.headers["Content-Type"])
+        self.assertIn("Statement parser", body)
+        self.assertIn("/parse", body)
+
+    def test_cors_preflight_is_answered(self) -> None:
+        # A browser calls /parse with a preflight first; answering it keeps the
+        # check page (and any future web caller) working.
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/parse", method="OPTIONS"
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            self.assertEqual(response.status, 204)
+            self.assertEqual(response.headers["Access-Control-Allow-Origin"], "*")
+            self.assertIn("POST", response.headers["Access-Control-Allow-Methods"])
+            self.assertIn("Authorization", response.headers["Access-Control-Allow-Headers"])
+
     def test_empty_body_is_rejected(self) -> None:
         status, payload = post(self.port, b"")
         self.assertEqual(status, 400)
