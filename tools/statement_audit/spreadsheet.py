@@ -77,11 +77,11 @@ def classify_header(raw: Any) -> ColumnRole:
     if re.search(r"(description|narration|particulars|details|memo|remarks|narrative)", text):
         return "description"
     if re.search(r"\b(debit|debits|withdrawal|withdrawals|dr)\b", text) or re.search(
-        r"(money out|outflow|paid out)", text
+        r"(money out|outflow|paid out|pay out|payout)", text
     ):
         return "debit"
     if re.search(r"\b(credit|credits|deposit|deposits|cr)\b", text) or re.search(
-        r"(money in|inflow|paid in)", text
+        r"(money in|inflow|paid in|pay in|payin)", text
     ):
         return "credit"
     if re.search(r"\b(amount|value)\b", text):

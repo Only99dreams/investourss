@@ -71,8 +71,8 @@ export function classifyHeader(raw: string): ColumnRole {
   if (/(\bref\b|reference|txn|cheque|transaction id)/.test(text)) return "reference";
   if (/\bdate\b/.test(text) || text.includes("trans time") || text.includes("transaction time")) return "date";
   if (/(description|narration|particulars|details|memo|remarks|narrative)/.test(text)) return "description";
-  if (/\b(debit|debits|withdrawal|withdrawals|dr)\b/.test(text) || /(money out|outflow|paid out)/.test(text)) return "debit";
-  if (/\b(credit|credits|deposit|deposits|cr)\b/.test(text) || /(money in|inflow|paid in)/.test(text)) return "credit";
+  if (/\b(debit|debits|withdrawal|withdrawals|dr)\b/.test(text) || /(money out|outflow|paid out|pay out|payout)/.test(text)) return "debit";
+  if (/\b(credit|credits|deposit|deposits|cr)\b/.test(text) || /(money in|inflow|paid in|pay in|payin)/.test(text)) return "credit";
   if (/\b(amount|value)\b/.test(text)) return "amount";
   if (/\b(type|direction)\b/.test(text) || text.includes("dr/cr")) return "type";
   if (text.includes("balance")) return "balance";
