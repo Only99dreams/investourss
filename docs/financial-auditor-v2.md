@@ -208,6 +208,19 @@ arithmetic stays where it is (identical rules, §4).
   used to swap in different rows. (`rowsAreFinal` in `auditRules.ts` decides this;
   a table reconstructed from text *without* OpenCV can still be cross-checked
   against the statement text, as before.)
+* **A reader's table is not discarded.** `routeSheetAudit` (in `auditRules.ts`)
+  decides how a request is read. Rows from a reader are summed when they exist.
+  When a reader produced a table that could not be broken into rows — a scan
+  whose header did not resolve to columns — the audit reports that instead of
+  falling through to an AI re-read of the text. Re-reading is how a scan's real
+  `₦50,000` / `₦12,000` columns became `₦0` / `₦0` on the audit page while the
+  preview showed the reader's own columns. Only a request with no page reading at
+  all (pasted SMS, a text-only upload) is read from its text.
+* **A header bound into one box still yields columns.** A scanner or an
+  underline can bind a header line into a single word-box. The reader rebuilds
+  the columns from the ink the data uses and names them from the header text
+  (`anchors_from_columns`, `place_merged_header` in `pdf_table.py`), so a scanned
+  statement's Debit and Credit columns are read rather than inferred.
 * **Never a hard dependency.** If the service is unset, slow or erroring the
   function falls back to the built-in pdf-parse path, so an upload cannot fail
   because of it. Verified for a wrong token (401) and an unreachable host.
@@ -304,12 +317,16 @@ the exact pattern list.
   "spreadsheet"`), skipping the AI entirely. Otherwise the existing text/AI path
   is unchanged. The request may also carry `tableReader` ("opencv" /
   "browser-spreadsheet"); when it names a real reader the rows are kept verbatim
-  and never handed to the AI (see §4b).
+  and never handed to the AI (see §4b). When a named reader produced a table that
+  yields no rows, the function answers `422` with a plain explanation rather than
+  re-reading the text.
 - `auditRules.ts`: `comparePrintedTotals(text, transactions)` returns the
   statement's printed credit/debit totals alongside the parser's sums and
   whether each side matches. `assessParserConfidence` now reuses it.
   `rowsAreFinal(tableReader)` says whether a request's rows are a real reading of
-  the page and must therefore be trusted as-is.
+  the page and must therefore be trusted as-is. `routeSheetAudit({tableReader,
+  hasTable, transactionCount})` turns that into the reading to use: `sum-rows`,
+  `reader-unreadable`, or `read-text`.
 - Reconciliation + data quality in the report: the auditor returns a
   `meta.validation` block (`method`, `reconciled`, `reconciliation`,
   `dataQuality`, `warnings`, `notes`, `aiExtraction`) which `AuditorConnect` folds

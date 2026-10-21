@@ -120,10 +120,19 @@ never a silently wrong number:
   the date and the amount are unaffected. Follow-up.
 * **Two tables on one page.** The page's ruling is detected once, so a second
   table on the same page is not framed separately.
+* **A header bound into one wide box.** A scanner or an underline can bind a
+  header line into a single word-box, so the header words carry one x-position.
+  The reader rebuilds the columns from the ink the data uses and names them from
+  the header text (money names take the right-hand columns, in reading order).
+  That is a best-effort placement: with no ruling to check against, a page whose
+  columns are irregular could still put an amount in the wrong column. It is
+  reported through the usual reconciliation notes rather than assumed correct.
 * **A statement the text parser cannot read at all.** For a PDF read *without*
   OpenCV (the `pdf-parse` fallback), the web auditor still falls back to the AI
   extractor when the text read looks unreliable — that path has no page reading to
-  trust. Statements read by OpenCV never take it: their rows are kept as-is.
+  trust. Statements read by OpenCV never take it: their rows are kept as-is. When
+  an OpenCV table cannot be broken into rows at all, the audit says so instead of
+  re-reading the text, so its figures are never swapped for a different reading.
 
 ## The app reads every upload with OpenCV
 
