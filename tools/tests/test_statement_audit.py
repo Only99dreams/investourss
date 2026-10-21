@@ -494,6 +494,15 @@ class CsvTest(PipelineTestCase):
 
 
 class WindowTest(unittest.TestCase):
+    """The audit window is reported, but it does not trim the totals.
+
+    The totals are the statement's own columns — every credit, every debit —
+    so Total Income is exactly the Credit (money in) column and Total Expenses
+    exactly the Debit (money out) column, whatever period is selected. The
+    selected months still set periodStart/periodEnd, auditMonths and the monthly
+    breakdown.
+    """
+
     def test_window_anchors_on_first_month(self) -> None:
         transactions = [
             {"date": "2025-03-15", "description": "Salary", "amount": 1000, "type": "credit"},
@@ -503,10 +512,26 @@ class WindowTest(unittest.TestCase):
         self.assertEqual(result.periodStart, "2025-03-01")
         self.assertEqual(result.periodEnd, "2025-04-30")
         self.assertEqual(result.statementMonthsCovered, 3)
-        # The May rent falls outside the 2-month window.
-        self.assertAlmostEqual(result.totalExpenses, 0.0)
+        # The May rent is outside the 2-month window, but the totals cover the
+        # whole statement, so it is still counted in total expenses.
+        self.assertAlmostEqual(result.totalExpenses, 400.0)
 
-    def test_undated_row_excluded_when_statement_outlasts_window(self) -> None:
+    def test_totals_match_the_columns_however_long_the_statement(self) -> None:
+        # A two-month statement audited at 1 month: the totals must still be the
+        # statement's own Credit and Debit column sums, not the first month's.
+        transactions = [
+            {"date": "2025-01-05", "description": "Salary Jan", "amount": 500, "type": "credit"},
+            {"date": "2025-01-06", "description": "Rent Jan", "amount": 120, "type": "debit"},
+            {"date": "2025-02-05", "description": "Salary Feb", "amount": 500, "type": "credit"},
+            {"date": "2025-02-06", "description": "Rent Feb", "amount": 120, "type": "debit"},
+        ]
+        result = audit_rules.apply_financial_audit_rules(transactions, 1)
+        self.assertEqual(result.auditMonths, 1)
+        self.assertAlmostEqual(result.totalIncome, 1000.0)
+        self.assertAlmostEqual(result.totalExpenses, 240.0)
+
+    def test_undated_row_counts_when_statement_outlasts_window(self) -> None:
+        # Nothing is trimmed, so an undated row is always counted and reported.
         transactions = [
             {"date": "2025-01-05", "description": "Salary", "amount": 1000, "type": "credit"},
             {"date": "2025-11-05", "description": "Salary", "amount": 1000, "type": "credit"},
@@ -514,8 +539,8 @@ class WindowTest(unittest.TestCase):
         ]
         result = audit_rules.apply_financial_audit_rules(transactions, 1)
         self.assertEqual(result.auditMonths, 1)
-        self.assertAlmostEqual(result.totalExpenses, 0.0)
-        self.assertEqual(result.dataQuality.excludedUndatedTransactions, 1)
+        self.assertAlmostEqual(result.totalExpenses, 50.0)
+        self.assertEqual(result.dataQuality.excludedUndatedTransactions, 0)
 
     def test_undated_row_kept_when_window_covers_statement(self) -> None:
         transactions = [

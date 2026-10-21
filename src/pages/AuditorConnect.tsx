@@ -898,11 +898,9 @@ const AuditorConnect = () => {
                           </span>
                         </div>
                         <p className="text-muted-foreground">
-                          {cleanedStatement.transactionCount} transaction(s) in the audit window ·{" "}
+                          {cleanedStatement.transactionCount} transaction(s) ·{" "}
                           {cleanedStatement.periodStart} to {cleanedStatement.periodEnd}
-                          {!cleanedStatement.coversWholeStatement
-                            ? " · totals cover only the selected period"
-                            : ""}
+                          {" · totals cover the whole statement"}
                           .
                         </p>
                         {cleanedStatement.warnings.length > 0 && (

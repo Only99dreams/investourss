@@ -232,19 +232,24 @@ arithmetic stays where it is (identical rules, §4).
 Applied deterministically before calculation:
 
 - Drop non-transaction rows (headers, footers, page numbers, summary lines).
-- Require a usable direction and a positive amount; keep undated rows when the
-  audit window covers the whole statement (they are still credits/debits) and
-  report the count, but exclude them when the statement extends beyond the
-  window because they cannot be attributed to the selected months.
+- Require a usable direction and a positive amount; keep undated rows (they are
+  still credits/debits) and report the count.
 - Deduplicate only **exact** duplicate rows (same date + description + amount +
   type + reference); distinct rows that reuse a reference are kept.
 - Flag: rows with unparseable dates, zero/negative amounts, missing direction,
   and any reconciliation difference.
-- Run everything through the audit window = the **selected number of months**,
-  anchored on the first month present in the statement. Total income is the sum
-  of the credit rows inside that window and total expenses is the sum of the
-  debit rows inside it; the statement's own printed totals / running balance are
-  only cross-checked when the window covers the whole statement.
+- **The totals are the statement's own columns.** Total income is the sum of
+  **every** credit row and total expenses the sum of **every** debit row in the
+  uploaded statement, so the audit page's Total Income is exactly the Credit
+  (money in) column and Total Expenses exactly the Debit (money out) column,
+  whatever statement length. Because the totals cover the whole statement, the
+  statement's printed credit/debit totals and its running balance always describe
+  the same rows and are compared directly.
+- **The selected months are reported, not applied to the totals.** The "1/3/6
+  month" choice still sets `auditMonths`, `periodStart`/`periodEnd` and the
+  monthly breakdown (anchored on the first month present in the statement), but it
+  no longer trims the totals — trimming is what made an audited statement show
+  less income than the Credit column printed on it.
 
 ### 5a. Review gate (upload page)
 
@@ -253,7 +258,7 @@ spreadsheet and the run button is "Proceed to Audit". The preview has two views:
 
 - **Cleaned Debit / Credit** (default): one row per transaction the audit will
   count, with the amount placed in a single **Debit** or **Credit** column and a
-  labelled `TOTAL` row, plus a header line showing the windowed Debit/Credit
+  labelled `TOTAL` row, plus a header line showing the whole-statement Debit/Credit
   totals. Summary/opening/closing rows are removed.
 - **As extracted**: the raw converted rows, so any extraction problem is visible.
 

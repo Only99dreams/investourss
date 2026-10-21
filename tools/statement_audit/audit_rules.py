@@ -632,28 +632,24 @@ def apply_financial_audit_rules(
     reference_date: Optional[datetime] = None,
 ) -> FinancialAuditRulesResult:
     normalized = normalize_transactions(raw_transactions)
+    # Every transaction in the uploaded statement is totalled, so the figures are
+    # exactly the statement's own columns: total income is the sum of ALL credit
+    # rows and total expenses the sum of ALL debit rows. The selected months are
+    # reported (periodStart/periodEnd, the monthly breakdown,
+    # statementMonthsCovered) but they no longer trim the totals — trimming is
+    # what made an audited statement show less income than the Credit column
+    # printed on it.
     statement_dates = [t.date for t in normalized["transactions"]]
     statement_months_covered = months_covered_by_statement(statement_dates, reference_date)
     audit_months = int(requested_months) if requested_months is not None and requested_months >= 1 else 1
     audit_months = max(1, math.floor(audit_months))
     window = get_audit_window(statement_dates, audit_months, reference_date)
 
-    window_dated = [t for t in normalized["transactions"] if t.date]
-    has_dated = len(window_dated) > 0
-    all_dated_inside = all(
-        window["periodStart"] <= t.date <= window["periodEnd"] for t in window_dated
-    ) if window_dated else True
-
+    # Nothing is trimmed, so no row is excluded from the totals: every credit and
+    # every debit in the statement counts. Kept at zero for the data-quality
+    # block, which still reports rows dropped for other reasons.
     excluded_undated = 0
-    selected = []
-    for transaction in normalized["transactions"]:
-        if transaction.date:
-            if window["periodStart"] <= transaction.date <= window["periodEnd"]:
-                selected.append(transaction)
-        elif has_dated and not all_dated_inside:
-            excluded_undated += 1
-        else:
-            selected.append(transaction)
+    selected = list(normalized["transactions"])
     selected.sort(
         key=lambda t: (t.date or "", t.description, t.amount, t.type)
     )

@@ -655,18 +655,11 @@ serve(async (req) => {
 
     // Reconcile the final figures against the statement's own printed totals
     // whenever it declares them. This covers the text and AI paths, and
-    // re-confirms a balance reconciliation for spreadsheets. The statement's
-    // running balance and printed totals describe the WHOLE statement, so they
-    // are only comparable when the audit window covers the whole statement;
-    // for a partial-period audit they are skipped (and said so) rather than
-    // shown as a false mismatch.
-    const coversWholeStatement = report.auditMonths >= report.statementMonthsCovered;
-    if (!coversWholeStatement) {
-      reconciliation = null;
-      validationNotes.push(
-        `This audit totals only the selected ${report.auditMonths}-month period (${report.periodStart} to ${report.periodEnd}). The statement's own totals cover a wider period, so they are not compared against the audited figures.`,
-      );
-    } else if (reconciliation === null) {
+    // re-confirms a balance reconciliation for spreadsheets. The totals now
+    // cover the whole statement, so the statement's printed credit/debit totals
+    // and its running balance always describe the same rows and are compared
+    // directly — there is no partial-period case to skip any more.
+    if (reconciliation === null) {
       const printed = comparePrintedTotals(text, report.transactions);
       if (printed.printedCredit !== undefined || printed.printedDebit !== undefined) {
         const reconciled = printed.creditMatches !== false && printed.debitMatches !== false;

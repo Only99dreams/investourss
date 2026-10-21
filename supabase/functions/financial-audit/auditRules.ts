@@ -761,37 +761,24 @@ export function applyFinancialAuditRules(
   referenceDate = new Date(),
 ): FinancialAuditRulesResult {
   const normalized = normalizeTransactions(rawTransactions);
-  // The audit covers the SELECTED number of months, anchored on the first month
-  // present in the statement. Total income is the sum of the credit rows inside
-  // that window and total expenses is the sum of the debit rows inside it; rows
-  // dated outside the window are left out of the totals.
+  // Every transaction in the uploaded statement is totalled, so the figures are
+  // exactly the statement's own columns: total income is the sum of ALL credit
+  // rows and total expenses the sum of ALL debit rows. The selected months are
+  // reported (periodStart/periodEnd, the monthly breakdown, statementMonthsCovered)
+  // but they no longer trim the totals — trimming is what made an audited
+  // statement show less income than the Credit column printed on it.
   const statementDates = normalized.transactions.map((transaction) => transaction.date);
   const statementMonthsCovered = monthsCoveredByStatement(statementDates, referenceDate);
   const auditMonths = Number.isFinite(requestedMonths) && requestedMonths >= 1
     ? Math.floor(requestedMonths)
     : 1;
   const window = getAuditWindow(statementDates, auditMonths, referenceDate);
-  // A row with no date cannot be placed precisely. It still counts when the
-  // window already covers the whole statement (nothing is being trimmed), but
-  // when the statement extends beyond the window it is excluded and reported,
-  // because it cannot be attributed to the selected months.
-  const windowDatedTransactions = normalized.transactions.filter(
-    (transaction): transaction is FinancialTransaction & { date: string } => Boolean(transaction.date),
-  );
-  const hasDatedTransactions = windowDatedTransactions.length > 0;
-  const allDatedInsideWindow = windowDatedTransactions.every(
-    (transaction) => transaction.date >= window.periodStart && transaction.date <= window.periodEnd,
-  );
-  let excludedUndatedTransactions = 0;
+  // Nothing is trimmed, so no row is excluded from the totals: every credit and
+  // every debit in the statement counts. Kept at zero for the data-quality block,
+  // which still reports rows dropped for other reasons.
+  const excludedUndatedTransactions = 0;
   const selectedTransactions = normalized.transactions
-    .filter((transaction) => {
-      if (transaction.date) return transaction.date >= window.periodStart && transaction.date <= window.periodEnd;
-      if (hasDatedTransactions && !allDatedInsideWindow) {
-        excludedUndatedTransactions += 1;
-        return false;
-      }
-      return true;
-    })
+    .slice()
     .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "")
       || a.description.localeCompare(b.description)
       || a.amount - b.amount
