@@ -566,6 +566,45 @@ export function rowsAreFinal(tableReader: string): boolean {
   return tableReader === "opencv" || tableReader === "browser-spreadsheet";
 }
 
+export type SheetRoute =
+  /** Sum the rows the reader produced. */
+  | "sum-rows"
+  /** The reader produced a page reading we could not break into rows: report
+   *  that, and never silently substitute a different read of the text. */
+  | "reader-unreadable"
+  /** No page reading; read the statement text (deterministically, then AI). */
+  | "read-text";
+
+/**
+ * Which reading an audit should use, given what the request carried.
+ *
+ * A reader that looked at the page is the highest authority on what the page
+ * says — higher than a text re-read, which for a scan is OCR output the row
+ * parser cannot reassemble. So when a table came from a reader:
+ *
+ *  - if it yielded transactions, those are the figures (nothing re-reads them);
+ *  - if it yielded none, the reader's table still exists and is still the page
+ *    reading. The audit reports that it could not be broken into rows instead of
+ *    throwing the reading away — because falling through to an AI re-read of
+ *    column-grouped OCR text is how a correct ₦50,000/₦12,000 scan becomes
+ *    ₦0/₦0 on the audit page while the preview shows the reader's real columns.
+ *
+ * Only a request that carried no page reading at all (`read-text`, e.g. pasted
+ * SMS or a text-only upload) is read from its text.
+ */
+export function routeSheetAudit(input: {
+  tableReader: string;
+  hasTable: boolean;
+  transactionCount: number;
+}): SheetRoute {
+  if (rowsAreFinal(input.tableReader)) {
+    return input.transactionCount > 0 ? "sum-rows" : "reader-unreadable";
+  }
+  if (input.transactionCount > 0) return "sum-rows";
+  if (input.hasTable) return "sum-rows";
+  return "read-text";
+}
+
 // Number of calendar months a statement spans, from its earliest to its latest
 // dated transaction (at least 1). The audit uses this so it always covers the
 // whole uploaded statement rather than trimming it to a fixed month count.

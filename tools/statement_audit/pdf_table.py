@@ -288,6 +288,135 @@ def is_header_row(row: list[Word]) -> bool:
     )
 
 
+def split_merged_header(row: list[Word]) -> Optional[list[Word]]:
+    """Recover header words from a header the reader returned as one wide box.
+
+    A scan's header is sometimes read as a single word-box covering the whole
+    line (OCR merged it, or the page has an underline binding the words). Its
+    text still names every column, but with one box there is one x-position, so
+    `find_anchors` cannot build columns and the page drops to `text` mode — one
+    cell per line, no Debit/Credit columns, and nothing for the audit to total.
+
+    The words are recovered in reading order at the box's own left edge. They
+    carry no true x-positions, so callers must place them against the columns
+    the DATA shows (see `anchors_from_columns`) rather than trusting an even
+    spread, which mis-assigns right-aligned amounts.
+
+    Returns None unless the line is a header that splits into at least two
+    recognised words, so nothing is invented for a line that is not a header.
+    """
+    if len(row) != 1:
+        return None
+    box = row[0]
+    if header_score(row) >= 2:
+        return None  # already separate words; nothing to recover
+    words = [w for w in re.findall(r"[A-Za-z][A-Za-z./&()#-]*", box.text) if HEADER_TOKEN.search(w)]
+    if len(words) < 2:
+        return None
+    # All words are stacked at the box's left edge: an intentional "no position"
+    # marker, so `anchors_from_columns` must supply the real columns.
+    return [
+        Word(text=word, x=box.x, y=box.y, x2=box.x, y2=box.y2)
+        for word in words
+    ]
+
+
+def merged_header_names(rows: list[list[Word]]) -> Optional[list[str]]:
+    """The header words of the first row that is a (possibly merged) header."""
+    for row in rows[:30]:
+        if is_header_row(row):
+            return [w.text for w in sorted(row, key=lambda w: w.x)]
+        recovered = split_merged_header(row)
+        if recovered is not None and is_header_row(recovered):
+            return [w.text for w in recovered]
+    return None
+
+
+def column_centers(rows: list[list[Word]]) -> list[float]:
+    """Distinct x-positions the page's CELLS use, left to right.
+
+    Columns are where the ink is, but a cell may hold several words (a
+    description, a grouped amount), so clustering single words splits one column
+    into many. Instead each row's words are grouped into cells by the same
+    gap rule the table itself uses, and the cells' positions are clustered
+    down the page. That yields one centre per column, which is the real geometry
+    a merged header lost.
+    """
+    body = [
+        row for row in rows
+        if row and not is_header_row(row) and split_merged_header(row) is None
+    ]
+    if not body:
+        return []
+    heights = [word.height for row in body for word in row]
+    typical = sorted(heights)[len(heights) // 2] if heights else 10.0
+    word_gap = max(2.0, typical * 0.9)
+
+    centers: list[float] = []
+    for row in body:
+        cell_words: list[list[Word]] = []
+        for word in sorted(row, key=lambda w: w.x):
+            if cell_words:
+                previous = cell_words[-1][-1]
+                if word.x - previous.x2 <= word_gap:
+                    cell_words[-1].append(word)
+                    continue
+            cell_words.append([word])
+        centers.extend(sum(w.center_x for w in cell) / len(cell) for cell in cell_words)
+
+    centers.sort()
+    if not centers:
+        return []
+    gap = max(6.0, typical * 1.5)
+    clusters: list[list[float]] = [[centers[0]]]
+    for value in centers[1:]:
+        if value - clusters[-1][-1] <= gap:
+            clusters[-1].append(value)
+        else:
+            clusters.append([value])
+    return [sum(cluster) / len(cluster) for cluster in clusters]
+
+
+MONEY_HEADER_WORDS = (
+    "debit", "debits", "credit", "credits", "amount", "withdrawal", "withdrawals",
+    "deposit", "deposits", "balance", "dr", "cr",
+)
+
+
+def anchors_from_columns(rows: list[list[Word]], names: list[str]) -> Optional[list[dict]]:
+    """Anchors for a merged header, taken from the columns the data uses.
+
+    A merged header's words carry no positions, so the columns come from the
+    ink. The header names are placed right-to-left: every money name
+    (debit/credit/balance/amount…) takes the next unused cluster from the right,
+    in the order the names appear, and the leading names (date, description)
+    take the remaining clusters from the left. Right-to-left is what keeps a
+    right-aligned Debit/Credit/Balance trio on its own columns.
+
+    Returns None unless every name gets a distinct cluster, rather than putting
+    an amount in a column it may not belong to.
+    """
+    centers = column_centers(rows)
+    if not centers:
+        return None
+    money_names = [
+        name for name in names
+        if any(word in name.lower() for word in MONEY_HEADER_WORDS)
+    ]
+    other_names = [name for name in names if name not in money_names]
+    if len(centers) < len(names):
+        return None
+    available = list(centers)
+    money_centers = [available.pop() for _ in range(len(money_names))][::-1]
+    other_centers = available[: len(other_names)]
+    if len(other_centers) != len(other_names):
+        return None
+    chosen = other_centers + money_centers
+    if len(chosen) != len(names) or len(set(chosen)) != len(chosen):
+        return None
+    return [{"x": center, "end": center} for center in chosen]
+
+
 def header_anchors(row: list[Word]) -> list[dict]:
     ordered = sorted(row, key=lambda w: w.x)
     anchors: list[dict] = []
@@ -310,12 +439,56 @@ def find_anchors(rows: list[list[Word]]) -> Optional[list[dict]]:
         if score > best_score:
             best_score = score
             best = row
-    return header_anchors(best) if best else None
+    if best is not None:
+        return header_anchors(best)
+    # No header whose words kept their own positions. If the page nevertheless
+    # carries a (merged) header, build anchors from the columns the data
+    # actually uses, so amounts land in the right Debit/Credit column.
+    names = merged_header_names(rows)
+    if names:
+        return anchors_from_columns(rows, names)
+    return None
+
+
+def place_merged_header(row: list[Word], anchors: list[dict]) -> Optional[list[str]]:
+    """Header cells for a row the reader returned as one merged word-box.
+
+    The words name the columns but carry no positions, and the anchors were
+    built from the data (see `anchors_from_columns`), so each name is placed in
+    the column its kind belongs to: money names (debit/credit/balance/…) fill
+    the right-hand columns in reading order, the leading names fill the left.
+    Emitting one cell per column is what lets the audit recognise the header —
+    a single merged string classifies as just "date" and no columns are read.
+
+    Returns None when the row is not a merged header, or when the names cannot
+    be placed one per column, so a non-header row is never rewritten.
+    """
+    recovered = split_merged_header(row)
+    if recovered is None or not is_header_row(recovered) or not anchors:
+        return None
+    names = [word.text for word in recovered]
+    if len(anchors) < len(names):
+        return None
+    cells = [""] * len(anchors)
+    money_names = [name for name in names if any(w in name.lower() for w in MONEY_HEADER_WORDS)]
+    other_names = [name for name in names if name not in money_names]
+    # Right-hand columns, right to left, for the money names in reading order.
+    money_slots = range(len(anchors) - 1, len(anchors) - 1 - len(money_names), -1)
+    for name, slot in zip(reversed(money_names), money_slots):
+        cells[slot] = name
+    for index, name in enumerate(other_names):
+        if index < len(anchors):
+            cells[index] = name
+    return cells
 
 
 def build_table(rows: list[list[Word]], anchors: list[dict]) -> list[list[str]]:
     table: list[list[str]] = []
     for row in rows:
+        header_cells = place_merged_header(row, anchors)
+        if header_cells is not None:
+            table.append(header_cells)
+            continue
         buckets: list[list[Word]] = [[] for _ in anchors]
         for word in row:
             best_index = 0
@@ -437,6 +610,10 @@ def _rows_from_grid(
                     cells.append(join_lines(column))
                 rows.append(cells)
             elif anchors:
+                header_cells = place_merged_header(visual_row, anchors)
+                if header_cells is not None:
+                    rows.append(header_cells)
+                    continue
                 buckets: list[list[Word]] = [[] for _ in anchors]
                 for word in visual_row:
                     best_index = 0

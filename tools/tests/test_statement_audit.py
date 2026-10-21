@@ -27,7 +27,11 @@ from openpyxl import load_workbook  # noqa: E402
 from statement_audit import audit_rules, spreadsheet, text_parser  # noqa: E402
 from statement_audit.cli import audit_statement  # noqa: E402
 from statement_audit.pdf_table import (  # noqa: E402
+    Word,
+    build_table,
     detect_grid,
+    find_anchors,
+    group_into_rows,
     pdf_to_table,
     render_page,
 )
@@ -355,6 +359,92 @@ class GridEdgeCaseTest(unittest.TestCase):
         result = spreadsheet.table_to_transactions(table.rows)
         self.assertEqual(len(result.transactions), 2)
         self.assertEqual(result.transactions[0]["amount"], 120_000.00)
+
+
+class MergedHeaderTest(unittest.TestCase):
+    """A header the reader returns as ONE wide word-box.
+
+    Scanners and underlines often bind a header line into a single box. Its text
+    still names every column, but with one box there is one x-position, so the
+    header cannot be located and the page used to drop to `text` mode: one cell
+    per line, no Debit/Credit columns, and nothing for the audit to total. The
+    reader now rebuilds the columns from the data and emits one header cell per
+    column, so "Total income" is the Credit column and "Total expenses" the
+    Debit column — read, not estimated.
+    """
+
+    def _words(self) -> tuple[list[Word], list[list[Word]]]:
+        header = [Word(text="Date Description Debit Credit Balance", x=40, y=100, x2=508, y2=110)]
+        body = [
+            [
+                Word(text="01/08/2026", x=40, y=120, x2=92, y2=130),
+                Word(text="POS", x=110, y=120, x2=135, y2=130),
+                Word(text="PURCHASE", x=140, y=120, x2=195, y2=130),
+                Word(text="10,000.00", x=300, y=120, x2=355, y2=130),
+                Word(text="100,000.00", x=440, y=120, x2=508, y2=130),
+            ],
+            [
+                Word(text="02/08/2026", x=40, y=140, x2=92, y2=150),
+                Word(text="SALARY", x=110, y=140, x2=155, y2=150),
+                Word(text="50,000.00", x=378, y=140, x2=428, y2=150),
+                Word(text="150,000.00", x=440, y=140, x2=508, y2=150),
+            ],
+        ]
+        return header, body
+
+    def test_merged_header_yields_one_cell_per_column(self) -> None:
+        header, body = self._words()
+        rows = group_into_rows(header + [word for row in body for word in row])
+        anchors = find_anchors(rows)
+        self.assertIsNotNone(anchors, "a merged header must still yield columns")
+        table = build_table(rows, anchors)
+        self.assertEqual(table[0], ["Date", "Description", "Debit", "Credit", "Balance"])
+
+    def test_amounts_land_in_the_right_columns(self) -> None:
+        header, body = self._words()
+        rows = group_into_rows(header + [word for row in body for word in row])
+        table = build_table(rows, find_anchors(rows))
+        # debit | credit | balance, by column index.
+        self.assertEqual(table[1][2], "10,000.00")
+        self.assertEqual(table[1][3], "")
+        self.assertEqual(table[1][4], "100,000.00")
+        self.assertEqual(table[2][2], "")
+        self.assertEqual(table[2][3], "50,000.00")
+        self.assertEqual(table[2][4], "150,000.00")
+
+    def test_the_rules_total_the_columns_directly(self) -> None:
+        header, body = self._words()
+        rows = group_into_rows(header + [word for row in body for word in row])
+        table = build_table(rows, find_anchors(rows))
+        result = spreadsheet.table_to_transactions(table)
+        report = audit_rules.apply_financial_audit_rules(result.transactions, 6)
+        # Total income IS the credit column; total expenses IS the debit column.
+        self.assertEqual(report.totalIncome, 50_000.00)
+        self.assertEqual(report.totalExpenses, 10_000.00)
+
+    def test_a_line_that_is_not_a_header_invents_no_columns(self) -> None:
+        # Two plain lines: no header, so no anchors and no columns are invented.
+        rows = group_into_rows([
+            Word(text="hello world", x=10, y=10, x2=60, y2=20),
+            Word(text="foo bar", x=10, y=30, x2=50, y2=40),
+        ])
+        self.assertIsNone(find_anchors(rows))
+
+    def test_a_separate_word_header_is_left_alone(self) -> None:
+        # The common path: words kept their own positions. It must be unchanged.
+        header = [
+            Word(text="Date", x=40, y=100, x2=62, y2=110),
+            Word(text="Description", x=110, y=100, x2=165, y2=110),
+            Word(text="Debit", x=330, y=100, x2=355, y2=110),
+            Word(text="Credit", x=400, y=100, x2=428, y2=110),
+            Word(text="Balance", x=470, y=100, x2=508, y2=110),
+        ]
+        _, body = self._words()
+        rows = group_into_rows(header + [word for row in body for word in row])
+        table = build_table(rows, find_anchors(rows))
+        self.assertEqual(table[0], ["Date", "Description", "Debit", "Credit", "Balance"])
+        self.assertEqual(table[1][2], "10,000.00")
+        self.assertEqual(table[2][3], "50,000.00")
 
 
 class BorderlessPdfTest(PipelineTestCase):

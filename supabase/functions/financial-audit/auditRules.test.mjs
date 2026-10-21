@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, getAuditWindow, parseFinancialRecords, rowsAreFinal, splitFinancialRecords } from "./auditRules.ts";
+import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, getAuditWindow, parseFinancialRecords, routeSheetAudit, rowsAreFinal, splitFinancialRecords } from "./auditRules.ts";
 
 test("chunks long statements without dropping or reordering source text", () => {
   const source = `first record\r\n${"x".repeat(50001)}\r\nlast record`;
@@ -582,4 +582,28 @@ test("a table reconstructed from text without a real reader is not final", () =>
   assert.equal(rowsAreFinal(""), false);
   assert.equal(rowsAreFinal("pdf-parse"), false);
   assert.equal(rowsAreFinal("unknown-reader"), false);
+});
+
+// A scanned statement is the case that broke: OpenCV reads the page and returns
+// a table, but for a scan with no ruling that table has one cell per line and no
+// date/amount columns, so it yields no rows. The audit must not then re-read the
+// OCR text with the AI — that produced figures unrelated to the reader's own
+// columns on the audit page while the preview showed the real ones.
+test("a reader's table is summed, and is never replaced by a text re-read", () => {
+  // Rows came out: sum them.
+  assert.equal(routeSheetAudit({ tableReader: "opencv", hasTable: true, transactionCount: 4 }), "sum-rows");
+
+  // The reader's table could not be broken into rows: say so, do not re-read.
+  assert.equal(routeSheetAudit({ tableReader: "opencv", hasTable: true, transactionCount: 0 }), "reader-unreadable");
+  assert.equal(routeSheetAudit({ tableReader: "browser-spreadsheet", hasTable: true, transactionCount: 0 }), "reader-unreadable");
+});
+
+test("only a request with no page reading is read from its text", () => {
+  // Pasted text or a text-only upload: nothing looked at a page.
+  assert.equal(routeSheetAudit({ tableReader: "", hasTable: false, transactionCount: 0 }), "read-text");
+  assert.equal(routeSheetAudit({ tableReader: "pdf-parse", hasTable: false, transactionCount: 0 }), "read-text");
+
+  // A table without a named reader is still summed, as it was before.
+  assert.equal(routeSheetAudit({ tableReader: "", hasTable: true, transactionCount: 3 }), "sum-rows");
+  assert.equal(routeSheetAudit({ tableReader: "", hasTable: true, transactionCount: 0 }), "sum-rows");
 });

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, parseFinancialRecords, rowsAreFinal, splitFinancialRecords } from "./auditRules.ts";
+import { applyFinancialAuditRules, assessParserConfidence, comparePrintedTotals, parseFinancialRecords, routeSheetAudit, rowsAreFinal, splitFinancialRecords } from "./auditRules.ts";
 import { parseCsv, tableToTransactions } from "./spreadsheet.ts";
 import {
   buildExplainPrompt,
@@ -467,6 +467,12 @@ serve(async (req) => {
     const sheetResult = readSpreadsheetInput(body);
     const sheetTransactions = sheetResult?.transactions ?? [];
     const hasSheetTransactions = sheetTransactions.length > 0;
+    const hasTable = Array.isArray(body.table) && body.table.length > 0;
+    const route = routeSheetAudit({
+      tableReader,
+      hasTable,
+      transactionCount: sheetTransactions.length,
+    });
 
     if ((!text || text.trim().length < 10) && !hasSheetTransactions) {
       const detail = sheetResult && sheetResult.warnings.length > 0 ? ` ${sheetResult.warnings.join(' ')}` : '';
@@ -488,7 +494,22 @@ serve(async (req) => {
     // carry over the previous request's.
     aiExtractionTrace = null;
 
-    if (hasSheetTransactions) {
+    // A reader looked at the page but its reading could not be broken into rows.
+    // Refuse to fall through to an AI re-read of the text: for a scan that text
+    // is OCR output the row parser cannot reassemble, and re-reading it is how
+    // the audit page ends up with figures unrelated to the reader's own columns.
+    // Say what happened, with the reader's own text, so the figures are never
+    // silently swapped for a different reading.
+    if (route === "reader-unreadable") {
+      const detail = sheetResult && sheetResult.warnings.length > 0 ? ` ${sheetResult.warnings.join(' ')}` : '';
+      return new Response(JSON.stringify({
+        success: false,
+        error: `The ${tableReader === "opencv" ? "OpenCV reader" : "reader"} read this statement but its table had no date/amount columns to total.${detail} The figures were not estimated or re-read from the text, so re-check the converted table below — or paste the statement text to audit it by text instead.`,
+        meta: { extractionMethod: "spreadsheet", extractedCount: 0 },
+      }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (route === "sum-rows") {
       // Preferred path: the statement arrived as structured rows (an uploaded
       // CSV/XLSX, or a PDF the parser reconstructed into a grid). The rules
       // engine sums the credit and debit columns directly — deterministic, no
@@ -563,7 +584,7 @@ serve(async (req) => {
           );
         }
       }
-    } else {
+    } else if (route === "read-text") {
       // Deterministic text extraction first. The local parser reads the
       // statement text verbatim, so the same upload always produces the same
       // transactions and the same income/expense totals — this is what makes the
