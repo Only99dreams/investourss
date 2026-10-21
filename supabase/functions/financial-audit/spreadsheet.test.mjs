@@ -51,6 +51,27 @@ test("classifies common statement column headers", () => {
   assert.equal(classifyHeader("Channel"), "ignore");
 });
 
+test("classifies the money columns of other banks' header styles", () => {
+  // Fidelity: money in / money out are named "Pay In" / "Pay Out".
+  assert.equal(classifyHeader("Pay In"), "credit");
+  assert.equal(classifyHeader("Pay Out"), "debit");
+  // Other banks' wording for the same two columns.
+  assert.equal(classifyHeader("Money In"), "credit");
+  assert.equal(classifyHeader("Money Out"), "debit");
+  assert.equal(classifyHeader("Paid In"), "credit");
+  assert.equal(classifyHeader("Paid Out"), "debit");
+  assert.equal(classifyHeader("Lodgement"), "credit");
+  assert.equal(classifyHeader("Withdrawals"), "debit");
+  assert.equal(classifyHeader("Deposits"), "credit");
+  assert.equal(classifyHeader("Debit Amount"), "debit");
+  assert.equal(classifyHeader("Credit Amount"), "credit");
+  assert.equal(classifyHeader("DR"), "debit");
+  assert.equal(classifyHeader("CR"), "credit");
+  // A balance column is never the transaction amount.
+  assert.equal(classifyHeader("Balance"), "balance");
+  assert.equal(classifyHeader("Running Balance"), "balance");
+});
+
 test("finds a header below leading title rows", () => {
   const header = detectHeader([
     ["Moniepoint MFB Limited"],
