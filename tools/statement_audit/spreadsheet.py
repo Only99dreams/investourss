@@ -67,28 +67,46 @@ def _num(value: Any) -> float:
 
 
 def classify_header(raw: Any) -> ColumnRole:
-    text = re.sub(r"[^a-z0-9+/]+", " ", cell_text(raw).lower()).strip()
+    text = re.sub(r"[^a-z0-9+/()]+", " ", cell_text(raw).lower()).strip()
     if not text:
         return "ignore"
-    if re.search(r"(\bref\b|reference|txn|cheque|transaction id)", text):
+    if re.search(r"(\bref\b|reference|txn|cheque|transaction id|chq|cheque no)", text):
         return "reference"
-    if re.search(r"\bdate\b", text) or "trans time" in text or "transaction time" in text:
+    if (
+        re.search(r"\bdate\b", text)
+        or "trans time" in text
+        or "transaction time" in text
+        or "posting date" in text
+        or "value date" in text
+    ):
         return "date"
-    if re.search(r"(description|narration|particulars|details|memo|remarks|narrative)", text):
+    if re.search(r"(description|narration|particulars|details|memo|remarks|narrative|transaction details|history)", text):
         return "description"
-    if re.search(r"\b(debit|debits|withdrawal|withdrawals|dr)\b", text) or re.search(
-        r"(money out|outflow|paid out|pay out|payout)", text
+    if (
+        re.search(
+            r"\b(debit|debits|debit amount|debits amount|withdrawal|withdrawals|withdraw|dr|dr amount|paid out|payout|outflow|outflows)\b",
+            text,
+        )
+        or re.search(r"(money out|pay out|amount out|outward)", text)
+        or (re.search(r"\bdebit\b", text) and re.search(r"\bamount\b", text))
+        or "(dr)" in text
     ):
         return "debit"
-    if re.search(r"\b(credit|credits|deposit|deposits|cr)\b", text) or re.search(
-        r"(money in|inflow|paid in|pay in|payin)", text
+    if (
+        re.search(
+            r"\b(credit|credits|credit amount|credits amount|deposit|deposits|cr|cr amount|lodgement|lodgements|paid in|payin|inflow|inflows)\b",
+            text,
+        )
+        or re.search(r"(money in|pay in|amount in|inward)", text)
+        or (re.search(r"\bcredit\b", text) and re.search(r"\bamount\b", text))
+        or "(cr)" in text
     ):
         return "credit"
-    if re.search(r"\b(amount|value)\b", text):
+    if re.search(r"\b(amount|value|transaction amount|trans amount)\b", text) and not re.search(r"\bbalance\b", text):
         return "amount"
-    if re.search(r"\b(type|direction)\b", text) or "dr/cr" in text:
+    if re.search(r"\b(type|direction|dr cr|dr/cr)\b", text) or "dr/cr" in text:
         return "type"
-    if "balance" in text:
+    if re.search(r"\bbalance\b", text):
         return "balance"
     return "ignore"
 

@@ -66,16 +66,26 @@ const CLOSING_WORDS = /\b(closing|balance c\/f|carried forward)\b/i;
 // Classify one header cell into the column role it names. Bank-agnostic:
 // matches on generic statement vocabulary, never a specific bank's layout.
 export function classifyHeader(raw: string): ColumnRole {
-  const text = raw.toLowerCase().replace(/[^a-z0-9+/]+/g, " ").trim();
+  const text = raw.toLowerCase().replace(/[^a-z0-9+/()]+/g, " ").trim();
   if (!text) return "ignore";
-  if (/(\bref\b|reference|txn|cheque|transaction id)/.test(text)) return "reference";
-  if (/\bdate\b/.test(text) || text.includes("trans time") || text.includes("transaction time")) return "date";
-  if (/(description|narration|particulars|details|memo|remarks|narrative)/.test(text)) return "description";
-  if (/\b(debit|debits|withdrawal|withdrawals|dr)\b/.test(text) || /(money out|outflow|paid out|pay out|payout)/.test(text)) return "debit";
-  if (/\b(credit|credits|deposit|deposits|cr)\b/.test(text) || /(money in|inflow|paid in|pay in|payin)/.test(text)) return "credit";
-  if (/\b(amount|value)\b/.test(text)) return "amount";
-  if (/\b(type|direction)\b/.test(text) || text.includes("dr/cr")) return "type";
-  if (text.includes("balance")) return "balance";
+  if (/(\bref\b|reference|txn|cheque|transaction id|chq|cheque no)/.test(text)) return "reference";
+  if (/\bdate\b/.test(text) || text.includes("trans time") || text.includes("transaction time") || text.includes("posting date") || text.includes("value date")) return "date";
+  if (/(description|narration|particulars|details|memo|remarks|narrative|transaction details|history)/.test(text)) return "description";
+  if (
+    /\b(debit|debits|debit amount|debits amount|withdrawal|withdrawals|withdraw|dr|dr amount|paid out|payout|outflow|outflows)\b/.test(text) ||
+    /(money out|pay out|amount out|outward)/.test(text) ||
+    /\bdebit\b/.test(text) && /\bamount\b/.test(text) ||
+    /\(dr\)/.test(text)
+  ) return "debit";
+  if (
+    /\b(credit|credits|credit amount|credits amount|deposit|deposits|cr|cr amount|lodgement|lodgements|paid in|payin|inflow|inflows)\b/.test(text) ||
+    /(money in|pay in|amount in|inward)/.test(text) ||
+    /\bcredit\b/.test(text) && /\bamount\b/.test(text) ||
+    /\(cr\)/.test(text)
+  ) return "credit";
+  if (/\b(amount|value|transaction amount|trans amount)\b/.test(text) && !/\b(balance)\b/.test(text)) return "amount";
+  if (/\b(type|direction|dr cr|dr\/cr)\b/.test(text) || text.includes("dr/cr")) return "type";
+  if (/\bbalance\b/.test(text)) return "balance";
   return "ignore";
 }
 
