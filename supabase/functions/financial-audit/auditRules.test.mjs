@@ -609,3 +609,17 @@ test("only a request with no page reading is read from its text", () => {
   assert.equal(routeSheetAudit({ tableReader: "", hasTable: true, transactionCount: 3 }), "sum-rows");
   assert.equal(routeSheetAudit({ tableReader: "", hasTable: true, transactionCount: 0 }), "sum-rows");
 });
+
+// The audit page once disagreed with the preview on an ordinary statement: a
+// reader's table with NO Balance column cannot reconcile against a running
+// balance, and an audit branch read "not reconciled" as "the table may have
+// mis-assigned a column" and re-summed the raw statement text instead. Plenty of
+// real statements have no balance column — scans with a plain Debit/Credit pair,
+// wallet exports — and the preview, which only ever totals the table, kept
+// showing the reader's own columns. The two pages must agree: Total Income is
+// the Credit column and Total Expenses the Debit column, from the table.
+test("a reader's table without a Balance column is still summed, not re-read", () => {
+  const route = routeSheetAudit({ tableReader: "opencv", hasTable: true, transactionCount: 2 });
+  assert.equal(route, "sum-rows", "a reader's rows are the reading, balance column or not");
+  assert.equal(rowsAreFinal("opencv"), true, "and nothing downstream may re-read them");
+});

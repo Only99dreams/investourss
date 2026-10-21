@@ -555,34 +555,6 @@ serve(async (req) => {
             `${by}; the figures are what its columns sum to. The rows could not be cross-checked against a running balance or the statement's printed totals, so confirm the conversion below looks right.`,
           );
         }
-      } else if (!reconciliation.reconciled && text.trim().length >= 10) {
-        // Guarded cross-check for tables read without OpenCV: a reconstructed
-        // table can mis-assign a column. If the table does not tally with its
-        // own running balance, but the raw statement text reproduces the bank's
-        // printed totals, trust the text.
-        const textTransactions = parseFinancialRecords(text);
-        const printed = comparePrintedTotals(text, textTransactions);
-        const textIsTrustworthy = textTransactions.length > 0
-          && printed.creditMatches !== false
-          && printed.debitMatches !== false
-          && (printed.creditMatches === true || printed.debitMatches === true);
-        if (textIsTrustworthy) {
-          report = buildReportFromRules(applyFinancialAuditRules(textTransactions, auditMonths), accountType);
-          extractedCount = textTransactions.length;
-          excludedCount = report.dataQuality.excludedInvalidTransactions;
-          extractionMethod = "deterministic-parser";
-          reconciliation = {
-            source: "printed-totals",
-            reconciled: true,
-            credits: printed.parsedCredits,
-            debits: printed.parsedDebits,
-            printedCredit: printed.printedCredit,
-            printedDebit: printed.printedDebit,
-          };
-          validationNotes.push(
-            "The reconstructed table did not tally with the statement's running balance, so the audit used the statement text, which matches the printed totals.",
-          );
-        }
       }
     } else if (route === "read-text") {
       // Deterministic text extraction first. The local parser reads the
