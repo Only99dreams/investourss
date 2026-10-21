@@ -106,7 +106,7 @@ interface DetectedHeader {
 // which is a money column or a date+description pair.
 export function detectHeader(rows: Table): DetectedHeader | null {
   let best: { index: number; roles: Partial<Record<ColumnRole, number>>; score: number } | null = null;
-  const limit = Math.min(rows.length, 25);
+  const limit = Math.min(rows.length, 50);
   for (let i = 0; i < limit; i++) {
     const row = rows[i] ?? [];
     const roles: Partial<Record<ColumnRole, number>> = {};
@@ -119,9 +119,35 @@ export function detectHeader(rows: Table): DetectedHeader | null {
     });
     const hasMoney = roles.debit !== undefined || roles.credit !== undefined
       || roles.amount !== undefined || roles.balance !== undefined;
-    const hasCore = (roles.date !== undefined && roles.description !== undefined) || hasMoney;
-    if (score >= 2 && hasCore && (!best || score > best.score)) {
+    const hasCore = (roles.date !== undefined && roles.description !== undefined) || hasMoney || (roles.date !== undefined && hasMoney);
+    if (score >= 1 && hasCore && (!best || score > best.score)) {
       best = { index: i, roles, score };
+    }
+  }
+  // Fallback: if no header found but table has numeric data, try to infer columns
+  if (!best && rows.length > 1) {
+    // Look for rows with numbers that might be transactions
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      const row = rows[i] ?? [];
+      const roles: Partial<Record<ColumnRole, number>> = {};
+      let score = 0;
+      row.forEach((cell, col) => {
+        const text = cellText(cell).toLowerCase();
+        if (/\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{1,2}-\d{1,2}/.test(text)) {
+          if (roles.date === undefined) { roles.date = col; score += 1; }
+        } else if (/[₦$€£]?\s*\d+[.,]\d{2}/.test(text) || /^\d+[.,]\d{2}$/.test(text.replace(/,/g,''))) {
+          // Could be amount - assign to amount if no money columns
+          if (roles.amount === undefined && roles.debit === undefined && roles.credit === undefined) {
+            roles.amount = col; score += 1;
+          }
+        } else if (text.length > 3 && !/^[\d\s,.-]+$/.test(text) && roles.description === undefined) {
+          roles.description = col; score += 1;
+        }
+      });
+      if (score >= 2) {
+        best = { index: i, roles, score };
+        break;
+      }
     }
   }
   return best ? { index: best.index, roles: best.roles, row: rows[best.index] ?? [] } : null;

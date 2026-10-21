@@ -122,7 +122,7 @@ def _type_from_cell(raw: Any) -> Optional[str]:
 
 def detect_header(rows: Table) -> Optional[dict]:
     best = None
-    limit = min(len(rows), 25)
+    limit = min(len(rows), 50)
     for index in range(limit):
         row = rows[index] if index < len(rows) else []
         roles: dict[str, int] = {}
@@ -135,9 +135,30 @@ def detect_header(rows: Table) -> Optional[dict]:
                 roles[role] = col
             score += 1
         has_money = any(k in roles for k in ("debit", "credit", "amount", "balance"))
-        has_core = ("date" in roles and "description" in roles) or has_money
-        if score >= 2 and has_core and (best is None or score > best["score"]):
+        has_core = ("date" in roles and "description" in roles) or has_money or ("date" in roles and has_money)
+        if score >= 1 and has_core and (best is None or score > best["score"]):
             best = {"index": index, "roles": roles, "score": score, "row": row}
+    if not best and rows:
+        for index in range(min(len(rows), 10)):
+            row = rows[index] if index < len(rows) else []
+            roles = {}
+            score = 0
+            for col, cell in enumerate(row):
+                text = cell_text(cell).lower()
+                if re.search(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{1,2}-\d{1,2}", text):
+                    if "date" not in roles:
+                        roles["date"] = col
+                        score += 1
+                elif re.search(r"[₦$€£]?\s*\d+[.,]\d{2}", text) or re.search(r"^\d+[.,]\d{2}$", text.replace(",", "")):
+                    if "amount" not in roles and "debit" not in roles and "credit" not in roles:
+                        roles["amount"] = col
+                        score += 1
+                elif len(text) > 3 and not re.match(r"^[\d\s,.-]+$", text) and "description" not in roles:
+                    roles["description"] = col
+                    score += 1
+            if score >= 2:
+                best = {"index": index, "roles": roles, "score": score, "row": row}
+                break
     return best
 
 
