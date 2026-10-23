@@ -13,9 +13,9 @@ import {
  * index.html and advertises the site logo. This function exists so a post has
  * ONE canonical URL whose response actually contains the post.
  *
- * It server-renders the post text and media as well as the metadata, so the
- * page is useful with JavaScript disabled and the media is fetchable by a
- * crawler that only reads HTML.
+ * Link-preview crawlers get the server-rendered post text, media and metadata
+ * in HTML. Everyone else is redirected straight to the post in the app, so a
+ * shared link never lands on an intermediate preview page.
  *
  * Security is unchanged. The post is read with the anon key, so the posts RLS
  * policy ("Anyone can view approved posts": is_approved AND NOT is_hidden)
@@ -147,7 +147,7 @@ function renderMedia(post: ShareablePost, poster: string | null): string {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const id = String(req.query.id ?? "").trim();
-  // A shared link carries the post owner's referral code. It is forwarded to the
+  // A shared link carries the post owner's referral code. It is passed to the
   // app URL so an unauthenticated visitor who signs up after voting is attributed
   // to the owner, but deliberately kept OUT of the canonical URL: the canonical
   // is one clean URL per post, while ?ref is per-share attribution.
@@ -186,6 +186,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `${SITE_URL}/community?post=${encodeURIComponent(post.id)}&autoplay=1` +
     (ref ? `&ref=${encodeURIComponent(ref)}` : "");
 
+  // Humans go straight to the post in the app. Only link-preview crawlers get
+  // the server-rendered copy; serving it to everyone showed an intermediate
+  // "open post" page before the app loaded.
+  if (!isCrawler(String(req.headers["user-agent"] ?? ""))) {
+    res.setHeader("Cache-Control", "no-store");
+    return res.redirect(302, appUrl);
+  }
+
   // Verified variant: an uploaded video's stored frame is only used if it
   // really exists. A post with no usable media resolves to no image at all, and
   // then no image tag is emitted - see the tag blocks below.
@@ -201,11 +209,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const author = (post.author_name ?? "").trim();
   const published = post.created_at ? new Date(post.created_at).toISOString() : null;
   const body = (post.content ?? "").trim();
-
-  // A crawler must not be redirected, or it would follow the redirect to the SPA
-  // shell and re-read index.html - which advertises the site logo. That is the
-  // reason a correct og:image kept rendering as the logo.
-  const forward = !isCrawler(String(req.headers["user-agent"] ?? ""));
 
   // Declared before the tag blocks that use it. A const arrow function is in the
   // temporal dead zone until its declaration is evaluated, so referencing it
@@ -295,7 +298,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ],
     }),
   )}</script>
-${forward ? `  <meta http-equiv="refresh" content="0;url=${escapeHtml(appUrl)}" />` : ""}
 </head>
 <body style="margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f8fafc;color:#0f172a">
   <main style="max-width:44rem;margin:0 auto;padding:2rem 1rem 4rem">
@@ -312,7 +314,7 @@ ${forward ? `  <meta http-equiv="refresh" content="0;url=${escapeHtml(appUrl)}" 
       <a href="${escapeHtml(appUrl)}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:.7rem 1.1rem;border-radius:10px;font-weight:600">Open in Investours</a>
     </p>
   </main>
-${forward ? `  <script>window.location.replace(${JSON.stringify(appUrl)});</script>\n` : ""}</body>
+</body>
 </html>`;
 
   // Crawlers must always see current data, and a human who lands here should not

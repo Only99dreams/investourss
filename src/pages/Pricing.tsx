@@ -301,9 +301,6 @@ const Pricing = () => {
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
-                      <div className="text-xs text-muted-foreground mb-3">
-                        2 votes per stage
-                      </div>
                       <Link to="/subscribe?plan=premium-monthly">
                         <Button variant="default" className="w-full" size="sm">
                           Upgrade Now
@@ -322,9 +319,6 @@ const Pricing = () => {
                           <span className="text-sm text-muted-foreground"> / 3 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-3">
-                        4 votes per stage
                       </div>
                       <Link to="/subscribe?plan=premium-quarterly">
                         <Button variant="accent" className="w-full" size="sm">
@@ -345,9 +339,6 @@ const Pricing = () => {
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
-                      <div className="text-xs text-muted-foreground mb-3">
-                        6 votes per stage
-                      </div>
                       <Link to="/subscribe?plan=premium-biennial">
                         <Button variant="accent" className="w-full" size="sm">
                           Upgrade Now
@@ -366,9 +357,6 @@ const Pricing = () => {
                           <span className="text-sm text-muted-foreground"> / year</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground mb-3">
-                        8 votes per stage
                       </div>
                       <Link to="/subscribe?plan=premium-annual">
                         <Button variant="default" className="w-full bg-investours-gold hover:bg-investours-gold/90 text-foreground" size="sm">
