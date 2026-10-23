@@ -90,6 +90,7 @@ import {
 } from "@/lib/voting";
 import { VoteButton } from "@/components/community/VoteButton";
 import { VoteCheckoutDialog } from "@/components/community/VoteCheckoutDialog";
+import { PostAsMemberPicker, type PostAsMember } from "@/components/community/PostAsMemberPicker";
 import { CategoryLeaderboard } from "@/components/community/CategoryLeaderboard";
 import { CommunityAuthDialog } from "@/components/community/CommunityAuthDialog";
 
@@ -164,6 +165,8 @@ const Community = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostCategory, setNewPostCategory] = useState<string>("general");
+  // Admins can publish on behalf of another member. Null means "post as me".
+  const [postingAs, setPostingAs] = useState<PostAsMember | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -847,7 +850,7 @@ const Community = () => {
 
       const insertPost = async (postCategory: string, url: string | null, type: string | null) =>
         supabase.from('posts').insert({
-          author_id: user.id,
+          author_id: postingAs?.id ?? user.id,
           content: newPostContent.trim(),
           category: postCategory,
           attachment_url: url,
@@ -895,10 +898,16 @@ const Community = () => {
         markCategoryMigrationNeeded(false);
       }
 
-      toast({ title: "Success!", description: "Your post has been published." });
+      toast({
+        title: "Success!",
+        description: postingAs
+          ? `Post published as ${postingAs.full_name?.trim() || postingAs.email?.trim() || "member"}.`
+          : "Your post has been published.",
+      });
 
       setNewPostContent("");
       setNewPostCategory(usedCategory);
+      setPostingAs(null);
       setSelectedFile(null);
       setFilePreview(null);
       setVideoLink("");
@@ -1246,6 +1255,13 @@ const Community = () => {
                             </SelectContent>
                           </Select>
                         </div>
+                        {isAdmin && (
+                          <PostAsMemberPicker
+                            value={postingAs}
+                            onChange={setPostingAs}
+                            disabled={isSubmitting}
+                          />
+                        )}
                         <div>
                           <Label htmlFor="content">Content</Label>
                           <Textarea id="content" value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} placeholder="What's on your mind?" className="min-h-[150px]" />

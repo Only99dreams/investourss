@@ -24,6 +24,7 @@ import {
 } from "@/lib/voting";
 import { VoteButton } from "@/components/community/VoteButton";
 import { VoteCheckoutDialog } from "@/components/community/VoteCheckoutDialog";
+import { PostAsMemberPicker, type PostAsMember } from "@/components/community/PostAsMemberPicker";
 import {
   DEFAULT_CATEGORIES,
   LEGACY_ENUM_CATEGORIES,
@@ -67,10 +68,12 @@ interface Comment {
 }
 
 const CommunitySection = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPost, setNewPost] = useState("");
+  // Admins can publish on behalf of another member. Null means "post as me".
+  const [postingAs, setPostingAs] = useState<PostAsMember | null>(null);
   const [isPosting, setIsPosting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [userLikes, setUserLikes] = useState<Set<string>>(new Set());
@@ -432,7 +435,7 @@ const CommunitySection = () => {
       const insertPost = async (postCategory: string) =>
         supabase.from('posts').insert({
           content: newPost.trim(),
-          author_id: user.id,
+          author_id: postingAs?.id ?? user.id,
           category: postCategory,
           attachment_url: attachmentUrl,
           attachment_type: attachmentType,
@@ -470,12 +473,15 @@ const CommunitySection = () => {
 
       toast({
         title: "Posted!",
-        description: usedCategory === category
-          ? "Your post has been shared with the community."
-          : `Your post has been shared under ${usedCategory}.`,
+        description: postingAs
+          ? `Published as ${postingAs.full_name?.trim() || postingAs.email?.trim() || "member"}.`
+          : usedCategory === category
+            ? "Your post has been shared with the community."
+            : `Your post has been shared under ${usedCategory}.`,
       });
       setNewPost("");
       setNewPostCategory(usedCategory);
+      setPostingAs(null);
       setSelectedFile(null);
       setFilePreview(null);
       setVideoLink("");
@@ -871,6 +877,13 @@ const CommunitySection = () => {
                           </p>
                         )}
                       </div>
+                      {isAdmin && (
+                        <PostAsMemberPicker
+                          value={postingAs}
+                          onChange={setPostingAs}
+                          disabled={isPosting}
+                        />
+                      )}
                       <Select
                         value={newPostCategory}
                         onValueChange={setNewPostCategory}
