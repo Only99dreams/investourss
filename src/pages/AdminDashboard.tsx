@@ -18,6 +18,7 @@ import ReferralsTab from "@/components/admin/tabs/ReferralsTab";
 import CampaignsTab from "@/components/admin/tabs/CampaignsTab";
 import ResourcesTab from "@/components/admin/tabs/ResourcesTab";
 import MessagesTab from "@/components/admin/tabs/MessagesTab";
+import AdminMailTab from "@/components/admin/tabs/AdminMailTab";
 import SupportTab from "@/components/admin/tabs/SupportTab";
 import AdvertisingTab from "@/components/admin/tabs/AdvertisingTab";
 import PromoCodesTab from "@/components/admin/tabs/PromoCodesTab";
@@ -92,6 +93,7 @@ const AdminDashboard = () => {
             <Route path="promo-codes" element={<PromoCodesTab />} />
             <Route path="resources" element={<ResourcesTab />} />
             <Route path="messages" element={<MessagesTab />} />
+            <Route path="mail" element={<AdminMailTab />} />
             <Route path="support" element={<SupportTab />} />
             <Route path="advertising" element={<AdvertisingTab />} />
             <Route path="leaderboard" element={<LeaderboardTab />} />

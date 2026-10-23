@@ -16,3 +16,8 @@ verify_jwt = false
 # function can confirm the Paystack charge belongs to them.
 [functions."verify-payment"]
 verify_jwt = true
+
+# Admin broadcast mail: the caller's JWT is required and the function checks
+# the admin role before sending through Resend.
+[functions."send-admin-mail"]
+verify_jwt = true
