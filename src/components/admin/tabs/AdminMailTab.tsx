@@ -1,12 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Bold,
   Check,
   CheckCircle2,
+  Heading1,
+  Heading2,
+  Image as ImageIcon,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
   Loader2,
   MailPlus,
+  Quote,
+  Redo,
   Search,
   Send,
+  Strikethrough,
+  Underline,
+  Undo,
   UserCheck,
   Users,
   X,
@@ -18,7 +31,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -55,10 +67,12 @@ const AdminMailTab = () => {
   const [allCount, setAllCount] = useState<number | null>(null);
   const [includeOptedOut, setIncludeOptedOut] = useState(false);
   const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
+  const [messageHtml, setMessageHtml] = useState("");
+  const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState(0);
   const [summary, setSummary] = useState<SendSummary | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const selectedIds = useMemo(() => new Set(selected.map((member) => member.id)), [selected]);
 
@@ -183,12 +197,45 @@ const AdminMailTab = () => {
     return recipients;
   };
 
+  const syncEditor = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    setMessageHtml(el.innerHTML);
+    const text = el.innerText || el.textContent || "";
+    setMessageText(text.trim());
+  }, []);
+
+  const exec = useCallback(
+    (command: string, value?: string) => {
+      if (sending) return;
+      editorRef.current?.focus();
+      // document.execCommand is still widely supported and works well for simple email formatting.
+      document.execCommand(command, false, value);
+      syncEditor();
+    },
+    [sending, syncEditor],
+  );
+
+  const insertLink = useCallback(() => {
+    if (sending) return;
+    const url = window.prompt("Enter link URL (https://...)");
+    if (!url) return;
+    exec("createLink", url);
+  }, [exec, sending]);
+
+  const insertImage = useCallback(() => {
+    if (sending) return;
+    const url = window.prompt("Enter image URL (https://...)");
+    if (!url) return;
+    exec("insertImage", url);
+  }, [exec, sending]);
+
   const handleSend = async () => {
     if (!subject.trim()) {
       toast({ title: "Subject required", description: "Add a subject line.", variant: "destructive" });
       return;
     }
-    if (!message.trim()) {
+    if (!messageText) {
       toast({ title: "Message required", description: "Write the email body.", variant: "destructive" });
       return;
     }
@@ -210,13 +257,15 @@ const AdminMailTab = () => {
 
       const total = recipients.length;
       const running: SendSummary = { sent: 0, skipped: 0, failed: 0 };
+      const bodyHtml = messageHtml.trim();
 
       for (let index = 0; index < recipients.length; index += BATCH_SIZE) {
         const batch = recipients.slice(index, index + BATCH_SIZE);
         const { data, error } = await supabase.functions.invoke("send-admin-mail", {
           body: {
             subject: subject.trim(),
-            message: message.trim(),
+            html: bodyHtml,
+            message: messageText,
             includeOptedOut,
             recipients: batch.map((member) => ({
               id: member.id,
@@ -257,7 +306,9 @@ const AdminMailTab = () => {
 
       if (running.failed === 0) {
         setSubject("");
-        setMessage("");
+        setMessageHtml("");
+        setMessageText("");
+        if (editorRef.current) editorRef.current.innerHTML = "";
       }
     } catch (error) {
       console.error("Error sending admin mail:", error);
@@ -428,17 +479,71 @@ const AdminMailTab = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="mail-body">Message</Label>
-            <Textarea
-              id="mail-body"
-              value={message}
-              maxLength={20000}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Write your message..."
-              className="min-h-[220px]"
-              disabled={sending}
-            />
-            <p className="text-right text-xs text-muted-foreground">{message.length.toLocaleString()} / 20,000</p>
+            <Label>Message</Label>
+            <div className="overflow-hidden rounded-md border">
+              <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 p-1">
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("bold")} disabled={sending} title="Bold">
+                  <Bold className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("italic")} disabled={sending} title="Italic">
+                  <Italic className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("underline")} disabled={sending} title="Underline">
+                  <Underline className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("strikeThrough")} disabled={sending} title="Strikethrough">
+                  <Strikethrough className="h-4 w-4" />
+                </Button>
+                <div className="mx-1 h-4 w-px bg-border" />
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("formatBlock", "H1")} disabled={sending} title="Heading 1">
+                  <Heading1 className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("formatBlock", "H2")} disabled={sending} title="Heading 2">
+                  <Heading2 className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("formatBlock", "BLOCKQUOTE")} disabled={sending} title="Quote">
+                  <Quote className="h-4 w-4" />
+                </Button>
+                <div className="mx-1 h-4 w-px bg-border" />
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("insertUnorderedList")} disabled={sending} title="Bulleted list">
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("insertOrderedList")} disabled={sending} title="Numbered list">
+                  <ListOrdered className="h-4 w-4" />
+                </Button>
+                <div className="mx-1 h-4 w-px bg-border" />
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={insertLink} disabled={sending} title="Insert link">
+                  <LinkIcon className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={insertImage} disabled={sending} title="Insert image">
+                  <ImageIcon className="h-4 w-4" />
+                </Button>
+                <div className="mx-1 h-4 w-px bg-border" />
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("undo")} disabled={sending} title="Undo">
+                  <Undo className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("redo")} disabled={sending} title="Redo">
+                  <Redo className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("removeFormat")} disabled={sending} title="Clear formatting">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div
+                ref={editorRef}
+                contentEditable={!sending}
+                suppressContentEditableWarning
+                onInput={syncEditor}
+                onBlur={syncEditor}
+                className={cn(
+                  "prose prose-sm max-w-none p-4 min-h-[260px] focus:outline-none",
+                  "prose-headings:my-3 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-blockquote:my-2 prose-img:max-w-full prose-img:h-auto",
+                  sending && "pointer-events-none opacity-70",
+                )}
+                data-placeholder="Write your message..."
+              />
+            </div>
+            <p className="text-right text-xs text-muted-foreground">{messageText.length.toLocaleString()} characters</p>
           </div>
 
           {sending && (
@@ -460,7 +565,7 @@ const AdminMailTab = () => {
           )}
 
           <div className="flex justify-end">
-            <Button onClick={() => void handleSend()} disabled={sending || !subject.trim() || !message.trim()}>
+            <Button onClick={() => void handleSend()} disabled={sending || !subject.trim() || !messageText}>
               {sending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...

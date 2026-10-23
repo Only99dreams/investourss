@@ -33,6 +33,7 @@ interface Recipient {
 interface MailRequest {
   subject?: string;
   message?: string;
+  html?: string;
   recipients?: Recipient[];
   includeOptedOut?: boolean;
 }
@@ -53,7 +54,7 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#039;");
 }
 
-function messageHtml(message: string): string {
+function messageHtmlPlain(message: string): string {
   // Keep intentional paragraph breaks while making the text safe in HTML.
   return message
     .split(/\n{2,}/)
@@ -61,20 +62,30 @@ function messageHtml(message: string): string {
     .join("");
 }
 
-function buildEmail(subject: string, message: string): string {
+function sanitizeEmailHtml(html: string): string {
+  // Very permissive allowlist for email clients. Strip scripts and event handlers.
+  let sanitized = html.replace(/<script[\s\S]*?<\/script>/gi, "");
+  sanitized = sanitized.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  sanitized = sanitized.replace(/href\s*=\s*["']\s*javascript:[^"']*["']/gi, 'href="#"');
+  // Style inline styles conservatively; just remove script-related content above is enough for most cases.
+  return sanitized;
+}
+
+function buildEmail(subject: string, body: string, htmlBody?: string): string {
+  const content = htmlBody && htmlBody.trim() ? sanitizeEmailHtml(htmlBody) : messageHtmlPlain(body);
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
     <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center;">
           <span style="color:#f5c842;font-size:22px;font-weight:bold;letter-spacing:1px;">INVESTOURS</span>
         </td></tr>
-        <tr><td style="padding:32px;">
+        <tr><td style="padding:32px;color:#444;line-height:1.65;">
           <h1 style="color:#1a1a2e;font-size:22px;margin:0 0 20px;">${escapeHtml(subject)}</h1>
-          ${messageHtml(message)}
+          ${content}
         </td></tr>
         <tr><td style="background:#f4f4f5;padding:20px 32px;text-align:center;font-size:12px;color:#888;">
           <p style="margin:0 0 8px;">You're receiving this because you have an Investours account.</p>
@@ -152,13 +163,17 @@ serve(async (req) => {
     const body = (await req.json()) as MailRequest;
     const subject = (body.subject ?? "").trim();
     const message = (body.message ?? "").trim();
+    const htmlBody = typeof body.html === "string" ? body.html : undefined;
     const includeOptedOut = body.includeOptedOut === true;
     const incoming = Array.isArray(body.recipients) ? body.recipients : [];
 
     if (!subject || subject.length > MAX_SUBJECT) {
       return json({ error: `Subject is required and must be ${MAX_SUBJECT} characters or fewer.` }, 400);
     }
-    if (!message || message.length > MAX_MESSAGE) {
+    if (!message && !htmlBody?.trim()) {
+      return json({ error: "Message is required." }, 400);
+    }
+    if (message.length > MAX_MESSAGE) {
       return json({ error: `Message is required and must be ${MAX_MESSAGE} characters or fewer.` }, 400);
     }
     if (incoming.length === 0 || incoming.length > MAX_RECIPIENTS) {
@@ -194,7 +209,7 @@ serve(async (req) => {
       }
     }
 
-    const html = buildEmail(subject, message);
+    const html = buildEmail(subject, message, htmlBody);
     const errors: string[] = [];
     let sent = 0;
     let skipped = 0;
