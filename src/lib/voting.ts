@@ -53,10 +53,10 @@ export const VOTING_TIERS: {
   label: string;
   votes_per_stage: number;
 }[] = [
-  { source: "subscription", plan_key: "monthly", label: "Monthly", votes_per_stage: 1 },
-  { source: "subscription", plan_key: "quarterly", label: "Quarterly", votes_per_stage: 2 },
-  { source: "subscription", plan_key: "biennial", label: "Bi-Annual", votes_per_stage: 3 },
-  { source: "subscription", plan_key: "annual", label: "Annual", votes_per_stage: 4 },
+  { source: "subscription", plan_key: "monthly", label: "Monthly", votes_per_stage: 2 },
+  { source: "subscription", plan_key: "quarterly", label: "Quarterly", votes_per_stage: 4 },
+  { source: "subscription", plan_key: "biennial", label: "Bi-Annual", votes_per_stage: 6 },
+  { source: "subscription", plan_key: "annual", label: "Annual", votes_per_stage: 8 },
   { source: "credit_pack", plan_key: "starter", label: "Starter Credit Pack", votes_per_stage: 1 },
   { source: "credit_pack", plan_key: "standard", label: "Standard Credit Pack", votes_per_stage: 2 },
   { source: "credit_pack", plan_key: "annual", label: "Annual Credit Pack", votes_per_stage: 3 },

@@ -302,7 +302,7 @@ const Pricing = () => {
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground mb-3">
-                        1 vote per stage
+                        2 votes per stage
                       </div>
                       <Link to="/subscribe?plan=premium-monthly">
                         <Button variant="default" className="w-full" size="sm">
@@ -324,7 +324,7 @@ const Pricing = () => {
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground mb-3">
-                        2 votes per stage
+                        4 votes per stage
                       </div>
                       <Link to="/subscribe?plan=premium-quarterly">
                         <Button variant="accent" className="w-full" size="sm">
@@ -346,7 +346,7 @@ const Pricing = () => {
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground mb-3">
-                        3 votes per stage
+                        6 votes per stage
                       </div>
                       <Link to="/subscribe?plan=premium-biennial">
                         <Button variant="accent" className="w-full" size="sm">
@@ -368,7 +368,7 @@ const Pricing = () => {
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground mb-3">
-                        4 votes per stage
+                        8 votes per stage
                       </div>
                       <Link to="/subscribe?plan=premium-annual">
                         <Button variant="default" className="w-full bg-investours-gold hover:bg-investours-gold/90 text-foreground" size="sm">
