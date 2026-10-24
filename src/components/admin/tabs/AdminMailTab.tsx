@@ -7,6 +7,7 @@ import {
   Heading1,
   Heading2,
   Image as ImageIcon,
+  ImagePlus,
   Italic,
   Link as LinkIcon,
   List,
@@ -53,16 +54,16 @@ interface SendSummary {
 }
 
 const BATCH_SIZE = 20;
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const MAX_PDF_BYTES = 10 * 1024 * 1024;
-const MAX_TOTAL_PDF_BYTES = 20 * 1024 * 1024;
-const MAX_PDFS = 3;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const MAX_ATTACHMENTS = 3;
 const ALPHABET = ["#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"];
 
 interface MailAttachment {
   name: string;
   url: string;
   size: number;
+  kind: "image" | "pdf";
 }
 
 const memberName = (member: MailMember) =>
@@ -74,6 +75,29 @@ const emailOf = (member: MailMember) => member.email?.trim().toLowerCase() ?? ""
 const initialOf = (member: MailMember) => {
   const first = memberName(member).charAt(0).toUpperCase();
   return /[A-Z]/.test(first) ? first : "#";
+};
+
+const IMAGE_STYLE = "width:100%;max-width:520px;height:auto;display:block;border:0;border-radius:8px;";
+const YOUTUBE_URL_RE =
+  /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i;
+
+const youTubeId = (value: string) => value.match(YOUTUBE_URL_RE)?.[1] ?? null;
+
+const escapeAttr = (value: string) =>
+  value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** A thumbnail block used instead of a plain link for YouTube URLs. */
+const youTubeBlock = (url: string, id: string) => {
+  const href = escapeAttr(url);
+  const thumb = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  return (
+    `<a href="${href}" style="display:block;max-width:520px;">` +
+    `<img src="${thumb}" alt="YouTube video thumbnail" style="${IMAGE_STYLE}" />` +
+    `</a>` +
+    `<p style="margin:8px 0 16px;">` +
+    `<a href="${href}" style="color:#7c3aed;text-decoration:underline;">\u25B6 Watch on YouTube</a>` +
+    `</p>`
+  );
 };
 
 const AdminMailTab = () => {
@@ -89,14 +113,14 @@ const AdminMailTab = () => {
   const [subject, setSubject] = useState("");
   const [messageHtml, setMessageHtml] = useState("");
   const [messageText, setMessageText] = useState("");
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingKind, setUploadingKind] = useState<null | "image" | "pdf" | "inline">(null);
   const [attachments, setAttachments] = useState<MailAttachment[]>([]);
-  const [uploadingPdf, setUploadingPdf] = useState(false);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState(0);
   const [summary, setSummary] = useState<SendSummary | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const inlineImageInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const selectedIds = useMemo(() => new Set(selected.map((member) => member.id)), [selected]);
@@ -278,31 +302,71 @@ const AdminMailTab = () => {
     [sending, syncEditor],
   );
 
+  const insertHtml = useCallback(
+    (html: string) => {
+      if (sending) return;
+      editorRef.current?.focus();
+      document.execCommand("insertHTML", false, html);
+      syncEditor();
+    },
+    [sending, syncEditor],
+  );
+
   const insertLink = useCallback(() => {
     if (sending) return;
     const url = window.prompt("Enter link URL (https://...)");
     if (!url) return;
+    const id = youTubeId(url.trim());
+    if (id) {
+      insertHtml(youTubeBlock(url.trim(), id));
+      return;
+    }
     exec("createLink", url);
-  }, [exec, sending]);
+  }, [exec, insertHtml, sending]);
 
-  const pickImage = useCallback(() => {
-    if (sending || uploadingImage) return;
-    imageInputRef.current?.click();
-  }, [sending, uploadingImage]);
+  /** Upgrade plain YouTube links (e.g. from the link prompt) to a thumbnail block. */
+  const upgradeYouTubeLinks = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    let changed = false;
 
-  const handleImageFile = useCallback(
+    // Remove any previously generated thumbnail blocks so we don't duplicate them on repeated passes.
+    el.querySelectorAll("[data-youtube-thumb='true']").forEach((node) => node.remove());
+
+    el.querySelectorAll("a[href]").forEach((anchor) => {
+      if (anchor.closest("[data-youtube-thumb]")) return;
+      const href = anchor.getAttribute("href") ?? "";
+      const id = youTubeId(href);
+      if (!id || anchor.querySelector("img")) return;
+
+      const block = document.createElement("div");
+      block.setAttribute("data-youtube-thumb", "true");
+      block.innerHTML = youTubeBlock(href, id);
+      anchor.insertAdjacentElement("afterend", block);
+      changed = true;
+    });
+
+    if (changed) syncEditor();
+  }, [syncEditor]);
+
+  const pickInlineImage = useCallback(() => {
+    if (sending || uploadingKind) return;
+    inlineImageInputRef.current?.click();
+  }, [sending, uploadingKind]);
+
+  const handleInlineImage = useCallback(
     async (file: File | undefined) => {
-      if (!file || sending) return;
+      if (!file || sending || uploadingKind) return;
       if (!file.type.startsWith("image/")) {
         toast({ title: "Not an image", description: "Choose a PNG, JPG, GIF or WebP file.", variant: "destructive" });
         return;
       }
-      if (file.size > MAX_IMAGE_BYTES) {
-        toast({ title: "Image too large", description: "Images must be 5 MB or smaller.", variant: "destructive" });
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        toast({ title: "Image too large", description: "Images must be 10 MB or smaller.", variant: "destructive" });
         return;
       }
 
-      setUploadingImage(true);
+      setUploadingKind("inline");
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError || !userData.user) throw new Error("Sign in required to upload images.");
@@ -316,66 +380,65 @@ const AdminMailTab = () => {
         if (uploadError) throw uploadError;
 
         const { data: publicUrlData } = supabase.storage.from("attachments").getPublicUrl(path);
-        const url = publicUrlData.publicUrl;
-
-        // Insert the image at the caret so it lands where the admin is writing.
-        const alt = file.name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-        editorRef.current?.focus();
-        document.execCommand(
-          "insertHTML",
-          false,
-          `<img src="${url}" alt="${alt}" style="max-width:100%;height:auto;" />`,
-        );
-        syncEditor();
-        toast({ title: "Image added", description: "The image was uploaded and inserted into your message." });
+        const alt = escapeAttr(file.name);
+        insertHtml(`<img src="${publicUrlData.publicUrl}" alt="${alt}" style="${IMAGE_STYLE}" />`);
+        toast({ title: "Image added", description: "The image was inserted into your message." });
       } catch (error) {
-        console.error("Could not upload mail image:", error);
+        console.error("Could not insert mail image:", error);
         toast({
           title: "Upload failed",
           description: error instanceof Error ? error.message : "Please try again.",
           variant: "destructive",
         });
       } finally {
-        setUploadingImage(false);
-        if (imageInputRef.current) imageInputRef.current.value = "";
+        setUploadingKind(null);
+        if (inlineImageInputRef.current) inlineImageInputRef.current.value = "";
       }
     },
-    [sending, syncEditor, toast],
+    [insertHtml, sending, toast, uploadingKind],
   );
 
+  const pickImage = useCallback(() => {
+    if (sending || uploadingKind) return;
+    imageInputRef.current?.click();
+  }, [sending, uploadingKind]);
+
   const pickPdf = useCallback(() => {
-    if (sending || uploadingPdf) return;
+    if (sending || uploadingKind) return;
     pdfInputRef.current?.click();
-  }, [sending, uploadingPdf]);
+  }, [sending, uploadingKind]);
 
-  const handlePdfFile = useCallback(
-    async (files: FileList | null) => {
-      if (!files || files.length === 0 || sending) return;
+  /** Upload files to storage and list them as email attachments (never inline). */
+  const uploadAttachments = useCallback(
+    async (files: FileList | null, kind: "image" | "pdf") => {
+      if (!files || files.length === 0 || sending || uploadingKind) return;
 
+      const input = kind === "image" ? imageInputRef : pdfInputRef;
       const incoming = Array.from(files);
-      if (attachments.length + incoming.length > MAX_PDFS) {
+
+      if (attachments.length + incoming.length > MAX_ATTACHMENTS) {
         toast({
           title: "Too many attachments",
-          description: `You can attach up to ${MAX_PDFS} PDFs per email.`,
+          description: `You can attach up to ${MAX_ATTACHMENTS} files per email.`,
           variant: "destructive",
         });
-        if (pdfInputRef.current) pdfInputRef.current.value = "";
+        if (input.current) input.current.value = "";
         return;
       }
 
       const existingBytes = attachments.reduce((total, attachment) => total + attachment.size, 0);
       const incomingBytes = incoming.reduce((total, file) => total + file.size, 0);
-      if (existingBytes + incomingBytes > MAX_TOTAL_PDF_BYTES) {
+      if (existingBytes + incomingBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
         toast({
           title: "Attachments too large",
-          description: "PDF attachments must total 20 MB or less per email.",
+          description: "Attachments must total 20 MB or less per email.",
           variant: "destructive",
         });
-        if (pdfInputRef.current) pdfInputRef.current.value = "";
+        if (input.current) input.current.value = "";
         return;
       }
 
-      setUploadingPdf(true);
+      setUploadingKind(kind);
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError || !userData.user) throw new Error("Sign in required to upload attachments.");
@@ -383,33 +446,44 @@ const AdminMailTab = () => {
         const uploaded: MailAttachment[] = [];
 
         for (const file of incoming) {
+          const isImage = file.type.startsWith("image/");
           const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-          if (!isPdf) {
-            toast({ title: "Not a PDF", description: `${file.name} is not a PDF file.`, variant: "destructive" });
+
+          if ((kind === "image" && !isImage) || (kind === "pdf" && !isPdf)) {
+            toast({
+              title: kind === "image" ? "Not an image" : "Not a PDF",
+              description: `${file.name} was skipped.`,
+              variant: "destructive",
+            });
             continue;
           }
-          if (file.size > MAX_PDF_BYTES) {
-            toast({ title: "PDF too large", description: `${file.name} is larger than 10 MB.`, variant: "destructive" });
+          if (file.size > MAX_ATTACHMENT_BYTES) {
+            toast({ title: "File too large", description: `${file.name} is larger than 10 MB.`, variant: "destructive" });
             continue;
           }
 
-          const baseName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-          const path = `${userData.user.id}/mail-pdfs/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${baseName}`;
+          const baseName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-") || "attachment";
+          const path = `${userData.user.id}/mail-attachments/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${baseName}`;
 
           const { error: uploadError } = await supabase.storage
             .from("attachments")
-            .upload(path, file, { cacheControl: "3600", upsert: false, contentType: "application/pdf" });
+            .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
           if (uploadError) throw uploadError;
 
           const { data: publicUrlData } = supabase.storage.from("attachments").getPublicUrl(path);
-          uploaded.push({ name: file.name, url: publicUrlData.publicUrl, size: file.size });
+          uploaded.push({
+            name: file.name,
+            url: publicUrlData.publicUrl,
+            size: file.size,
+            kind: kind === "image" ? "image" : "pdf",
+          });
         }
 
         if (uploaded.length > 0) {
           setAttachments((prev) => [...prev, ...uploaded]);
           toast({
-            title: "PDF attached",
-            description: `${uploaded.length} PDF${uploaded.length === 1 ? "" : "s"} added to this email.`,
+            title: "Attachment added",
+            description: `${uploaded.length} file${uploaded.length === 1 ? "" : "s"} attached to this email.`,
           });
         }
       } catch (error) {
@@ -420,11 +494,11 @@ const AdminMailTab = () => {
           variant: "destructive",
         });
       } finally {
-        setUploadingPdf(false);
-        if (pdfInputRef.current) pdfInputRef.current.value = "";
+        setUploadingKind(null);
+        if (input.current) input.current.value = "";
       }
     },
-    [attachments, sending, toast],
+    [attachments, sending, uploadingKind, toast],
   );
 
   const removeAttachment = (url: string) => {
@@ -458,7 +532,8 @@ const AdminMailTab = () => {
 
       const total = recipients.length;
       const running: SendSummary = { sent: 0, skipped: 0, failed: 0 };
-      const bodyHtml = messageHtml.trim();
+      upgradeYouTubeLinks();
+      const bodyHtml = (editorRef.current?.innerHTML ?? messageHtml).trim();
 
       for (let index = 0; index < recipients.length; index += BATCH_SIZE) {
         const batch = recipients.slice(index, index + BATCH_SIZE);
@@ -717,8 +792,14 @@ const AdminMailTab = () => {
 
           <div className="space-y-2">
             <Label>Message</Label>
+            <p className="text-xs text-muted-foreground">
+              Live preview — this is exactly how the email will look. Images and PDFs are delivered as attachments.
+            </p>
             <div className="overflow-hidden rounded-md border">
-              <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 p-1">
+              <div
+                className="flex flex-wrap items-center gap-1 border-b bg-muted/40 p-1"
+                onMouseDown={(event) => event.preventDefault()}
+              >
                 <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("bold")} disabled={sending} title="Bold">
                   <Bold className="h-4 w-4" />
                 </Button>
@@ -749,21 +830,55 @@ const AdminMailTab = () => {
                   <ListOrdered className="h-4 w-4" />
                 </Button>
                 <div className="mx-1 h-4 w-px bg-border" />
-                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={insertLink} disabled={sending} title="Insert link">
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={insertLink} disabled={sending} title="Insert link or YouTube video">
                   <LinkIcon className="h-4 w-4" />
                 </Button>
-                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={pickImage} disabled={sending || uploadingImage} title="Upload image">
-                  {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={pickInlineImage}
+                  disabled={sending || Boolean(uploadingKind)}
+                  title="Insert image in email"
+                >
+                  {uploadingKind === "inline" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                 </Button>
-                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={pickPdf} disabled={sending || uploadingPdf || attachments.length >= MAX_PDFS} title="Attach PDF">
-                  {uploadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={pickImage}
+                  disabled={sending || Boolean(uploadingKind) || attachments.length >= MAX_ATTACHMENTS}
+                  title="Attach image"
+                >
+                  {uploadingKind === "image" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={pickPdf}
+                  disabled={sending || Boolean(uploadingKind) || attachments.length >= MAX_ATTACHMENTS}
+                  title="Attach PDF"
+                >
+                  {uploadingKind === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                </Button>
+                <input
+                  ref={inlineImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => void handleInlineImage(event.target.files?.[0])}
+                />
                 <input
                   ref={imageInputRef}
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(event) => void handleImageFile(event.target.files?.[0])}
+                  onChange={(event) => void uploadAttachments(event.target.files, "image")}
                 />
                 <input
                   ref={pdfInputRef}
@@ -771,7 +886,7 @@ const AdminMailTab = () => {
                   accept="application/pdf,.pdf"
                   multiple
                   className="hidden"
-                  onChange={(event) => void handlePdfFile(event.target.files)}
+                  onChange={(event) => void uploadAttachments(event.target.files, "pdf")}
                 />
                 <div className="mx-1 h-4 w-px bg-border" />
                 <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("undo")} disabled={sending} title="Undo">
@@ -784,25 +899,70 @@ const AdminMailTab = () => {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              <div
-                ref={editorRef}
-                contentEditable={!sending}
-                suppressContentEditableWarning
-                onInput={syncEditor}
-                onBlur={syncEditor}
-                className={cn(
-                  "prose prose-sm max-w-none p-4 min-h-[260px] focus:outline-none",
-                  "prose-headings:my-3 prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-blockquote:my-2 prose-img:max-w-full prose-img:h-auto",
-                  sending && "pointer-events-none opacity-70",
-                )}
-                data-placeholder="Write your message..."
-              />
+
+              {/* Mirrors the HTML the send-admin-mail function wraps around the body. */}
+              <div className="bg-[#f4f4f5] p-3 sm:p-5">
+                <div className="mx-auto max-w-[600px] overflow-hidden rounded-t-3xl rounded-b-xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
+                  <div className="rounded-t-3xl border-2 border-[#7c3aed] bg-white px-8 py-6 text-center">
+                    <span className="text-[22px] font-bold tracking-[1px] text-[#7c3aed]">INVESTOURS</span>
+                  </div>
+                  <div className="px-8 pt-8 pb-5">
+                    <h1 className="m-0 font-[Arial,Helvetica,sans-serif] text-[22px] font-bold leading-[1.3] text-[#1a1a2e]">
+                      {subject.trim() || "Subject line preview"}
+                    </h1>
+                  </div>
+                  <div
+                    ref={editorRef}
+                    contentEditable={!sending}
+                    suppressContentEditableWarning
+                    onInput={syncEditor}
+                    onBlur={() => {
+                      upgradeYouTubeLinks();
+                      syncEditor();
+                    }}
+                    onPaste={(event) => {
+                      const text = event.clipboardData.getData("text/plain").trim();
+                      const id = youTubeId(text);
+                      if (id && !/\s/.test(text)) {
+                        event.preventDefault();
+                        insertHtml(youTubeBlock(text, id));
+                        window.setTimeout(() => {
+                          upgradeYouTubeLinks();
+                          syncEditor();
+                        }, 0);
+                        return;
+                      }
+                      window.setTimeout(syncEditor, 0);
+                    }}
+                    className={cn(
+                      "min-h-[260px] bg-white px-8 pb-8 pt-0 font-[Arial,Helvetica,sans-serif] text-sm leading-[1.65] text-[#444] outline-none",
+                      "[&_p]:mb-4 [&_p]:mt-0",
+                      "[&_h1]:mb-4 [&_h1]:mt-0 [&_h1]:text-[22px] [&_h1]:font-bold [&_h1]:text-[#1a1a2e]",
+                      "[&_h2]:mb-3 [&_h2]:mt-0 [&_h2]:text-[18px] [&_h2]:font-bold [&_h2]:text-[#1a1a2e]",
+                      "[&_ul]:mb-4 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:mb-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:mb-2",
+                      "[&_blockquote]:my-4 [&_blockquote]:border-l-4 [&_blockquote]:border-[#7c3aed] [&_blockquote]:pl-4 [&_blockquote]:text-[#555]",
+                      "[&_a]:text-[#7c3aed] [&_a]:underline",
+                      "[&_img]:mb-4 [&_img]:block [&_img]:h-auto [&_img]:w-full [&_img]:max-w-[520px] [&_img]:rounded-lg",
+                      sending && "pointer-events-none opacity-70",
+                    )}
+                    data-placeholder="Write your message..."
+                  />
+                  <div className="bg-[#f4f4f5] px-8 py-5 text-center text-xs text-[#888]">
+                    <p className="mb-2">You're receiving this because you have an Investours account.</p>
+                    <p>© {new Date().getFullYear()} Investours. All rights reserved.</p>
+                  </div>
+                </div>
+              </div>
             </div>
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {attachments.map((attachment) => (
                   <Badge key={attachment.url} variant="secondary" className="gap-1 pr-1">
-                    <Paperclip className="h-3 w-3 shrink-0" />
+                    {attachment.kind === "image" ? (
+                      <ImageIcon className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <Paperclip className="h-3 w-3 shrink-0" />
+                    )}
                     <span className="max-w-[16rem] truncate" title={attachment.name}>{attachment.name}</span>
                     <button
                       type="button"

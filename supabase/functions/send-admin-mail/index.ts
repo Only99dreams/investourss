@@ -89,17 +89,31 @@ function buildEmail(subject: string, body: string, htmlBody?: string): string {
   const content = htmlBody && htmlBody.trim() ? sanitizeEmailHtml(htmlBody) : messageHtmlPlain(body);
   return `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  .mail-content { font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #444444; line-height: 1.65; }
+  .mail-content p { margin: 0 0 16px; }
+  .mail-content h1 { margin: 0 0 16px; color: #1a1a2e; font-size: 22px; line-height: 1.3; }
+  .mail-content h2 { margin: 0 0 12px; color: #1a1a2e; font-size: 18px; line-height: 1.3; }
+  .mail-content ul, .mail-content ol { margin: 0 0 16px; padding-left: 24px; }
+  .mail-content li { margin: 0 0 8px; }
+  .mail-content blockquote { margin: 16px 0; padding: 4px 0 4px 16px; border-left: 4px solid #7c3aed; color: #555555; }
+  .mail-content a { color: #7c3aed; text-decoration: underline; }
+  .mail-content img { display: block; width: 100%; max-width: 520px; height: auto; margin: 0 0 16px; border-radius: 8px; }
+</style>
+</head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-        <tr><td style="background:#1a1a2e;padding:24px 32px;text-align:center;">
-          <span style="color:#f5c842;font-size:22px;font-weight:bold;letter-spacing:1px;">INVESTOURS</span>
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:24px 24px 12px 12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#ffffff;border:2px solid #7c3aed;border-radius:24px 24px 0 0;padding:24px 32px;text-align:center;">
+          <span style="color:#7c3aed;font-size:22px;font-weight:bold;letter-spacing:1px;">INVESTOURS</span>
         </td></tr>
         <tr><td style="padding:32px;color:#444;line-height:1.65;">
           <h1 style="color:#1a1a2e;font-size:22px;margin:0 0 20px;">${escapeHtml(subject)}</h1>
-          ${content}
+          <div class="mail-content">${content}</div>
         </td></tr>
         <tr><td style="background:#f4f4f5;padding:20px 32px;text-align:center;font-size:12px;color:#888;">
           <p style="margin:0 0 8px;">You're receiving this because you have an Investours account.</p>
@@ -124,7 +138,7 @@ function toBase64(bytes: Uint8Array): string {
 }
 
 function safeFilename(value: string): string {
-  return value.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/^-+/, "").slice(0, 120) || "attachment.pdf";
+  return value.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/^-+/, "").slice(0, 120) || "attachment";
 }
 
 async function sendOne(
@@ -241,7 +255,7 @@ serve(async (req) => {
     const storagePrefix = `${supabaseUrl}/storage/v1/object/public/attachments/`;
     const incomingAttachments = Array.isArray(body.attachments) ? body.attachments : [];
     if (incomingAttachments.length > MAX_ATTACHMENTS) {
-      return json({ error: `Attach at most ${MAX_ATTACHMENTS} PDFs per email.` }, 400);
+      return json({ error: `Attach at most ${MAX_ATTACHMENTS} files per email.` }, 400);
     }
 
     const attachments: ResendAttachment[] = [];
@@ -266,7 +280,7 @@ serve(async (req) => {
       }
       attachmentBytes += bytes.byteLength;
       if (attachmentBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
-        return json({ error: "PDF attachments must total 20 MB or less per email." }, 400);
+        return json({ error: "Attachments must total 20 MB or less per email." }, 400);
       }
 
       attachments.push({
