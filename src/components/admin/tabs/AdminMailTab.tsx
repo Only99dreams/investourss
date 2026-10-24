@@ -366,19 +366,30 @@ const AdminMailTab = () => {
     const trimmed = url.trim();
     const id = youTubeId(trimmed);
     if (id) {
+      const el = editorRef.current;
       // Remove any existing YouTube content
-      editorRef.current?.querySelectorAll("[data-youtube-block='1'], [data-youtube-thumb='true'], a[href]").forEach((node) => {
+      el?.querySelectorAll("[data-youtube-block='1'], [data-youtube-thumb='true'], a[href]").forEach((node) => {
         const href = (node as HTMLAnchorElement).getAttribute?.("href") || "";
         if (youTubeId(href) || node.getAttribute("data-youtube-block") === "1" || node.getAttribute("data-youtube-thumb") === "true") {
           node.remove();
         }
       });
-      insertHtml(youTubeBlock(trimmed, id));
-      window.setTimeout(() => upgradeYouTubeLinks(), 0);
+      el?.querySelectorAll("p, div, span").forEach((n) => {
+        if (n.textContent && n.textContent.trim() === trimmed && n.children.length === 0) {
+          n.remove();
+        }
+      });
+      el?.focus();
+      document.execCommand("insertHTML", false, youTubeBlock(trimmed, id));
+      syncEditor();
+      window.setTimeout(() => {
+        upgradeYouTubeLinks();
+        syncEditor();
+      }, 0);
       return;
     }
     exec("createLink", url);
-  }, [exec, insertHtml, sending, upgradeYouTubeLinks]);
+  }, [exec, sending, syncEditor, upgradeYouTubeLinks]);
 
   /** Upgrade plain YouTube links (e.g. from the link prompt) to a thumbnail block. */
   
