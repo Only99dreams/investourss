@@ -86,19 +86,20 @@ const youTubeId = (value: string) => value.match(YOUTUBE_URL_RE)?.[1] ?? null;
 const escapeAttr = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** A thumbnail block used instead of a plain link for YouTube URLs. */
-const youTubeBlock = (url: string, id: string) => {
-  const href = escapeAttr(url);
-  const thumb = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-  return (
-    `<a href="${href}" style="display:block;max-width:520px;">` +
-    `<img src="${thumb}" alt="YouTube video thumbnail" style="${IMAGE_STYLE}" />` +
-    `</a>` +
-    `<p style="margin:8px 0 16px;">` +
-    `<a href="${href}" style="color:#7c3aed;text-decoration:underline;">\u25B6 Watch on YouTube</a>` +
-    `</p>`
-  );
-};
+  const youTubeBlock = (url: string, id: string) => {
+    const href = escapeAttr(url);
+    const thumb = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+    return (
+      `<div data-youtube-block="1" contenteditable="false" style="display:block;max-width:520px;margin:0 0 16px;">` +
+      `<a href="${href}" target="_blank" rel="noopener noreferrer" style="display:block;">` +
+      `<img src="${thumb}" alt="YouTube video thumbnail" style="${IMAGE_STYLE} margin:0;" />` +
+      `</a>` +
+      `<p style="margin:8px 0 0;">` +
+      `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:underline;">\u25B6 Watch on YouTube</a>` +
+      `</p>` +
+      `</div>`
+    );
+  };
 
 const AdminMailTab = () => {
   const { toast } = useToast();
@@ -316,13 +317,22 @@ const AdminMailTab = () => {
     if (sending) return;
     const url = window.prompt("Enter link URL (https://...)");
     if (!url) return;
-    const id = youTubeId(url.trim());
+    const trimmed = url.trim();
+    const id = youTubeId(trimmed);
     if (id) {
-      insertHtml(youTubeBlock(url.trim(), id));
+      // Remove any existing YouTube content
+      editorRef.current?.querySelectorAll("[data-youtube-block='1'], [data-youtube-thumb='true'], a[href]").forEach((node) => {
+        const href = (node as HTMLAnchorElement).getAttribute?.("href") || "";
+        if (youTubeId(href) || node.getAttribute("data-youtube-block") === "1" || node.getAttribute("data-youtube-thumb") === "true") {
+          node.remove();
+        }
+      });
+      insertHtml(youTubeBlock(trimmed, id));
+      window.setTimeout(() => upgradeYouTubeLinks(), 0);
       return;
     }
     exec("createLink", url);
-  }, [exec, insertHtml, sending]);
+  }, [exec, insertHtml, sending, upgradeYouTubeLinks]);
 
   /** Upgrade plain YouTube links (e.g. from the link prompt) to a thumbnail block. */
   const upgradeYouTubeLinks = useCallback(() => {
@@ -330,35 +340,41 @@ const AdminMailTab = () => {
     if (!el) return;
     let changed = false;
 
-    // Remove any previously generated thumbnail blocks so we don't duplicate them on repeated passes.
-    el.querySelectorAll("[data-youtube-thumb='true']").forEach((node) => node.remove());
-
-    const anchors = Array.from(el.querySelectorAll("a[href]"));
-    const processed = new Set<string>();
-
-    for (const anchor of anchors) {
-      if (anchor.closest("[data-youtube-thumb]")) continue;
+    // Remove all existing YouTube blocks/anchors and rebuild from scratch
+    el.querySelectorAll("[data-youtube-thumb='true'], [data-youtube-block='1']").forEach((node) => node.remove());
+    el.querySelectorAll("a[href]").forEach((anchor) => {
       const href = anchor.getAttribute("href") ?? "";
-      const id = youTubeId(href);
-      if (!id || anchor.querySelector("img")) continue;
-
-      // If we've already processed this YouTube video ID, skip duplicate anchors
-      if (processed.has(id)) {
+      if (youTubeId(href)) {
         anchor.remove();
+        changed = true;
+      }
+    });
+
+    // Find raw YouTube URLs in text nodes
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const textNodes: Text[] = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      textNodes.push(node as Text);
+    }
+
+    const processed = new Set<string>();
+    for (const textNode of textNodes) {
+      const text = textNode.textContent || "";
+      const match = text.match(YOUTUBE_URL_RE);
+      if (!match) continue;
+      const url = match[0].startsWith("http") ? match[0] : `https://${match[0]}`;
+      const id = youTubeId(url);
+      if (!id || processed.has(id)) {
+        textNode.parentElement?.removeChild(textNode);
         changed = true;
         continue;
       }
       processed.add(id);
 
-      // Avoid upgrading if we've already inserted a block right after this anchor in a previous pass.
-      if (anchor.nextElementSibling?.getAttribute("data-youtube-thumb") === "true") {
-        anchor.nextElementSibling.remove();
-      }
-
-      const block = document.createElement("div");
-      block.setAttribute("data-youtube-thumb", "true");
-      block.innerHTML = youTubeBlock(href, id);
-      anchor.insertAdjacentElement("afterend", block);
+      const span = document.createElement("div");
+      span.innerHTML = youTubeBlock(url, id);
+      textNode.parentElement?.replaceChild(span.firstElementChild || span, textNode);
       changed = true;
     }
 
@@ -941,11 +957,17 @@ const AdminMailTab = () => {
                       const id = youTubeId(text);
                       if (id && !/\s/.test(text)) {
                         event.preventDefault();
-                        // Clear any stale upgraded blocks first
-                        editorRef.current?.querySelectorAll("[data-youtube-thumb='true'], a[href]").forEach((node) => {
+                        const el = editorRef.current;
+                        // Clear any stale YouTube content first
+                        el?.querySelectorAll("[data-youtube-block='1'], [data-youtube-thumb='true'], a[href]").forEach((node) => {
                           const href = (node as HTMLAnchorElement).getAttribute?.("href") || "";
-                          if (youTubeId(href) || node.getAttribute("data-youtube-thumb") === "true") {
+                          if (youTubeId(href) || node.getAttribute("data-youtube-block") === "1" || node.getAttribute("data-youtube-thumb") === "true") {
                             node.remove();
+                          }
+                        });
+                        el?.querySelectorAll("p, div, span").forEach((n) => {
+                          if (n.textContent && n.textContent.trim() === text && n.children.length === 0) {
+                            n.remove();
                           }
                         });
                         insertHtml(youTubeBlock(text, id));
