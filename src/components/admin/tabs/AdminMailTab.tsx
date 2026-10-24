@@ -361,14 +361,7 @@ const AdminMailTab = () => {
     return recipients;
   };
 
-  const syncEditor = useCallback(() => {
-    const el = editorRef.current;
-    if (!el) return;
-    setMessageHtml(el.innerHTML);
-    const text = el.innerText || el.textContent || "";
-    setMessageText(text.trim());
-  }, []);
-
+  
   const exec = useCallback(
     (command: string, value?: string) => {
       if (sending) return;
