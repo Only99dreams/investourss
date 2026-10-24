@@ -126,6 +126,14 @@ const AdminMailTab = () => {
 
   const selectedIds = useMemo(() => new Set(selected.map((member) => member.id)), [selected]);
 
+  const syncEditor = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    setMessageHtml(el.innerHTML);
+    const text = el.innerText || el.textContent || "";
+    setMessageText(text.trim());
+  }, []);
+
   const upgradeYouTubeLinks = useCallback(() => {
     const el = editorRef.current;
     if (!el) return;
@@ -186,8 +194,14 @@ const AdminMailTab = () => {
       changed = true;
     }
 
-    if (changed) syncEditor();
-  }, [syncEditor]);
+    if (changed) {
+      const ed = editorRef.current;
+      if (!ed) return;
+      setMessageHtml(ed.innerHTML);
+      const txt = ed.innerText || ed.textContent || "";
+      setMessageText(txt.trim());
+    }
+  }, []);
 
   /** Count the audience for the "all members" option. */
   useEffect(() => {
