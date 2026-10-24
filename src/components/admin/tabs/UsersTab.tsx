@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, Loader2, MoreVertical, Pencil, CheckCircle, XCircle, PieChart, Eye } from "lucide-react";
+import { Users, Search, Loader2, MoreVertical, Pencil, CheckCircle, XCircle, PieChart, Eye, Wallet, ReceiptText, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -67,6 +67,11 @@ const UsersTab = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [referralStats, setReferralStats] = useState<any>(null);
   const [referrerMap, setReferrerMap] = useState<Record<string, string>>({});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [wallet, setWallet] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
+  const [walletLoading, setWalletLoading] = useState(false);
 
   const formatNaira = (value: number) =>
     `₦${Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -76,9 +81,12 @@ const UsersTab = () => {
     setSelectedUser(user);
     setIsDetailsDialogOpen(true);
     setDetailsLoading(true);
+    setWalletLoading(true);
     setPortfolio(null);
     setFollowers([]);
     setReferralStats(null);
+    setWallet(null);
+    setWalletTransactions([]);
 
     try {
       const { data: portfolioData, error: portfolioError } = await supabase
@@ -111,6 +119,38 @@ const UsersTab = () => {
       });
     } finally {
       setDetailsLoading(false);
+    }
+
+    try {
+      const { data: walletData, error: walletError } = await supabase
+        .from("wallets")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (walletError) throw walletError;
+      setWallet(walletData || null);
+
+      if (walletData?.id) {
+        const { data: txData, error: txError } = await supabase
+          .from("wallet_transactions")
+          .select("*")
+          .eq("wallet_id", walletData.id)
+          .order("created_at", { ascending: false })
+          .limit(50);
+        if (txError) throw txError;
+        setWalletTransactions(txData || []);
+      } else {
+        setWalletTransactions([]);
+      }
+    } catch (error) {
+      console.error("Error loading wallet details:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load wallet details",
+        variant: "destructive",
+      });
+    } finally {
+      setWalletLoading(false);
     }
   };
 
@@ -520,6 +560,119 @@ const UsersTab = () => {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                <Wallet className="w-4 h-4" /> Wallets & Totals
+              </p>
+              {walletLoading ? (
+                <div className="flex justify-center p-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : !wallet ? (
+                <p className="text-sm text-muted-foreground py-3 rounded-lg border bg-background/60 px-3">
+                  No wallet record found for this user.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">User Wallet Balance</p>
+                    <p className="text-lg font-bold">{formatNaira(wallet.user_wallet_balance)}</p>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">GFE Wallet Balance</p>
+                    <p className="text-lg font-bold">{formatNaira(wallet.gfe_wallet_balance)}</p>
+                  </div>
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                    <p className="text-xs text-muted-foreground">Total Wallet Balance</p>
+                    <p className="text-lg font-bold text-primary">
+                      {formatNaira(Number(wallet.user_wallet_balance || 0) + Number(wallet.gfe_wallet_balance || 0))}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">Total Referral Earnings (Recorded)</p>
+                    <p className="text-lg font-bold">{formatNaira(referralStats?.total_earnings)}</p>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">Gem Points</p>
+                    <p className="text-lg font-bold">{wallet.gem_points ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-3">
+                    <p className="text-xs text-muted-foreground">Total Income (Referrals + Portfolio)</p>
+                    <p className="text-lg font-bold">
+                      {formatNaira(
+                        Number(referralStats?.total_earnings || 0) +
+                          Number(portfolio?.current_portfolio_value || 0) +
+                          Number(portfolio?.total_earned_individuals || 0) +
+                          Number(portfolio?.total_earned_businesses || 0)
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                <ReceiptText className="w-4 h-4" /> Recent Transactions
+              </p>
+              {walletLoading ? (
+                <div className="flex justify-center p-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : !wallet ? (
+                <p className="text-sm text-muted-foreground py-3 rounded-lg border bg-background/60 px-3">
+                  No transactions to show.
+                </p>
+              ) : walletTransactions.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-3 rounded-lg border bg-background/60 px-3">
+                  No wallet transactions yet.
+                </p>
+              ) : (
+                <div className="rounded-md border overflow-x-auto max-h-72 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Narration</TableHead>
+                        <TableHead>Source</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {walletTransactions.map((tx) => (
+                        <TableRow key={tx.id}>
+                          <TableCell className="whitespace-nowrap">
+                            {new Date(tx.created_at).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="capitalize">
+                            <div className="flex items-center gap-2">
+                              {tx.transaction_type === "credit" ? (
+                                <ArrowDownCircle className="h-4 w-4 text-emerald-500" />
+                              ) : (
+                                <ArrowUpCircle className="h-4 w-4 text-amber-500" />
+                              )}
+                              {tx.transaction_type}
+                            </div>
+                          </TableCell>
+                          <TableCell className="max-w-[320px] truncate" title={tx.narration || ""}>
+                            {tx.narration || "—"}
+                          </TableCell>
+                          <TableCell className="capitalize">{tx.source || "—"}</TableCell>
+                          <TableCell className="capitalize">{tx.status || "completed"}</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {tx.transaction_type === "credit" ? "+" : "-"}
+                            {formatNaira(tx.amount)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </div>
