@@ -86,20 +86,20 @@ const youTubeId = (value: string) => value.match(YOUTUBE_URL_RE)?.[1] ?? null;
 const escapeAttr = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-  const youTubeBlock = (url: string, id: string) => {
-    const href = escapeAttr(url);
-    const thumb = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
-    return (
-      `<div data-youtube-block="1" contenteditable="false" style="display:block;max-width:520px;margin:0 0 16px;">` +
-      `<a href="${href}" target="_blank" rel="noopener noreferrer" style="display:block;">` +
-      `<img src="${thumb}" alt="YouTube video thumbnail" style="${IMAGE_STYLE} margin:0;" />` +
-      `</a>` +
-      `<p style="margin:8px 0 0;">` +
-      `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:underline;">\u25B6 Watch on YouTube</a>` +
-      `</p>` +
-      `</div>`
-    );
-  };
+const youTubeBlock = (url: string, id: string) => {
+  const href = escapeAttr(url);
+  const thumb = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  return (
+    `<div data-youtube-block="1" contenteditable="false" style="display:block;max-width:520px;margin:0 0 16px;">` +
+    `<a href="${href}" target="_blank" rel="noopener noreferrer" style="display:block;">` +
+    `<img src="${thumb}" alt="YouTube video thumbnail" style="${IMAGE_STYLE} margin:0;" />` +
+    `</a>` +
+    `<p style="margin:8px 0 0;">` +
+    `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:underline;">\u25B6 Watch on YouTube</a>` +
+    `</p>` +
+    `</div>`
+  );
+};
 
 const AdminMailTab = () => {
   const { toast } = useToast();
@@ -125,6 +125,52 @@ const AdminMailTab = () => {
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const selectedIds = useMemo(() => new Set(selected.map((member) => member.id)), [selected]);
+
+  const upgradeYouTubeLinks = useCallback(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    let changed = false;
+
+    // Remove all existing YouTube blocks/anchors and rebuild from scratch
+    el.querySelectorAll("[data-youtube-thumb='true'], [data-youtube-block='1']").forEach((node) => node.remove());
+    el.querySelectorAll("a[href]").forEach((anchor) => {
+      const href = anchor.getAttribute("href") ?? "";
+      if (youTubeId(href)) {
+        anchor.remove();
+        changed = true;
+      }
+    });
+
+    // Find raw YouTube URLs in text nodes
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const textNodes: Text[] = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      textNodes.push(node as Text);
+    }
+
+    const processed = new Set<string>();
+    for (const textNode of textNodes) {
+      const text = textNode.textContent || "";
+      const match = text.match(YOUTUBE_URL_RE);
+      if (!match) continue;
+      const url = match[0].startsWith("http") ? match[0] : `https://${match[0]}`;
+      const id = youTubeId(url);
+      if (!id || processed.has(id)) {
+        textNode.parentElement?.removeChild(textNode);
+        changed = true;
+        continue;
+      }
+      processed.add(id);
+
+      const span = document.createElement("div");
+      span.innerHTML = youTubeBlock(url, id);
+      textNode.parentElement?.replaceChild(span.firstElementChild || span, textNode);
+      changed = true;
+    }
+
+    if (changed) syncEditor();
+  }, []);
 
   /** Count the audience for the "all members" option. */
   useEffect(() => {
