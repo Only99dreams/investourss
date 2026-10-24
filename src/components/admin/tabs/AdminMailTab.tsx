@@ -333,12 +333,22 @@ const AdminMailTab = () => {
     // Remove any previously generated thumbnail blocks so we don't duplicate them on repeated passes.
     el.querySelectorAll("[data-youtube-thumb='true']").forEach((node) => node.remove());
 
-    el.querySelectorAll("a[href]").forEach((anchor) => {
-      if (anchor.closest("[data-youtube-thumb]")) return;
+    const anchors = Array.from(el.querySelectorAll("a[href]"));
+    const processed = new Set<string>();
+
+    for (const anchor of anchors) {
+      if (anchor.closest("[data-youtube-thumb]")) continue;
       const href = anchor.getAttribute("href") ?? "";
       const id = youTubeId(href);
-      if (!id || anchor.querySelector("img")) return;
-      if (anchor.parentElement?.querySelector("[data-youtube-thumb='true']")) return;
+      if (!id || anchor.querySelector("img")) continue;
+
+      // If we've already processed this YouTube video ID, skip duplicate anchors
+      if (processed.has(id)) {
+        anchor.remove();
+        changed = true;
+        continue;
+      }
+      processed.add(id);
 
       // Avoid upgrading if we've already inserted a block right after this anchor in a previous pass.
       if (anchor.nextElementSibling?.getAttribute("data-youtube-thumb") === "true") {
@@ -350,19 +360,7 @@ const AdminMailTab = () => {
       block.innerHTML = youTubeBlock(href, id);
       anchor.insertAdjacentElement("afterend", block);
       changed = true;
-    });
-
-    // Final pass: remove any accidental duplicate blocks
-    const seen = new Set();
-    el.querySelectorAll("[data-youtube-thumb='true']").forEach((block) => {
-      const key = block.querySelector("a")?.getAttribute("href") || block.innerHTML;
-      if (seen.has(key)) {
-        block.remove();
-        changed = true;
-        return;
-      }
-      seen.add(key);
-    });
+    }
 
     if (changed) syncEditor();
   }, [syncEditor]);
@@ -944,7 +942,12 @@ const AdminMailTab = () => {
                       if (id && !/\s/.test(text)) {
                         event.preventDefault();
                         // Clear any stale upgraded blocks first
-                        editorRef.current?.querySelectorAll("[data-youtube-thumb='true']").forEach((node) => node.remove());
+                        editorRef.current?.querySelectorAll("[data-youtube-thumb='true'], a[href]").forEach((node) => {
+                          const href = (node as HTMLAnchorElement).getAttribute?.("href") || "";
+                          if (youTubeId(href) || node.getAttribute("data-youtube-thumb") === "true") {
+                            node.remove();
+                          }
+                        });
                         insertHtml(youTubeBlock(text, id));
                         window.setTimeout(() => {
                           upgradeYouTubeLinks();
