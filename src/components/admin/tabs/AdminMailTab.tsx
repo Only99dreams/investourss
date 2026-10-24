@@ -157,20 +157,37 @@ const AdminMailTab = () => {
       const url = match[0].startsWith("http") ? match[0] : `https://${match[0]}`;
       const id = youTubeId(url);
       if (!id || processed.has(id)) {
-        textNode.parentElement?.removeChild(textNode);
+        if (textNode.parentElement && textNode.parentElement !== el) {
+          textNode.parentElement.removeChild(textNode);
+        } else {
+          textNode.textContent = "";
+        }
         changed = true;
         continue;
       }
       processed.add(id);
 
-      const span = document.createElement("div");
-      span.innerHTML = youTubeBlock(url, id);
-      textNode.parentElement?.replaceChild(span.firstElementChild || span, textNode);
+      const wrapper = document.createElement("div");
+      wrapper.setAttribute("data-youtube-block", "1");
+      wrapper.setAttribute("contenteditable", "false");
+      wrapper.style.display = "block";
+      wrapper.style.maxWidth = "520px";
+      wrapper.style.margin = "0 0 16px";
+      const href = escapeAttr(url);
+      const thumb = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+      wrapper.innerHTML =
+        `<a href="${href}" target="_blank" rel="noopener noreferrer" style="display:block;">` +
+        `<img src="${thumb}" alt="YouTube video thumbnail" style="width:100%;max-width:520px;height:auto;display:block;border:0;border-radius:8px;margin:0;" />` +
+        `</a>` +
+        `<p style="margin:8px 0 0;">` +
+        `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#7c3aed;text-decoration:underline;">▶ Watch on YouTube</a>` +
+        `</p>`;
+      textNode.parentElement?.replaceChild(wrapper, textNode);
       changed = true;
     }
 
     if (changed) syncEditor();
-  }, []);
+  }, [syncEditor]);
 
   /** Count the audience for the "all members" option. */
   useEffect(() => {
