@@ -338,12 +338,30 @@ const AdminMailTab = () => {
       const href = anchor.getAttribute("href") ?? "";
       const id = youTubeId(href);
       if (!id || anchor.querySelector("img")) return;
+      if (anchor.parentElement?.querySelector("[data-youtube-thumb='true']")) return;
+
+      // Avoid upgrading if we've already inserted a block right after this anchor in a previous pass.
+      if (anchor.nextElementSibling?.getAttribute("data-youtube-thumb") === "true") {
+        anchor.nextElementSibling.remove();
+      }
 
       const block = document.createElement("div");
       block.setAttribute("data-youtube-thumb", "true");
       block.innerHTML = youTubeBlock(href, id);
       anchor.insertAdjacentElement("afterend", block);
       changed = true;
+    });
+
+    // Final pass: remove any accidental duplicate blocks
+    const seen = new Set();
+    el.querySelectorAll("[data-youtube-thumb='true']").forEach((block) => {
+      const key = block.querySelector("a")?.getAttribute("href") || block.innerHTML;
+      if (seen.has(key)) {
+        block.remove();
+        changed = true;
+        return;
+      }
+      seen.add(key);
     });
 
     if (changed) syncEditor();
@@ -925,6 +943,8 @@ const AdminMailTab = () => {
                       const id = youTubeId(text);
                       if (id && !/\s/.test(text)) {
                         event.preventDefault();
+                        // Clear any stale upgraded blocks first
+                        editorRef.current?.querySelectorAll("[data-youtube-thumb='true']").forEach((node) => node.remove());
                         insertHtml(youTubeBlock(text, id));
                         window.setTimeout(() => {
                           upgradeYouTubeLinks();
