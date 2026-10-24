@@ -13,10 +13,12 @@ import {
   ListOrdered,
   Loader2,
   MailPlus,
+  Paperclip,
   Quote,
   Redo,
   Search,
   Send,
+  Upload,
   Strikethrough,
   Underline,
   Undo,
@@ -51,28 +53,51 @@ interface SendSummary {
 }
 
 const BATCH_SIZE = 20;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
+const MAX_TOTAL_PDF_BYTES = 20 * 1024 * 1024;
+const MAX_PDFS = 3;
+const ALPHABET = ["#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"];
+
+interface MailAttachment {
+  name: string;
+  url: string;
+  size: number;
+}
 
 const memberName = (member: MailMember) =>
   member.full_name?.trim() || member.email?.trim() || "Unnamed member";
 
 const emailOf = (member: MailMember) => member.email?.trim().toLowerCase() ?? "";
 
+/** First letter used for the A-Z jump bar ("#" for numbers and symbols). */
+const initialOf = (member: MailMember) => {
+  const first = memberName(member).charAt(0).toUpperCase();
+  return /[A-Z]/.test(first) ? first : "#";
+};
+
 const AdminMailTab = () => {
   const { toast } = useToast();
   const [audience, setAudience] = useState<Audience>("all");
   const [selected, setSelected] = useState<MailMember[]>([]);
   const [search, setSearch] = useState("");
-  const [results, setResults] = useState<MailMember[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [letter, setLetter] = useState("All");
+  const [members, setMembers] = useState<MailMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
   const [allCount, setAllCount] = useState<number | null>(null);
   const [includeOptedOut, setIncludeOptedOut] = useState(false);
   const [subject, setSubject] = useState("");
   const [messageHtml, setMessageHtml] = useState("");
   const [messageText, setMessageText] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [attachments, setAttachments] = useState<MailAttachment[]>([]);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState(0);
   const [summary, setSummary] = useState<SendSummary | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const selectedIds = useMemo(() => new Set(selected.map((member) => member.id)), [selected]);
 
@@ -107,41 +132,57 @@ const AdminMailTab = () => {
     };
   }, [audience, includeOptedOut]);
 
-  const searchMembers = useCallback(async (query: string) => {
-    setSearching(true);
+  const loadMembers = useCallback(async () => {
+    setLoadingMembers(true);
     try {
-      // Strip PostgREST filter syntax so punctuation in a name cannot alter
-      // the OR expression.
-      const safe = query.trim().replace(/[(),%*\\]/g, " ").trim();
+      const all: MailMember[] = [];
+      const pageSize = 1000;
 
-      let request = supabase
-        .from("profiles")
-        .select("id, full_name, email, email_opt_in")
-        .not("email", "is", null)
-        .neq("email", "")
-        .order("full_name", { ascending: true })
-        .limit(20);
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name, email, email_opt_in")
+          .not("email", "is", null)
+          .neq("email", "")
+          .order("full_name", { ascending: true })
+          .range(from, from + pageSize - 1);
 
-      if (safe) {
-        request = request.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%`);
+        if (error) throw error;
+
+        const rows = (data ?? []) as MailMember[];
+        all.push(...rows);
+        if (rows.length < pageSize) break;
       }
 
-      const { data, error } = await request;
-      if (error) throw error;
-      setResults((data ?? []) as MailMember[]);
+      all.sort((a, b) => memberName(a).localeCompare(memberName(b), undefined, { sensitivity: "base" }));
+      setMembers(all);
     } catch (error) {
-      console.error("Could not search members:", error);
-      setResults([]);
+      console.error("Could not load members:", error);
+      setMembers([]);
     } finally {
-      setSearching(false);
+      setLoadingMembers(false);
     }
   }, []);
 
   useEffect(() => {
     if (audience !== "selected") return;
-    const timer = window.setTimeout(() => void searchMembers(search), search ? 250 : 0);
-    return () => window.clearTimeout(timer);
-  }, [audience, search, searchMembers]);
+    void loadMembers();
+  }, [audience, loadMembers]);
+
+  /** Members matching the active search and A-Z letter, in name order. */
+  const visibleMembers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return members.filter((member) => {
+      if (letter !== "All" && initialOf(member) !== letter) return false;
+      if (!query) return true;
+      return memberName(member).toLowerCase().includes(query) || emailOf(member).includes(query);
+    });
+  }, [members, search, letter]);
+
+  const availableLetters = useMemo(() => {
+    const present = new Set(members.map(initialOf));
+    return ALPHABET.filter((value) => value === "#" ? present.has("#") : present.has(value));
+  }, [members]);
 
   const toggleMember = (member: MailMember) => {
     setSelected((prev) =>
@@ -149,6 +190,27 @@ const AdminMailTab = () => {
         ? prev.filter((item) => item.id !== member.id)
         : [...prev, member],
     );
+  };
+
+  /** Filter by a letter and tick everyone whose name starts with it (toggle off if all ticked). */
+  const selectLetter = (value: string) => {
+    setLetter(value);
+    if (value === "All") return;
+
+    const matches = members.filter((member) => initialOf(member) === value);
+    if (matches.length === 0) return;
+
+    const currentlySelected = new Set(selected.map((member) => member.id));
+    const allSelected = matches.every((member) => currentlySelected.has(member.id));
+
+    setSelected((prev) => {
+      if (allSelected) {
+        const remove = new Set(matches.map((member) => member.id));
+        return prev.filter((member) => !remove.has(member.id));
+      }
+      const existing = new Set(prev.map((member) => member.id));
+      return [...prev, ...matches.filter((member) => !existing.has(member.id))];
+    });
   };
 
   /** Every opted-in profile with an email address, paged to avoid the row cap. */
@@ -223,12 +285,151 @@ const AdminMailTab = () => {
     exec("createLink", url);
   }, [exec, sending]);
 
-  const insertImage = useCallback(() => {
-    if (sending) return;
-    const url = window.prompt("Enter image URL (https://...)");
-    if (!url) return;
-    exec("insertImage", url);
-  }, [exec, sending]);
+  const pickImage = useCallback(() => {
+    if (sending || uploadingImage) return;
+    imageInputRef.current?.click();
+  }, [sending, uploadingImage]);
+
+  const handleImageFile = useCallback(
+    async (file: File | undefined) => {
+      if (!file || sending) return;
+      if (!file.type.startsWith("image/")) {
+        toast({ title: "Not an image", description: "Choose a PNG, JPG, GIF or WebP file.", variant: "destructive" });
+        return;
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        toast({ title: "Image too large", description: "Images must be 5 MB or smaller.", variant: "destructive" });
+        return;
+      }
+
+      setUploadingImage(true);
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData.user) throw new Error("Sign in required to upload images.");
+
+        const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
+        const path = `${userData.user.id}/mail-images/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("attachments")
+          .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage.from("attachments").getPublicUrl(path);
+        const url = publicUrlData.publicUrl;
+
+        // Insert the image at the caret so it lands where the admin is writing.
+        const alt = file.name.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        editorRef.current?.focus();
+        document.execCommand(
+          "insertHTML",
+          false,
+          `<img src="${url}" alt="${alt}" style="max-width:100%;height:auto;" />`,
+        );
+        syncEditor();
+        toast({ title: "Image added", description: "The image was uploaded and inserted into your message." });
+      } catch (error) {
+        console.error("Could not upload mail image:", error);
+        toast({
+          title: "Upload failed",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setUploadingImage(false);
+        if (imageInputRef.current) imageInputRef.current.value = "";
+      }
+    },
+    [sending, syncEditor, toast],
+  );
+
+  const pickPdf = useCallback(() => {
+    if (sending || uploadingPdf) return;
+    pdfInputRef.current?.click();
+  }, [sending, uploadingPdf]);
+
+  const handlePdfFile = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0 || sending) return;
+
+      const incoming = Array.from(files);
+      if (attachments.length + incoming.length > MAX_PDFS) {
+        toast({
+          title: "Too many attachments",
+          description: `You can attach up to ${MAX_PDFS} PDFs per email.`,
+          variant: "destructive",
+        });
+        if (pdfInputRef.current) pdfInputRef.current.value = "";
+        return;
+      }
+
+      const existingBytes = attachments.reduce((total, attachment) => total + attachment.size, 0);
+      const incomingBytes = incoming.reduce((total, file) => total + file.size, 0);
+      if (existingBytes + incomingBytes > MAX_TOTAL_PDF_BYTES) {
+        toast({
+          title: "Attachments too large",
+          description: "PDF attachments must total 20 MB or less per email.",
+          variant: "destructive",
+        });
+        if (pdfInputRef.current) pdfInputRef.current.value = "";
+        return;
+      }
+
+      setUploadingPdf(true);
+      try {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData.user) throw new Error("Sign in required to upload attachments.");
+
+        const uploaded: MailAttachment[] = [];
+
+        for (const file of incoming) {
+          const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+          if (!isPdf) {
+            toast({ title: "Not a PDF", description: `${file.name} is not a PDF file.`, variant: "destructive" });
+            continue;
+          }
+          if (file.size > MAX_PDF_BYTES) {
+            toast({ title: "PDF too large", description: `${file.name} is larger than 10 MB.`, variant: "destructive" });
+            continue;
+          }
+
+          const baseName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+          const path = `${userData.user.id}/mail-pdfs/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${baseName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("attachments")
+            .upload(path, file, { cacheControl: "3600", upsert: false, contentType: "application/pdf" });
+          if (uploadError) throw uploadError;
+
+          const { data: publicUrlData } = supabase.storage.from("attachments").getPublicUrl(path);
+          uploaded.push({ name: file.name, url: publicUrlData.publicUrl, size: file.size });
+        }
+
+        if (uploaded.length > 0) {
+          setAttachments((prev) => [...prev, ...uploaded]);
+          toast({
+            title: "PDF attached",
+            description: `${uploaded.length} PDF${uploaded.length === 1 ? "" : "s"} added to this email.`,
+          });
+        }
+      } catch (error) {
+        console.error("Could not upload mail attachment:", error);
+        toast({
+          title: "Upload failed",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setUploadingPdf(false);
+        if (pdfInputRef.current) pdfInputRef.current.value = "";
+      }
+    },
+    [attachments, sending, toast],
+  );
+
+  const removeAttachment = (url: string) => {
+    setAttachments((prev) => prev.filter((attachment) => attachment.url !== url));
+  };
 
   const handleSend = async () => {
     if (!subject.trim()) {
@@ -267,6 +468,7 @@ const AdminMailTab = () => {
             html: bodyHtml,
             message: messageText,
             includeOptedOut,
+            attachments: attachments.map((attachment) => ({ filename: attachment.name, url: attachment.url })),
             recipients: batch.map((member) => ({
               id: member.id,
               email: emailOf(member),
@@ -308,6 +510,7 @@ const AdminMailTab = () => {
         setSubject("");
         setMessageHtml("");
         setMessageText("");
+        setAttachments([]);
         if (editorRef.current) editorRef.current.innerHTML = "";
       }
     } catch (error) {
@@ -383,15 +586,49 @@ const AdminMailTab = () => {
                 />
               </div>
 
-              <div className="max-h-56 overflow-y-auto rounded-md border">
-                {searching ? (
+              <div className="flex flex-wrap gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={letter === "All" ? "default" : "outline"}
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setLetter("All")}
+                  disabled={sending}
+                  title="Show all names"
+                >
+                  All
+                </Button>
+                {ALPHABET.map((value) => {
+                  const enabled = value === "#" ? availableLetters.includes("#") : availableLetters.includes(value);
+                  return (
+                    <Button
+                      key={value}
+                      type="button"
+                      size="sm"
+                      variant={letter === value ? "default" : "outline"}
+                      className="h-7 w-7 p-0 text-xs"
+                      onClick={() => selectLetter(value)}
+                      disabled={sending || !enabled}
+                      title={`Select everyone whose name starts with ${value}`}
+                    >
+                      {value}
+                    </Button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pick a letter to tick everyone whose name starts with it. Click the same letter again to untick them.
+              </p>
+
+              <div className="max-h-72 overflow-y-auto rounded-md border">
+                {loadingMembers ? (
                   <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Searching...
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading members...
                   </div>
-                ) : results.length === 0 ? (
+                ) : visibleMembers.length === 0 ? (
                   <p className="p-6 text-center text-sm text-muted-foreground">No members found.</p>
                 ) : (
-                  results.map((member) => {
+                  visibleMembers.map((member) => {
                     const checked = selectedIds.has(member.id);
                     return (
                       <button
@@ -515,9 +752,27 @@ const AdminMailTab = () => {
                 <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={insertLink} disabled={sending} title="Insert link">
                   <LinkIcon className="h-4 w-4" />
                 </Button>
-                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={insertImage} disabled={sending} title="Insert image">
-                  <ImageIcon className="h-4 w-4" />
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={pickImage} disabled={sending || uploadingImage} title="Upload image">
+                  {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
                 </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={pickPdf} disabled={sending || uploadingPdf || attachments.length >= MAX_PDFS} title="Attach PDF">
+                  {uploadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                </Button>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => void handleImageFile(event.target.files?.[0])}
+                />
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => void handlePdfFile(event.target.files)}
+                />
                 <div className="mx-1 h-4 w-px bg-border" />
                 <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => exec("undo")} disabled={sending} title="Undo">
                   <Undo className="h-4 w-4" />
@@ -543,6 +798,25 @@ const AdminMailTab = () => {
                 data-placeholder="Write your message..."
               />
             </div>
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {attachments.map((attachment) => (
+                  <Badge key={attachment.url} variant="secondary" className="gap-1 pr-1">
+                    <Paperclip className="h-3 w-3 shrink-0" />
+                    <span className="max-w-[16rem] truncate" title={attachment.name}>{attachment.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(attachment.url)}
+                      disabled={sending}
+                      className="rounded-sm p-0.5 hover:bg-muted-foreground/20"
+                      aria-label={`Remove ${attachment.name}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
             <p className="text-right text-xs text-muted-foreground">{messageText.length.toLocaleString()} characters</p>
           </div>
 

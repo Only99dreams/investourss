@@ -22,6 +22,9 @@ const FROM_EMAIL = Deno.env.get("ADMIN_MAIL_FROM") || "Investours <notifications
 const MAX_RECIPIENTS = 25;
 const MAX_SUBJECT = 200;
 const MAX_MESSAGE = 20000;
+const MAX_ATTACHMENTS = 3;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface Recipient {
@@ -30,12 +33,23 @@ interface Recipient {
   name?: string;
 }
 
+interface IncomingAttachment {
+  filename?: string;
+  url?: string;
+}
+
+interface ResendAttachment {
+  filename: string;
+  content: string;
+}
+
 interface MailRequest {
   subject?: string;
   message?: string;
   html?: string;
   recipients?: Recipient[];
   includeOptedOut?: boolean;
+  attachments?: IncomingAttachment[];
 }
 
 function json(body: unknown, status = 200) {
@@ -100,7 +114,26 @@ function buildEmail(subject: string, body: string, htmlBody?: string): string {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function sendOne(resendKey: string, to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function safeFilename(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/^-+/, "").slice(0, 120) || "attachment.pdf";
+}
+
+async function sendOne(
+  resendKey: string,
+  to: string,
+  subject: string,
+  html: string,
+  attachments: ResendAttachment[],
+): Promise<{ ok: boolean; error?: string }> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -108,7 +141,13 @@ async function sendOne(resendKey: string, to: string, subject: string, html: str
         Authorization: `Bearer ${resendKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }),
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: [to],
+        subject,
+        html,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      }),
     });
 
     if (res.ok) return { ok: true };
@@ -196,6 +235,46 @@ serve(async (req) => {
 
     if (recipients.length === 0) return json({ error: "No valid recipient emails were supplied." }, 400);
 
+    // Attachments must be files the admin uploaded to our public storage bucket.
+    // Downloading them here keeps Resend from fetching arbitrary URLs and lets
+    // us enforce the size limit before any email goes out.
+    const storagePrefix = `${supabaseUrl}/storage/v1/object/public/attachments/`;
+    const incomingAttachments = Array.isArray(body.attachments) ? body.attachments : [];
+    if (incomingAttachments.length > MAX_ATTACHMENTS) {
+      return json({ error: `Attach at most ${MAX_ATTACHMENTS} PDFs per email.` }, 400);
+    }
+
+    const attachments: ResendAttachment[] = [];
+    let attachmentBytes = 0;
+    for (const item of incomingAttachments) {
+      const url = String(item?.url ?? "").trim();
+      if (!url.startsWith(storagePrefix)) {
+        return json({ error: "Attachments must be uploaded to Investours storage first." }, 400);
+      }
+
+      const path = decodeURIComponent(url.slice(storagePrefix.length).split("?")[0]);
+      const { data: blob, error: downloadError } = await adminClient.storage
+        .from("attachments")
+        .download(path);
+      if (downloadError || !blob) {
+        return json({ error: `Could not read attachment "${item?.filename ?? path}".` }, 400);
+      }
+
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (bytes.byteLength === 0 || bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+        return json({ error: `Attachment "${item?.filename ?? path}" must be 10 MB or smaller.` }, 400);
+      }
+      attachmentBytes += bytes.byteLength;
+      if (attachmentBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+        return json({ error: "PDF attachments must total 20 MB or less per email." }, 400);
+      }
+
+      attachments.push({
+        filename: safeFilename(String(item?.filename ?? path.split("/").pop() ?? "attachment.pdf")),
+        content: toBase64(bytes),
+      });
+    }
+
     // Re-check the opt-out flag server-side so a modified client cannot bypass it.
     const optedOut = new Set<string>();
     const ids = recipients.map((r) => r.id).filter((id): id is string => Boolean(id));
@@ -222,7 +301,7 @@ serve(async (req) => {
         continue;
       }
 
-      const result = await sendOne(resendKey, recipient.email, subject, html);
+      const result = await sendOne(resendKey, recipient.email, subject, html, attachments);
       if (result.ok) sent += 1;
       else if (result.error) errors.push(result.error);
     }
