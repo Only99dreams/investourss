@@ -33,9 +33,9 @@ export function isAiwcCategory(value?: string | null): boolean {
  */
 export const AIWC_SHARE_TEXT = `🚀 I’m competing in the Investours Creativity & Enterprise Challenge!
 🏆 Competing for a share of the ₦1,500,000+ prize pool!
-🗳️ Like, share, comment & vote to help me advance.
-🎓 Mentorship, certification & 30% platform revenue sharing apply.
-#Investours #EliteCreators #EliteFounders`;
+🤖 To vote for me, unlock Investours' AI-powered tools starting at just ₦1,700.
+🗳️ You get premium AI access, and your vote instantly validates my entry!
+#Investours #AITools`;
 
 /**
  * Condensed pitch for link previews (og:description, Twitter cards), where
