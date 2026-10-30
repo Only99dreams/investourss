@@ -17,6 +17,11 @@ verify_jwt = false
 [functions."verify-payment"]
 verify_jwt = true
 
+# Bookmaker AI ebook generation. The caller's JWT is required so every paid
+# operation can be reserved against the right account.
+[functions.bookmaker]
+verify_jwt = true
+
 # Admin broadcast mail: the caller's JWT is required and the function checks
 # the admin role before sending through Resend.
 [functions."send-admin-mail"]

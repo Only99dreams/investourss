@@ -19,6 +19,11 @@ const Auth = () => {
   const { signIn, signOut, user, isLoading: authLoading } = useAuth();
   
   const initialMode = searchParams.get("mode") === "forgot" ? "forgot" : "login";
+  const requestedRedirect = searchParams.get("redirect");
+  const redirectTarget =
+    requestedRedirect && requestedRedirect.startsWith("/") && !requestedRedirect.startsWith("//")
+      ? requestedRedirect
+      : "/home";
   const [mode, setMode] = useState<"login" | "forgot">(initialMode);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,9 +37,9 @@ const Auth = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (user && !authLoading) {
-      navigate("/home");
+      navigate(redirectTarget);
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, navigate, redirectTarget]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +60,7 @@ const Auth = () => {
           title: "Welcome back!",
           description: "You have successfully logged in.",
         });
-        navigate("/home");
+        navigate(redirectTarget);
       }
     } else if (mode === "forgot") {
       setIsLoading(false);

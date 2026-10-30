@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { 
   User, Wallet, GraduationCap, TrendingUp, FileText, Users, 
   Settings, Bell, MessageSquare, AlertCircle, Share2, Trophy,
-  Target, LogOut, Shield, Umbrella, Award, ScanSearch, PieChart, History, ShieldCheck
+  Target, LogOut, Shield, Umbrella, Award, ScanSearch, PieChart, History, ShieldCheck, BookOpen
 } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
@@ -16,6 +16,7 @@ const sidebarItems = [
   { icon: ShieldCheck, label: "Credit Readiness", path: "/dashboard/credit-readiness", subtitle: "Borrowing Assessment" },
   { icon: History, label: "Audit History", path: "/dashboard/audit-history", subtitle: "Reports & PDFs" },
   { icon: FileText, label: "My Plans", path: "/dashboard/plans", subtitle: "Business Plans" },
+  { icon: BookOpen, label: "Bookmaker", path: "/dashboard/bookmaker", subtitle: "My Ebooks" },
   { icon: User, label: "Profile", path: "/dashboard/profile" },
   { icon: Bell, label: "Notifications", path: "/dashboard/notifications" },
   { icon: Award, label: "My Certificates", path: "/dashboard/certificates" },

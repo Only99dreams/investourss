@@ -1576,6 +1576,177 @@ export type Database = {
           archived_at?: string
         }
       }
+      bookmaker_books: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          subtitle: string | null
+          idea: string
+          idea_input_mode: string
+          audience: string
+          custom_audience: string | null
+          purpose: string
+          custom_purpose: string | null
+          language: string
+          custom_language: string | null
+          length: string
+          status: string
+          outline: Json
+          chapters: Json
+          cover: Json
+          theme: Json
+          design: Json
+          audiobook: Json
+          metadata: Json
+          credits_spent: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title?: string
+          subtitle?: string | null
+          idea?: string
+          idea_input_mode?: string
+          audience?: string
+          custom_audience?: string | null
+          purpose?: string
+          custom_purpose?: string | null
+          language?: string
+          custom_language?: string | null
+          length?: string
+          status?: string
+          outline?: Json
+          chapters?: Json
+          cover?: Json
+          theme?: Json
+          design?: Json
+          audiobook?: Json
+          metadata?: Json
+          credits_spent?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          subtitle?: string | null
+          idea?: string
+          idea_input_mode?: string
+          audience?: string
+          custom_audience?: string | null
+          purpose?: string
+          custom_purpose?: string | null
+          language?: string
+          custom_language?: string | null
+          length?: string
+          status?: string
+          outline?: Json
+          chapters?: Json
+          cover?: Json
+          theme?: Json
+          design?: Json
+          audiobook?: Json
+          metadata?: Json
+          credits_spent?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      bookmaker_credit_operations: {
+        Row: {
+          id: string
+          user_id: string
+          book_id: string | null
+          operation: string
+          idempotency_key: string
+          credit_cost: number
+          credits_from_subscription: number
+          credits_from_packs: number
+          subscription_grant_id: string | null
+          pack_breakdown: Json
+          status: string
+          refunded_credits: number
+          error: string | null
+          metadata: Json
+          created_at: string
+          completed_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          book_id?: string | null
+          operation: string
+          idempotency_key: string
+          credit_cost?: number
+          credits_from_subscription?: number
+          credits_from_packs?: number
+          subscription_grant_id?: string | null
+          pack_breakdown?: Json
+          status?: string
+          refunded_credits?: number
+          error?: string | null
+          metadata?: Json
+          created_at?: string
+          completed_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          book_id?: string | null
+          operation?: string
+          idempotency_key?: string
+          credit_cost?: number
+          credits_from_subscription?: number
+          credits_from_packs?: number
+          subscription_grant_id?: string | null
+          pack_breakdown?: Json
+          status?: string
+          refunded_credits?: number
+          error?: string | null
+          metadata?: Json
+          created_at?: string
+          completed_at?: string | null
+        }
+      }
+      bookmaker_subscription_credits: {
+        Row: {
+          id: string
+          user_id: string
+          subscription_type: string
+          period_start: string
+          period_end: string
+          credits_granted: number
+          credits_used: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          subscription_type?: string
+          period_start: string
+          period_end: string
+          credits_granted?: number
+          credits_used?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          subscription_type?: string
+          period_start?: string
+          period_end?: string
+          credits_granted?: number
+          credits_used?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -1725,6 +1896,48 @@ export type Database = {
       get_fha_portfolio: {
         Args: {
           p_target_user?: string
+        }
+        Returns: Json
+      }
+      bookmaker_get_entitlement: {
+        Args: Record<string, never>
+        Returns: Json
+      }
+      bookmaker_reserve_operation: {
+        Args: {
+          p_book_id: string | null
+          p_operation: string
+          p_idempotency_key: string
+          p_length?: string | null
+          p_metadata?: Json
+        }
+        Returns: Json
+      }
+      bookmaker_complete_operation: {
+        Args: {
+          p_operation_id: string
+        }
+        Returns: Json
+      }
+      bookmaker_abandon_operation: {
+        Args: {
+          p_operation_id: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      bookmaker_fail_operation: {
+        Args: {
+          p_operation_id: string
+          p_reason?: string
+        }
+        Returns: number
+      }
+      bookmaker_record_chapter_progress: {
+        Args: {
+          p_operation_id: string
+          p_chapter_number: number
+          p_total_chapters?: number | null
         }
         Returns: Json
       }

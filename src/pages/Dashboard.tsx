@@ -15,6 +15,7 @@ import { SettingsSection } from "@/components/dashboard/sections/SettingsSection
 import { NotificationsSection } from "@/components/dashboard/sections/NotificationsSection";
 import { LeaderboardSection } from "@/components/dashboard/sections/LeaderboardSection";
 import { SavedPlansSection } from "@/components/dashboard/sections/SavedPlansSection";
+import { BookmakerHistorySection } from "@/components/dashboard/sections/BookmakerHistorySection";
 import { AuditorDashboard } from "@/pages/AuditorDashboard";
 import { CreditReadinessPage } from "@/pages/CreditReadinessPage";
 import AuditHistoryPage from "@/pages/AuditHistoryPage";
@@ -123,6 +124,12 @@ const Dashboard = () => {
             <>
               <DashboardHeader title="My Business Plans" onMenuClick={() => setSidebarOpen(true)} />
               <SavedPlansSection />
+            </>
+          } />
+          <Route path="/bookmaker" element={
+            <>
+              <DashboardHeader title="Bookmaker" onMenuClick={() => setSidebarOpen(true)} />
+              <BookmakerHistorySection />
             </>
           } />
           <Route path="/ai-reports" element={

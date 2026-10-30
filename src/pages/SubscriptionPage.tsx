@@ -26,6 +26,12 @@ const SubscriptionPage = () => {
   const { user, profile } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'quarterly' | 'biennial' | 'annual' | 'b2b_quarterly' | null>(null);
 
+  // Purchase started from Bookmaker: return to the ebook when it finishes.
+  const returnBookId = searchParams.get('book');
+  const bookReturnHref = returnBookId
+    ? `/bookmaker/create?book=${encodeURIComponent(returnBookId)}`
+    : null;
+
   const currentSubType = profile?.subscription_type || null;
   const currentPlanLevel = currentSubType ? planHierarchy[currentSubType] || 0 : 0;
   const isPremium = profile?.user_tier === 'premium' || profile?.user_tier === 'exclusive';
@@ -39,7 +45,7 @@ const SubscriptionPage = () => {
 
     // Only redirect if user is already on the highest plan (annual)
     if (isPremium && currentSubType === 'annual') {
-      navigate('/dashboard');
+      navigate(bookReturnHref ?? '/dashboard');
       return;
     }
 
@@ -58,14 +64,14 @@ const SubscriptionPage = () => {
         setSelectedPlan('b2b_quarterly');
       }
     }
-  }, [user, profile, searchParams, navigate, isPremium, currentSubType]);
+  }, [user, profile, searchParams, navigate, isPremium, currentSubType, bookReturnHref]);
 
   const handlePaymentSuccess = () => {
-    navigate('/dashboard');
+    navigate(bookReturnHref ?? '/dashboard');
   };
 
   const handleCancel = () => {
-    navigate('/pricing');
+    navigate(bookReturnHref ?? '/pricing');
   };
 
   // Only block if annual subscriber (highest tier) or not logged in
