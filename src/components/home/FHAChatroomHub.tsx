@@ -242,7 +242,7 @@ const FHAChatroomHub = () => {
     if (!newPost.trim() || !user) return;
 
     if (!isEligible) {
-      toast({ title: "Access Required", description: "Only active Financial Health Ambassadors can post.", variant: "destructive" });
+      toast({ title: "Access Required", description: "Only active Enterprise Partners can post.", variant: "destructive" });
       return;
     }
 
@@ -282,7 +282,7 @@ const FHAChatroomHub = () => {
 
       toast({
         title: "Posted!",
-        description: "Your message has been shared with the FHA Chatroom.",
+        description: "Your message has been shared with the Partners Chatroom.",
       });
       setNewPost("");
       setSelectedFile(null);
@@ -311,7 +311,7 @@ const FHAChatroomHub = () => {
     }
 
     if (!isEligible) {
-      toast({ title: "Access Required", description: "Only active Financial Health Ambassadors can interact.", variant: "destructive" });
+      toast({ title: "Access Required", description: "Only active Enterprise Partners can interact.", variant: "destructive" });
       return;
     }
 
@@ -363,7 +363,7 @@ const FHAChatroomHub = () => {
     if (!content || !user) return;
 
     if (!isEligible) {
-      toast({ title: "Access Required", description: "Only active Financial Health Ambassadors can comment.", variant: "destructive" });
+      toast({ title: "Access Required", description: "Only active Enterprise Partners can comment.", variant: "destructive" });
       return;
     }
 
@@ -439,10 +439,10 @@ const FHAChatroomHub = () => {
             <Users className="w-7 h-7 text-investours-coral" />
           </div>
           <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-            FHA Chatroom
+            Partners Chatroom
           </h2>
           <p className="text-muted-foreground">
-            Exclusive Chatroom for Financial Health Ambassadors — share insights, ask questions, and grow together.
+            Exclusive Chatroom for Enterprise Partners — share insights, ask questions, and grow together.
           </p>
         </motion.div>
 
@@ -465,7 +465,7 @@ const FHAChatroomHub = () => {
                         <Textarea
                           value={newPost}
                           onChange={(e) => setNewPost(e.target.value)}
-                          placeholder="Share an update with the FHA community..."
+                          placeholder="Share an update with the partner community..."
                           className="resize-none min-h-[80px]"
                         />
                         {filePreview && (
@@ -524,9 +524,9 @@ const FHAChatroomHub = () => {
               <Card className="bg-primary/5 border-primary/20">
                 <CardContent className="py-6 text-center">
                   <Crown className="w-8 h-8 text-primary mx-auto mb-2" />
-                  <p className="text-muted-foreground mb-3">Become a Financial Health Ambassador to post in the FHA Chatroom.</p>
+                  <p className="text-muted-foreground mb-3">Become an Enterprise Partner to post in the Partners Chatroom.</p>
                   <Link to="/ambassador">
-                    <Button variant="default" size="sm">Become an Ambassador</Button>
+                    <Button variant="default" size="sm">Become a Partner</Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -535,7 +535,7 @@ const FHAChatroomHub = () => {
             <Card className="bg-primary/5 border-primary/20">
               <CardContent className="py-6 text-center">
                 <Lock className="w-8 h-8 text-primary mx-auto mb-2" />
-                <p className="text-muted-foreground mb-3">Login to post and engage with the FHA community</p>
+                <p className="text-muted-foreground mb-3">Login to post and engage with the partner community</p>
                 <Link to="/auth?mode=login">
                   <Button variant="default" size="sm">Login to Post</Button>
                 </Link>
@@ -736,7 +736,7 @@ const FHAChatroomHub = () => {
                                     </div>
                                   ) : (
                                     <p className="text-xs text-muted-foreground">
-                                      <Link to="/ambassador" className="text-primary hover:underline">Become an Ambassador</Link> to comment
+                                      <Link to="/ambassador" className="text-primary hover:underline">Become a Partner</Link> to comment
                                     </p>
                                   )
                                 ) : (

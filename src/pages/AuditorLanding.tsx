@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowRight, Search, Eye, Banknote, BellRing, Lock, Check, Sparkles, Stethoscope,
-  FileSearch, TrendingUp, Wallet, ShieldCheck, PiggyBank,
+  FileSearch, TrendingUp, Wallet, ShieldCheck, PiggyBank, BookOpen, Mic, Download,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -62,7 +62,7 @@ const AuditorLanding = () => {
               <Link to="/auditor/packs">View Pricing</Link>
             </Button>
             <Button asChild size="xl" variant="outline" className="w-full sm:w-auto whitespace-normal h-auto min-h-12 py-2">
-              <Link to="/ambassador">Join Financial Health Ambassadors</Link>
+              <Link to="/ambassador">Enterprise Partners Program</Link>
             </Button>
           </div>
         </motion.section>
@@ -118,6 +118,41 @@ const AuditorLanding = () => {
               </motion.div>
             ))}
           </div>
+        </motion.section>
+
+        {/* Bookmaker */}
+        <motion.section {...fadeUp} className="mb-16">
+          <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-accent/5">
+            <CardContent className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8">
+              <div>
+                <Badge variant="outline" className="mb-3 gap-1">
+                  <BookOpen className="w-3 h-3 text-primary" /> Bookmaker by Investours
+                </Badge>
+                <h2 className="text-2xl font-bold mb-2">Turn Your Knowledge Into Digital Income</h2>
+                <p className="text-sm text-primary font-medium mb-2">Create your first ebook in minutes!</p>
+                <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  Share your idea by text or voice note. Get a free outline, then write, edit and
+                  design a complete ebook with useful visuals, a cover and a smartphone-friendly PDF.
+                  AI credits from as low as ₦2,720 — and your free outline costs nothing.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><Mic className="w-3.5 h-3.5 text-primary" /> Voice or text ideas</span>
+                  <span className="flex items-center gap-1.5"><Download className="w-3.5 h-3.5 text-primary" /> Print-ready PDF</span>
+                  <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5 text-primary" /> Credits only when AI writes</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row md:flex-col">
+                <Button asChild size="lg">
+                  <Link to="/bookmaker/create">
+                    Create My Ebook Free <ArrowRight className="w-4 h-4 ml-2" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link to="/bookmaker">Explore Bookmaker</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </motion.section>
 
         {/* Free vs Premium */}
@@ -189,13 +224,48 @@ const AuditorLanding = () => {
                       <Link to="/subscribe">Subscribe</Link>
                     </Button>
                     <Button asChild size="sm" variant="outline" className="w-full whitespace-normal">
-                      <Link to="/auditor/packs">Or buy Platform Credits from ₦1,700</Link>
+                      <Link to="/auditor/packs">Or buy Platform Credits from ₦2,720</Link>
                     </Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
+        </motion.section>
+
+        {/* Enterprise Partners Program */}
+        <motion.section {...fadeUp} className="mb-16">
+          <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/5 via-card to-accent/5">
+            <CardContent className="grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">Enterprise Partners Program</h2>
+                <p className="text-sm text-primary font-medium mb-2">
+                  Earn recurring income helping businesses and individuals improve their financial health.
+                </p>
+                <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  Partner with Investours to bring AI financial health tools to your clients,
+                  members or community. Earn 40% first-time commission and 20% recurring
+                  commission from active subscriptions, plus quarterly rewards as your
+                  portfolio grows.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-primary" /> 40% first-time commission</span>
+                  <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5 text-primary" /> 20% recurring commission</span>
+                  <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-primary" /> Quarterly rewards</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row md:flex-col">
+                <Button asChild size="lg">
+                  <Link to="/ambassador">
+                    Explore the Program <ArrowRight className="w-4 h-4 ml-2" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link to="/fha-chatroom">Partners Chatroom</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </motion.section>
 
         {/* CTA */}

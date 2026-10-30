@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { 
   Check, 
   ArrowRight,
@@ -49,9 +49,26 @@ const staggerContainer = {
 const Pricing = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
   const [packsLoading, setPacksLoading] = useState(true);
   const [b2bProcessing, setB2bProcessing] = useState(false);
+
+  // Carry the Bookmaker return target through the purchase flow so the member
+  // lands back on the ebook they were writing once credits are active.
+  const returnBookId = searchParams.get("book");
+  const returnParams = new URLSearchParams();
+  if (searchParams.get("from")) returnParams.set("from", searchParams.get("from")!);
+  if (returnBookId) returnParams.set("book", returnBookId);
+  const returnSuffix = returnParams.toString() ? `?${returnParams.toString()}` : "";
+  const packsHref = `/auditor/packs${returnSuffix}`;
+  const subscribeHref = (plan: string) => {
+    const params = new URLSearchParams(returnParams);
+    params.set("plan", plan);
+    return `/subscribe?${params.toString()}`;
+  };
+  const bookmakerHref = returnBookId ? `/bookmaker/create?book=${encodeURIComponent(returnBookId)}` : null;
 
   useEffect(() => {
     const fetchPacks = async () => {
@@ -114,6 +131,7 @@ const Pricing = () => {
           });
           if (error) throw error;
           toast({ title: "B2B Subscription Activated!", description: "Your B2B plan is now active." });
+          if (bookmakerHref) navigate(bookmakerHref);
         } catch (err) {
           toast({ title: "Activation Pending", description: "Payment received. We're confirming automatically…", variant: "destructive" });
         } finally {
@@ -171,7 +189,7 @@ const Pricing = () => {
               Individual & Business Plans
             </h2>
             <p className="text-muted-foreground">
-              Use Platform Credit Packs (pay-as-you-go) for on-demand AI audits and scam checks,
+              Use Platform Credit Packs (pay-as-you-go) for on-demand AI solutions,
               or upgrade to Premium for unlimited access to all tools, mentorship, and opportunities.
             </p>
           </motion.div>
@@ -189,7 +207,7 @@ const Pricing = () => {
                 <CardHeader className="text-center pb-4">
                   <CardTitle className="text-2xl font-bold">Platform Credit Packs</CardTitle>
                   <CardDescription className="text-base">
-                    Pay-as-you-go credits for on-demand AI financial audits and scam checks.
+                    Pay-as-you-go credits for on-demand AI solutions.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -234,7 +252,7 @@ const Pricing = () => {
                             <div className="text-xs text-muted-foreground mb-3">
                               {pack.credits} Platform Credits · Valid {pack.validity_days} Days
                             </div>
-                            <Link to="/auditor/packs">
+                            <Link to={packsHref}>
                               <Button
                                 variant={isAnnual ? "default" : isStandard ? "accent" : "default"}
                                 className={`w-full ${isAnnual ? "bg-investours-gold hover:bg-investours-gold/90 text-foreground" : ""}`}
@@ -252,7 +270,7 @@ const Pricing = () => {
                   <ul className="space-y-2 pt-2">
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                      <span className="text-sm">Spend credits on AI Financial Audits &amp; Scam Detector scans</span>
+                      <span className="text-sm">Spend credits on AI Financial Audits, Scam Detector scans &amp; Bookmaker ebooks</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
@@ -267,12 +285,19 @@ const Pricing = () => {
                       <span className="text-sm">No automatic renewal — pay only for what you use</span>
                     </li>
                   </ul>
-                  <Link to="/auditor/packs" className="block mt-4">
+                  <Link to={packsHref} className="block mt-4">
                     <Button variant="outline" className="w-full" size="lg">
                       Get Started with Credits
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </Link>
+                  <p className="mt-3 text-center text-xs text-muted-foreground">
+                    Writing an ebook? Credits from this pack also work in{" "}
+                    <Link to="/bookmaker" className="font-medium text-primary hover:underline">
+                      Bookmaker by Investours
+                    </Link>
+                    .
+                  </p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -301,7 +326,7 @@ const Pricing = () => {
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
-                      <Link to="/subscribe?plan=premium-monthly">
+                      <Link to={subscribeHref("premium-monthly")}>
                         <Button variant="default" className="w-full" size="sm">
                           Upgrade Now
                         </Button>
@@ -320,7 +345,7 @@ const Pricing = () => {
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
-                      <Link to="/subscribe?plan=premium-quarterly">
+                      <Link to={subscribeHref("premium-quarterly")}>
                         <Button variant="accent" className="w-full" size="sm">
                           Upgrade Now
                         </Button>
@@ -339,7 +364,7 @@ const Pricing = () => {
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
-                      <Link to="/subscribe?plan=premium-biennial">
+                      <Link to={subscribeHref("premium-biennial")}>
                         <Button variant="accent" className="w-full" size="sm">
                           Upgrade Now
                         </Button>
@@ -358,7 +383,7 @@ const Pricing = () => {
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                         </div>
                       </div>
-                      <Link to="/subscribe?plan=premium-annual">
+                      <Link to={subscribeHref("premium-annual")}>
                         <Button variant="default" className="w-full bg-investours-gold hover:bg-investours-gold/90 text-foreground" size="sm">
                           Upgrade Now
                         </Button>

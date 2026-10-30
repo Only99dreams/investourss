@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { usePaystackPayment } from "react-paystack";
 import {
   CreditCard, Check, ArrowRight, Loader2, Coins, Clock, Info, Sparkles, Banknote, Copy, CheckCircle2, RefreshCw,
@@ -46,7 +46,14 @@ interface PaystackTransaction {
 const AuditorPacks = () => {
   const { user, profile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Return to the in-progress ebook when the purchase started in Bookmaker.
+  const returnBookId = searchParams.get("book");
+  const returnToBook = () => {
+    if (returnBookId) navigate(`/bookmaker/create?book=${encodeURIComponent(returnBookId)}`);
+  };
 
   const [packs, setPacks] = useState<CreditPack[]>([]);
   const [access, setAccess] = useState<AuditAccess>(DEFAULT_ACCESS);
@@ -159,6 +166,7 @@ const AuditorPacks = () => {
       toast({ title: "Platform Credits Activated!", description: "Your platform credits have been added to your account." });
       setPendingOrder(null);
       await loadData();
+      returnToBook();
     } catch (err) {
       const msg = errorMessage(err);
       const alreadyProcessed = /not found|could not find|already/i.test(msg);
@@ -170,6 +178,7 @@ const AuditorPacks = () => {
           title: "Already Processed",
           description: "Your payment reference was already processed. Credits refreshed.",
         });
+        returnToBook();
       } else {
         toast({
           title: "Activation Pending",
@@ -185,6 +194,7 @@ const AuditorPacks = () => {
           });
           setPendingOrder(null);
           await loadData();
+          returnToBook();
         }
       }
     } finally {

@@ -7,7 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Welcome from "./pages/Welcome";
 import Auth from "./pages/Auth";
 import SignupTypeSelection from "./pages/SignupTypeSelection";
-import AmbassadorApply from "./pages/Ambassador";
+import EnterprisePartners from "./pages/EnterprisePartners";
 import FHAChatroom from "./pages/FHAChatroom";
 import AuditorLanding from "./pages/AuditorLanding";
 import AuditorConnect from "./pages/AuditorConnect";
@@ -21,6 +21,8 @@ import Vetting from "./pages/Vetting";
 import Community from "./pages/Community";
 import FinancialTutor from "./pages/FinancialTutor";
 import BusinessPlanGenerator from "./pages/BusinessPlanGenerator";
+import Bookmaker from "./pages/Bookmaker";
+import BookmakerLanding from "./pages/BookmakerLanding";
 import Pricing from "./pages/Pricing";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import NotFound from "./pages/NotFound";
@@ -43,7 +45,7 @@ const App = () => (
             <Route path="/home" element={<AuditorLanding />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignupTypeSelection />} />
-            <Route path="/ambassador" element={<AmbassadorApply />} />
+            <Route path="/ambassador" element={<EnterprisePartners />} />
             <Route path="/fha-chatroom" element={<FHAChatroom />} />
             <Route path="/auditor" element={<ProtectedRoute><AuditorLanding /></ProtectedRoute>} />
             <Route path="/auditor/connect" element={<ProtectedRoute><AuditorConnect /></ProtectedRoute>} />
@@ -57,6 +59,8 @@ const App = () => (
             <Route path="/community" element={<Community />} />
             <Route path="/tutor" element={<FinancialTutor />} />
             <Route path="/business-plan" element={<BusinessPlanGenerator />} />
+            <Route path="/bookmaker" element={<BookmakerLanding />} />
+            <Route path="/bookmaker/create" element={<Bookmaker />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/subscribe" element={<SubscriptionPage />} />
             <Route path="/reset-password" element={<ResetPassword />} />

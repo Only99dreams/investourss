@@ -43,12 +43,12 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/ambassador" className="text-muted-foreground hover:text-primary transition-colors">
-                  Ambassadors
+                  Enterprise Partners
                 </Link>
               </li>
               <li>
                 <Link to="/fha-chatroom" className="text-muted-foreground hover:text-primary transition-colors">
-                  FHA Chatroom
+                  Partners Chatroom
                 </Link>
               </li>
               <li>

@@ -17,7 +17,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -280,7 +280,7 @@ const FHAChatroom = () => {
 
   const handleCreatePost = async () => {
     if (!user || !isEligible) {
-      toast({ title: "Access Required", description: "Only active Financial Health Ambassadors can post.", variant: "destructive" });
+      toast({ title: "Access Required", description: "Only active Enterprise Partners can post.", variant: "destructive" });
       return;
     }
 
@@ -331,7 +331,7 @@ const FHAChatroom = () => {
 
       if (error) throw error;
 
-      toast({ title: "Success!", description: "Your message has been posted to the FHA Chatroom." });
+      toast({ title: "Success!", description: "Your message has been posted to the Partners Chatroom." });
 
       setNewPostContent("");
       setSelectedFile(null);
@@ -348,7 +348,7 @@ const FHAChatroom = () => {
 
   const handleLike = async (postId: string, isLiked: boolean) => {
     if (!user || !isEligible) {
-      toast({ title: "Access Required", description: "Only active Financial Health Ambassadors can interact.", variant: "destructive" });
+      toast({ title: "Access Required", description: "Only active Enterprise Partners can interact.", variant: "destructive" });
       return;
     }
 
@@ -409,7 +409,7 @@ const FHAChatroom = () => {
 
   const handleAddComment = async (postId: string) => {
     if (!user || !isEligible) {
-      toast({ title: "Access Required", description: "Only active Financial Health Ambassadors can comment.", variant: "destructive" });
+      toast({ title: "Access Required", description: "Only active Enterprise Partners can comment.", variant: "destructive" });
       return;
     }
 
@@ -470,18 +470,18 @@ const FHAChatroom = () => {
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
               <Shield className="w-8 h-8 text-primary" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground mb-4">FHA Chatroom</h1>
+            <h1 className="text-3xl font-bold text-foreground mb-4">Partners Chatroom</h1>
             <p className="text-lg text-muted-foreground mb-6">
-              This chatroom is exclusive to active Financial Health Ambassadors.
+              This chatroom is exclusive to active Enterprise Partners.
             </p>
             <Card className="mb-8 bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 justify-center">
                   <Crown className="w-5 h-5 text-primary" />
-                  Become a Financial Health Ambassador
+                  Become an Enterprise Partner
                 </CardTitle>
                 <CardDescription>
-                  Maintain an active subscription or a platform credit pack to access the FHA Chatroom.
+                  Maintain an active subscription or a platform credit pack to access the Partners Chatroom.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -516,10 +516,10 @@ const FHAChatroom = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
-                FHA Chatroom
+                Partners Chatroom
               </h1>
               <p className="text-muted-foreground">
-                Connect with fellow Financial Health Ambassadors. Share insights, ask questions, and grow together.
+                Connect with fellow Enterprise Partners. Share insights, ask questions, and grow together.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-4">
@@ -534,7 +534,7 @@ const FHAChatroom = () => {
                   <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>New Message</DialogTitle>
-                      <DialogDescription>Share an update with the FHA community</DialogDescription>
+                      <DialogDescription>Share an update with the partner community</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
@@ -586,7 +586,7 @@ const FHAChatroom = () => {
               <div className="flex items-center gap-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-foreground">{chatroomStats.totalMembers.toLocaleString()}</div>
-                  <div className="text-sm text-muted-foreground">Ambassadors</div>
+                  <div className="text-sm text-muted-foreground">Partners</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-foreground">{chatroomStats.totalPosts.toLocaleString()}</div>
@@ -644,7 +644,7 @@ const FHAChatroom = () => {
                               {post.author?.full_name || "Anonymous"}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {post.author?.country || "Ambassador"} • {formatTimeAgo(post.created_at)}
+                              {post.author?.country || "Partner"} • {formatTimeAgo(post.created_at)}
                             </p>
                           </div>
                         </div>
@@ -774,10 +774,10 @@ const FHAChatroom = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary" />
-                  Ambassador Chatroom
+                  Partners Chatroom
                 </CardTitle>
                 <CardDescription>
-                  Exclusive space for active Financial Health Ambassadors to connect, share, and grow together.
+                  Exclusive space for active Enterprise Partners to connect, share, and grow together.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -788,7 +788,7 @@ const FHAChatroom = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-primary" />
-                    <span>Connect with fellow ambassadors</span>
+                    <span>Connect with fellow partners</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-primary" />

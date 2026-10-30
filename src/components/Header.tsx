@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Menu, X, User, LogOut, Settings, LayoutDashboard, ChevronDown, Shield, Building, FileText, Award, ScanSearch, MessageSquare } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, LayoutDashboard, ChevronDown, Shield, Building, Building2, MessageSquare, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -67,18 +67,12 @@ const Header = () => {
             >
               Home
             </Link>
-            <Link 
-              to="/auditor" 
+            <Link
+              to="/bookmaker"
               className="text-foreground/80 hover:text-primary transition-colors font-medium flex items-center gap-1"
             >
-              <ScanSearch className="w-4 h-4" />
-              AI Auditor
-            </Link>
-            <Link
-              to="/dashboard/plans"
-              className="text-foreground/80 hover:text-primary transition-colors font-medium"
-            >
-              My Plans
+              <BookOpen className="w-4 h-4" />
+              Bookmaker
             </Link>
             <Link
               to="/community"
@@ -90,13 +84,13 @@ const Header = () => {
               to="/ambassador"
               className="text-foreground/80 hover:text-primary transition-colors font-medium"
             >
-              Ambassadors
+              Enterprise Partners
             </Link>
             <Link
               to="/fha-chatroom"
               className="text-foreground/80 hover:text-primary transition-colors font-medium"
             >
-              FHA Chatroom
+              Partners Chatroom
             </Link>
             <Link
               to="/pricing"
@@ -203,7 +197,7 @@ const Header = () => {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="md:hidden absolute top-full left-0 right-0 bg-card border-b border-border shadow-lg"
+          className="md:hidden absolute top-full left-0 right-0 max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain bg-card border-b border-border shadow-lg"
         >
           <nav className="container mx-auto px-4 py-4 flex flex-col gap-2">
             {user && (
@@ -241,19 +235,12 @@ const Header = () => {
               Home
             </Link>
             <Link
-              to="/auditor"
+              to="/bookmaker"
               className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors flex items-center gap-2"
               onClick={() => setIsMenuOpen(false)}
             >
-              <ScanSearch className="w-4 h-4" />
-              AI Auditor
-            </Link>
-            <Link 
-              to="/dashboard/plans" 
-              className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              My Plans
+              <BookOpen className="w-4 h-4" />
+              Bookmaker
             </Link>
             <Link 
               to="/community" 
@@ -267,8 +254,8 @@ const Header = () => {
               className="py-2 px-4 rounded-lg text-foreground hover:bg-secondary transition-colors flex items-center gap-2"
               onClick={() => setIsMenuOpen(false)}
             >
-              <Award className="w-4 h-4" />
-              Ambassadors
+              <Building2 className="w-4 h-4" />
+              Enterprise Partners
             </Link>
             <Link
               to="/fha-chatroom"
@@ -276,7 +263,7 @@ const Header = () => {
               onClick={() => setIsMenuOpen(false)}
             >
               <MessageSquare className="w-4 h-4" />
-              FHA Chatroom
+              Partners Chatroom
             </Link>
             <Link 
               to="/pricing" 

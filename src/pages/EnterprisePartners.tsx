@@ -29,19 +29,19 @@ const WhoCanJoinSection = ({ items }: { items: string[] }) => (
 
 const HowItWorksSteps = [
   {
-    title: "Join the Ambassadors",
+    title: "Join the Enterprise Partners Program",
     description:
-      "Purchase a Platform Credit Pack (₦1,700) or Subscription (₦7,650) and gain access to Investours AI tools.",
+      "Purchase a Platform Credit Pack (₦2,720) or Subscription (₦7,650) and give your team access to Investours AI tools.",
   },
   {
-    title: "Teach Businesses & Individuals",
+    title: "Equip Your Clients",
     description:
-      "Teach businesses and individuals how to use AI to improve their financial health and monitor leakages, e.g., non-reversed double debits, incorrect bank charges, etc.",
+      "Onboard businesses and individuals onto AI tools that improve their financial health and monitor leakages, e.g., non-reversed double debits, incorrect bank charges, etc.",
   },
   {
     title: "Build Your Portfolio",
     description:
-      "Help businesses and individuals actively use the AI tools to improve their financial health and livelihood.",
+      "Help your clients actively use the AI tools to improve their financial health and livelihood.",
   },
   {
     title: "Earn Monthly Income",
@@ -55,7 +55,7 @@ const HowItWorksSteps = [
   },
 ];
 
-const AmbassadorApplyPage = () => {
+const EnterprisePartnersPage = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -69,10 +69,12 @@ const AmbassadorApplyPage = () => {
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle()
-      .then(({ data }) => {
-        if (data) setIsActivated(true);
-      })
-      .catch(() => {});
+      .then(
+        ({ data }) => {
+          if (data) setIsActivated(true);
+        },
+        () => {},
+      );
   }, [user]);
 
   const handleApply = async () => {
@@ -90,7 +92,7 @@ const AmbassadorApplyPage = () => {
       const result = (data as Array<{ success: boolean; referral_code: string | null; tier: string | null; message: string } | null>)?.[0];
       const success = result?.success;
       const code = result?.referral_code ?? undefined;
-      const message = result?.message ?? "Unable to activate ambassador status.";
+      const message = result?.message ?? "Unable to activate enterprise partner status.";
       const alreadyMember = message.toLowerCase().includes("already registered");
 
       if (success) {
@@ -98,11 +100,11 @@ const AmbassadorApplyPage = () => {
         if (alreadyMember) {
           toast({
             title: "Already a Member",
-            description: "You're already an FHA member. Welcome to the FHA Chatroom!",
+            description: "You're already an Enterprise Partner. Welcome to the Partners Chatroom!",
           });
         } else {
           toast({
-            title: "Ambassador Activated!",
+            title: "Enterprise Partner Activated!",
             description: `${message} Referral code: ${code ?? "N/A"}`,
           });
         }
@@ -133,9 +135,9 @@ const AmbassadorApplyPage = () => {
     : isApplying
       ? "Applying..."
       : isActivated
-        ? "Ambassador Activated ✓"
+        ? "Enterprise Partner Activated ✓"
         : eligible
-          ? "Activate Ambassador Status"
+          ? "Activate Partner Status"
           : "Apply Now";
 
   return (
@@ -156,16 +158,16 @@ const AmbassadorApplyPage = () => {
           className="text-center mb-16"
         >
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-            Financial Health Ambassadors
+            Enterprise Partners Program
           </h1>
           <p className="text-xl text-primary font-medium mb-4">
-            Building Africa's largest AI-powered financial health network.
+            Building Africa's largest AI-powered financial health network through enterprise partnerships.
           </p>
           <p className="text-sm text-muted-foreground max-w-2xl mx-auto">
-            Our mission is to build Africa's largest network of AI-powered
-            Financial Health Ambassadors, helping millions of individuals and
-            businesses improve their financial wellbeing while creating
-            sustainable recurring income opportunities for local communities.
+            Our mission is to partner with businesses, institutions and community
+            organisations to expand access to AI-powered financial health tools,
+            helping millions of individuals and enterprises improve their financial
+            wellbeing while creating sustainable recurring income for our partners.
           </p>
         </motion.section>
 
@@ -180,7 +182,7 @@ const AmbassadorApplyPage = () => {
           <div className="flex justify-center">
             <img
               src="/WhatsApp Image 2026-08-06 at 17.55.53.jpeg"
-              alt="Financial Health Ambassadors"
+              alt="Enterprise Partners Program"
               className="max-w-2xl w-full rounded-2xl border border-border shadow-lg"
             />
           </div>
@@ -196,13 +198,14 @@ const AmbassadorApplyPage = () => {
         >
           <h2 className="text-2xl font-bold text-center text-foreground mb-2">Who Can Join?</h2>
           <p className="text-center text-muted-foreground mb-8 max-w-xl mx-auto">
-            Anyone passionate about helping people and businesses improve their
-            financial wellbeing.
+            Organisations and professionals already serving businesses and
+            individuals who want to help them improve their financial wellbeing.
           </p>
           <WhoCanJoinSection items={[
-            "Students", "NYSC Corps Members", "Graduates", "Freelancers",
-            "Financial Coaches", "Accountants", "Consultants",
-            "Business Owners", "Civil Servants", "Community Leaders",
+            "SMEs & Startups", "Financial Institutions", "Microfinance Banks",
+            "Cooperatives", "Accounting Firms", "Consulting Firms",
+            "Fintech Companies", "NGOs & Associations", "Corporate Wellness Teams",
+            "Business Associations", "Training Organisations", "Community Groups",
           ]} />
         </motion.section>
 
@@ -223,7 +226,7 @@ const AmbassadorApplyPage = () => {
             </CardHeader>
             <CardContent className="text-center">
               <p className="text-lg text-foreground mb-2">
-                To participate, members must maintain either:
+                To participate, partner organisations must maintain either:
               </p>
               <div className="flex flex-col sm:flex-row justify-center gap-4 mt-4">
                 <Badge variant="default" className="text-base px-4 py-2">
@@ -276,7 +279,7 @@ const AmbassadorApplyPage = () => {
             Growth Path & Quarterly Rewards
           </h2>
           <p className="text-center text-muted-foreground mb-6 max-w-2xl mx-auto">
-            Build your Financial Health Portfolio — any combination of active businesses and individuals.
+            Build your Enterprise Partner portfolio — any combination of active businesses and individuals.
             Not compulsorily as in the table below. Earn first-time (40%) and recurring (20%) commissions
             at every stage. Qualify for Rewards (EVERY 90 DAYS)!
           </p>
@@ -284,7 +287,7 @@ const AmbassadorApplyPage = () => {
             <table className="w-full text-sm min-w-[900px]">
               <thead className="bg-secondary/30">
                 <tr>
-                  <th className="text-left py-3 px-4 font-semibold">Category</th>
+                  <th className="text-left py-3 px-4 font-semibold">Partner Tier</th>
                   <th className="text-right py-3 px-4 font-semibold">Businesses</th>
                   <th className="text-right py-3 px-4 font-semibold">Individuals</th>
                   <th className="text-right py-3 px-4 font-semibold">Income From Businesses</th>
@@ -328,10 +331,10 @@ const AmbassadorApplyPage = () => {
           <Card className="bg-gradient-to-r from-primary to-accent text-primary-foreground border-0">
             <CardHeader>
               <CardTitle className="text-2xl md:text-3xl">
-                Ready to become a Financial Health Ambassador?
+                Ready to become an Enterprise Partner?
               </CardTitle>
               <CardDescription className="text-primary-foreground/80">
-                Join a community of educators building Africa's financial future
+                Join a network of organisations building Africa's financial future
                 while earning sustainable recurring income.
               </CardDescription>
             </CardHeader>
@@ -349,9 +352,9 @@ const AmbassadorApplyPage = () => {
               {user && (
                 <p className="text-sm text-primary-foreground/70 mt-3">
                   {isActivated
-                    ? "You're now an FHA member. Post in the FHA Chatroom below!"
+                    ? "You're now an Enterprise Partner. Post in the Partners Chatroom below!"
                     : eligible
-                      ? "You're eligible to activate your ambassador status."
+                      ? "You're eligible to activate your partner status."
                       : "Maintain an active subscription or platform credits to qualify."}
                 </p>
               )}
@@ -359,7 +362,7 @@ const AmbassadorApplyPage = () => {
           </Card>
         </motion.section>
 
-        {/* FHA Chatroom Hub */}
+        {/* Partners Chatroom Hub */}
         <FHAChatroomHub />
       </div>
 
@@ -368,4 +371,4 @@ const AmbassadorApplyPage = () => {
   );
 };
 
-export default AmbassadorApplyPage;
+export default EnterprisePartnersPage;
