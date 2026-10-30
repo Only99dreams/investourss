@@ -160,7 +160,7 @@ const Dashboard = () => {
           <Route path="/health-guidance" element={<Navigate to="/dashboard/audit-history" replace />} />
           <Route path="/fha-portfolio" element={
             <>
-              <DashboardHeader title="FHA Portfolio" onMenuClick={() => setSidebarOpen(true)} />
+              <DashboardHeader title="Portfolio" onMenuClick={() => setSidebarOpen(true)} />
               <FHAPortfolioSection />
             </>
           } />

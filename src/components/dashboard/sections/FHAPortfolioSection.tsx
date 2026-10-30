@@ -144,7 +144,7 @@ export function FHAPortfolioSection() {
                 Become a Financial Health Ambassador
               </CardTitle>
               <CardDescription>
-                Your FHA Portfolio tracks the active users you refer, the commissions you earn, and your
+                Your Portfolio tracks the active users you refer, the commissions you earn, and your
                 progress toward the Quarterly Reward. Become an ambassador to unlock it.
               </CardDescription>
             </CardHeader>
@@ -216,7 +216,7 @@ export function FHAPortfolioSection() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <PieChart className="w-5 h-5 text-primary" />
-              FHA Portfolio
+              Portfolio
             </CardTitle>
             <CardDescription>
               Track the active users you refer, the commissions they generate, and your total portfolio value.
