@@ -611,7 +611,7 @@ const Bookmaker = () => {
       }
       if (response.entitlement) setEntitlement(response.entitlement as BookmakerEntitlement);
       toast({
-        title: "Your free outline is ready",
+        title: "Your outline is ready",
         description: "Edit the title and chapters, then write the manuscript when you are happy with the structure.",
       });
     } catch (err) {
@@ -717,7 +717,7 @@ const Bookmaker = () => {
       const saved = await saveBookmakerBook(book.id, { chapters: updateChapterList(updated) });
       setBook(saved);
       setEditingChapter(null);
-      toast({ title: "Chapter saved", description: "Manual edits are always free." });
+      toast({ title: "Chapter saved", description: "Manual edits never use credits." });
     } catch (err) {
       toast({
         title: "Could not save the chapter",
@@ -1539,7 +1539,7 @@ const Bookmaker = () => {
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
               {book
                 ? `${lengthLabel(book.length)} · ${audienceLabel(book)} · ${purposeLabel(book)}`
-                : "Start with an idea. The title and outline are free."}
+                : "Start with an idea. Your title and outline come first."}
             </p>
           </div>
           {book ? (
@@ -1662,7 +1662,7 @@ const Bookmaker = () => {
 
                 <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs text-muted-foreground">
-                    {user ? "Signed in. Your draft is saved automatically." : "You can start here, then sign in to generate the free outline."}
+                    {user ? "Signed in. Your draft is saved automatically." : "You can start here, then sign in to generate your outline."}
                   </p>
                   <Button
                     onClick={() => {
@@ -1894,7 +1894,7 @@ const Bookmaker = () => {
                 </Button>
                 <Button onClick={handleGenerateOutline} disabled={generatingOutline} size="lg" className="w-full gap-2 sm:w-auto">
                   {generatingOutline ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {generatingOutline ? "Building your outline…" : "Generate my free outline"}
+                  {generatingOutline ? "Building your outline…" : "Generate my outline"}
                 </Button>
               </div>
             </div>
@@ -1923,7 +1923,7 @@ const Bookmaker = () => {
                   </div>
                   <div className="flex items-start justify-between gap-3 border-t border-primary/15 pt-3">
                     <span className="text-muted-foreground">Outline</span>
-                    <span className="font-medium text-green-700">Free</span>
+                    <span className="font-medium text-green-700">Included</span>
                   </div>
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-muted-foreground">Manuscript</span>
@@ -1946,7 +1946,7 @@ const Bookmaker = () => {
                   {startShortfall > 0 ? (
                     <>
                       <p className="text-xs text-amber-700">
-                        You are {startShortfall} credit{startShortfall === 1 ? "" : "s"} short for the manuscript. The outline is still free.
+                        You are {startShortfall} credit{startShortfall === 1 ? "" : "s"} short for the manuscript. You can still generate the outline.
                       </p>
                       <Button asChild size="sm" className="w-full">
                         <Link to={purchaseUrl(book?.id ?? null, "packs")}>Buy credits</Link>
@@ -1973,7 +1973,7 @@ const Bookmaker = () => {
                     <div>
                       <h2 className="text-lg font-semibold">No outline yet</h2>
                       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                        Go back to the setup step and generate a free outline. You can edit everything before writing.
+                        Go back to the setup step and generate an outline. You can edit everything before writing.
                       </p>
                     </div>
                     <Button onClick={() => setStep(1)}>Back to setup</Button>
@@ -1984,7 +1984,7 @@ const Bookmaker = () => {
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-lg">Title &amp; promise</CardTitle>
-                      <CardDescription>Your outline is free to edit as many times as you like.</CardDescription>
+                      <CardDescription>You can edit your outline as many times as you like.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-1.5">
@@ -2118,7 +2118,7 @@ const Bookmaker = () => {
                   </p>
                   <p className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-                    You can edit every chapter for free after it is written.
+                    You can edit every chapter after it is written.
                   </p>
                   <p className="flex items-start gap-2">
                     <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -2291,7 +2291,7 @@ const Bookmaker = () => {
                       <div className="min-w-0">
                         <CardTitle className="text-lg">Edit chapter {editingChapter + 1}</CardTitle>
                         <CardDescription className="line-clamp-2">
-                          {chapters.find((chapter) => chapter.number === editingChapter + 1)?.title} · manual edits are free
+                          {chapters.find((chapter) => chapter.number === editingChapter + 1)?.title} · manual edits use no credits
                         </CardDescription>
                       </div>
                       <Badge variant="secondary" className="shrink-0 text-[10px]">
@@ -2315,7 +2315,7 @@ const Bookmaker = () => {
                         </Button>
                         <Button onClick={handleSaveChapter} disabled={savingEdit} className="gap-2">
                           {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                          Save edits (free)
+                          Save edits
                         </Button>
                       </div>
                     </CardContent>
@@ -2514,14 +2514,14 @@ const Bookmaker = () => {
                     <Download className="h-5 w-5 text-primary" /> Preview &amp; export
                   </CardTitle>
                   <CardDescription>
-                    A4 pages with a cover, title page, contents, page numbers and smartphone-readable type.
+                    A5 pages with a cover, title page, contents, page numbers and smartphone-readable type.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
                     <p className="font-medium text-foreground">PDF tips</p>
                     <p className="mt-1">
-                      In the print dialog choose <strong>Save as PDF</strong>, A4 paper and enable <strong>Background graphics</strong> so the cover and visuals print correctly.
+                      In the print dialog choose <strong>Save as PDF</strong>, A5 paper and enable <strong>Background graphics</strong> so the cover and visuals print correctly.
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -2536,7 +2536,7 @@ const Bookmaker = () => {
                     <Button variant="ghost" size="sm" onClick={() => setStep(3)} className="gap-2">
                       <Edit3 className="h-4 w-4" /> Back to manuscript
                     </Button>
-                    <p className="text-xs text-muted-foreground">PDF export is free.</p>
+                    <p className="text-xs text-muted-foreground">PDF export is included.</p>
                   </div>
                 </CardContent>
               </Card>

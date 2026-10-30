@@ -6,16 +6,16 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
  *
  * Every paid AI operation is reserved server-side through
  * `bookmaker_reserve_operation`. The client can never choose the price, and a
- * repeated request key can never charge twice. Free operations are still
+ * repeated request key can never charge twice. Zero-credit operations are still
  * recorded so one browser/account cannot run an uncontrolled stream of calls.
  *
  * Actions:
- *   outline             free  — idea -> title + chapter outline
+ *   outline             0 cr  — idea -> title + chapter outline
  *   start_manuscript    paid  — reserve the whole book, then call `chapter`
- *   resume              free  — inspect an existing reservation without charging
+ *   resume              0 cr  — inspect an existing reservation without charging
  *   chapter             paid  — generate one chapter inside an open reservation
- *   complete            free  — settle a reservation once all chapters exist
- *   abandon             free  — settle early and refund ungenerated chapters
+ *   complete            0 cr  — settle a reservation once all chapters exist
+ *   abandon             0 cr  — settle early and refund ungenerated chapters
  *   regenerate_chapter  paid  — rewrite one chapter (1 credit)
  *   regenerate_visual   paid  — rewrite one visual block (1 credit)
  *   generate_cover      paid  — typographic/vector cover art direction (1 credit)
@@ -126,7 +126,7 @@ Quality rules:
 - Diagrams must be a linear or branching flow with 3–6 short node labels (max 4 words each) and arrow labels that explain the relationship.
 - Charts must have 3–6 bars, short labels, one unit, and numbers that are supplied by the author or clearly labelled as illustrative assumptions. Never invent statistics, studies, dates or sources.
 - Prefer one excellent visual over three shallow ones. Include at least ONE visual block per chapter (two for a chapter over 700 words).
-- Keep every label short enough to read on a phone and an A4 page. No image URLs, no emoji, no decorative images.`;
+- Keep every label short enough to read on a phone and an A5 page. No image URLs, no emoji, no decorative images.`;
 
 const OUTLINE_SYSTEM = `You are Bookmaker by Investours, a senior nonfiction book editor and instructional designer.
 You turn a creator's idea into a commercially useful ebook outline that matches their audience, purpose and language.
@@ -820,7 +820,7 @@ serve(async (req) => {
   try {
     switch (action) {
       // ---------------------------------------------------------------------
-      // Outline (free, but idempotent and logged)
+      // Outline (0 credits, but idempotent and logged)
       // ---------------------------------------------------------------------
       case "outline": {
         const config = normalizeConfig(body);
@@ -1137,7 +1137,7 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
       }
 
       // ---------------------------------------------------------------------
-      // Inspect an active manuscript reservation (free, never charges)
+      // Inspect an active manuscript reservation (0 credits, never charges)
       // ---------------------------------------------------------------------
       case "resume": {
         const bookId = String(body?.bookId ?? "").trim();
@@ -1279,7 +1279,7 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
         const number = chapterIndex + 1;
         const existingChapter = chaptersArray(book).find((c: any) => Number(c?.number) === number);
 
-        // A retry for a chapter already generated is free and returns the saved copy.
+        // A retry for a chapter already generated does not charge and returns the saved copy.
         if (coveredByOperation(op).includes(number) && existingChapter) {
           return json({
             success: true,
@@ -1779,7 +1779,7 @@ Return only the replacement visual block.`,
       }
 
       // ---------------------------------------------------------------------
-      // Narrate the whole book (3 credits, chapter by chapter)
+      // Narrate the whole book (2 credits, chapter by chapter)
       // ---------------------------------------------------------------------
       case "start_audiobook": {
         const bookId = String(body?.bookId ?? "").trim();
@@ -2129,7 +2129,7 @@ Return only the replacement visual block.`,
       }
 
       // ---------------------------------------------------------------------
-      // Combine narrated chapters into one downloadable WAV (free)
+      // Combine narrated chapters into one downloadable WAV (0 credits)
       // ---------------------------------------------------------------------
       case "assemble_audiobook": {
         const bookId = String(body?.bookId ?? "").trim();

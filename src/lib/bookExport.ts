@@ -16,13 +16,13 @@ export interface BookExportOptions {
   autoPrint?: boolean;
 }
 
-const A4 = {
-  width: 210,
-  height: 297,
-  marginTop: 18,
-  marginSide: 18,
-  marginBottom: 20,
-  footerBottom: 9,
+const A5 = {
+  width: 148,
+  height: 210,
+  marginTop: 14,
+  marginSide: 14,
+  marginBottom: 16,
+  footerBottom: 7,
 };
 
 let coverArtSequence = 0;
@@ -149,42 +149,42 @@ function generatedCoverArt(book: BookmakerBook, theme: BookTheme, authorName?: s
   const kicker = "BOOKMAKER BY INVESTOURS";
   const headlineSize =
     headline.length > 72
-      ? "30pt"
+      ? "21pt"
       : headline.length > 54
-        ? "34pt"
+        ? "24pt"
         : style === "premium-minimal"
-          ? "38pt"
+          ? "26pt"
           : style === "bold-editorial"
-            ? "46pt"
-            : "42pt";
+            ? "32pt"
+            : "29pt";
 
   const frame =
     layout === "framed"
-      ? `<div style="position:absolute;inset:8mm;border:1.5px solid ${alpha(palette.text, 0.4)};pointer-events:none;"></div>`
+      ? `<div style="position:absolute;inset:6mm;border:1.5px solid ${alpha(palette.text, 0.4)};pointer-events:none;"></div>`
       : "";
   const splitBand =
     layout === "split"
-      ? `<div style="position:absolute;left:0;top:0;bottom:0;width:8mm;background:${palette.accent};"></div>`
+      ? `<div style="position:absolute;left:0;top:0;bottom:0;width:5mm;background:${palette.accent};"></div>`
       : "";
-  const paddingLeft = layout === "split" ? "27mm" : layout === "framed" ? "24mm" : "19mm";
-  const paddingRight = layout === "framed" ? "24mm" : "19mm";
+  const paddingLeft = layout === "split" ? "19mm" : layout === "framed" ? "17mm" : "14mm";
+  const paddingRight = layout === "framed" ? "17mm" : "13mm";
   const justify = layout === "centered" ? "center" : "space-between";
-  const subheadlineMargin = layout === "centered" ? "0 auto" : "7mm 0 0";
+  const subheadlineMargin = layout === "centered" ? "0 auto" : "5mm 0 0";
 
-  return `<div style="position:relative;width:100%;height:100%;overflow:hidden;background:${palette.background};color:${palette.text};padding:22mm ${paddingRight} 23mm ${paddingLeft};display:flex;flex-direction:column;justify-content:${justify};text-align:${align};">
+  return `<div style="position:relative;width:100%;height:100%;overflow:hidden;background:${palette.background};color:${palette.text};padding:16mm ${paddingRight} 17mm ${paddingLeft};display:flex;flex-direction:column;justify-content:${justify};text-align:${align};">
     ${coverBackdropSvg(palette)}
     ${coverMotifSvg(design?.motif ?? "orbit", palette)}
     ${splitBand}
     ${frame}
     <div style="position:relative;z-index:2;">
-      <div style="font-family:${theme.bodyFont};font-size:8.5pt;letter-spacing:0.26em;text-transform:uppercase;opacity:0.78;margin-bottom:${layout === "centered" ? "12mm" : "16mm"};">${escapeHtml(kicker)}</div>
-      <h1 style="margin:0;font-family:${theme.headingFont};font-size:${headlineSize};line-height:1.04;letter-spacing:${style === "bold-editorial" ? "-0.02em" : "0"};text-wrap:balance;overflow-wrap:anywhere;max-width:${layout === "centered" ? "150mm" : "160mm"};">${escapeHtml(headline)}</h1>
-      ${subheadline ? `<p style="margin:${subheadlineMargin};font-family:${theme.bodyFont};font-size:${headline.length > 60 ? "11.5pt" : "13pt"};line-height:1.45;opacity:0.88;overflow-wrap:anywhere;max-width:${layout === "centered" ? "138mm" : "140mm"};${layout === "centered" ? "margin-left:auto;margin-right:auto;" : ""}">${escapeHtml(subheadline)}</p>` : ""}
+      <div style="font-family:${theme.bodyFont};font-size:6pt;letter-spacing:0.24em;text-transform:uppercase;opacity:0.78;margin-bottom:${layout === "centered" ? "8.5mm" : "11mm"};">${escapeHtml(kicker)}</div>
+      <h1 style="margin:0;font-family:${theme.headingFont};font-size:${headlineSize};line-height:1.05;letter-spacing:${style === "bold-editorial" ? "-0.02em" : "0"};text-wrap:balance;overflow-wrap:anywhere;max-width:${layout === "centered" ? "108mm" : "115mm"};">${escapeHtml(headline)}</h1>
+      ${subheadline ? `<p style="margin:${subheadlineMargin};font-family:${theme.bodyFont};font-size:${headline.length > 60 ? "8.5pt" : "9.5pt"};line-height:1.45;opacity:0.88;overflow-wrap:anywhere;max-width:${layout === "centered" ? "99mm" : "100mm"};${layout === "centered" ? "margin-left:auto;margin-right:auto;" : ""}">${escapeHtml(subheadline)}</p>` : ""}
     </div>
-    <div style="position:relative;z-index:2;display:flex;flex-direction:column;gap:6mm;align-items:${align === "center" ? "center" : "flex-start"};">
-      <div style="width:28mm;height:2px;background:${palette.accent};"></div>
-      <p style="margin:0;font-family:${theme.bodyFont};font-size:10pt;letter-spacing:0.1em;text-transform:uppercase;opacity:0.85;overflow-wrap:anywhere;max-width:145mm;">${escapeHtml(tagline)}</p>
-      ${authorName ? `<p style="margin:0;font-family:${theme.headingFont};font-size:13pt;">${escapeHtml(authorName)}</p>` : ""}
+    <div style="position:relative;z-index:2;display:flex;flex-direction:column;gap:4mm;align-items:${align === "center" ? "center" : "flex-start"};">
+      <div style="width:20mm;height:2px;background:${palette.accent};"></div>
+      <p style="margin:0;font-family:${theme.bodyFont};font-size:7.5pt;letter-spacing:0.1em;text-transform:uppercase;opacity:0.85;overflow-wrap:anywhere;max-width:104mm;">${escapeHtml(tagline)}</p>
+      ${authorName ? `<p style="margin:0;font-family:${theme.headingFont};font-size:10pt;">${escapeHtml(authorName)}</p>` : ""}
     </div>
   </div>`;
 }
@@ -204,13 +204,13 @@ export function coverPageHtml(book: BookmakerBook, theme: BookTheme, authorName?
 function titlePageHtml(book: BookmakerBook, theme: BookTheme, authorName?: string): string {
   return `<section class="page front-page">
     <div class="page-content" style="display:flex;flex-direction:column;justify-content:center;text-align:center;font-family:${theme.bodyFont};">
-      <p style="margin:0 0 8mm;font-size:9pt;letter-spacing:0.24em;text-transform:uppercase;color:${theme.palette.muted};">${escapeHtml(purposeLabel(book))}</p>
-      <h1 style="margin:0;font-family:${theme.headingFont};font-size:30pt;line-height:1.15;color:${theme.palette.primary};">${escapeHtml(book.title || "Untitled Book")}</h1>
-      ${book.subtitle ? `<p style="margin:5mm auto 0;max-width:125mm;font-size:13pt;line-height:1.5;color:${theme.palette.muted};">${escapeHtml(book.subtitle)}</p>` : ""}
-      <div style="width:24mm;height:2px;background:${theme.palette.accent};margin:12mm auto;"></div>
-      ${authorName ? `<p style="margin:0;font-family:${theme.headingFont};font-size:15pt;color:${theme.palette.text};">${escapeHtml(authorName)}</p>` : ""}
-      <p style="margin:6mm 0 0;font-size:9.5pt;color:${theme.palette.muted};">Created ${escapeHtml(formatBookDate(book.created_at))}</p>
-      <p style="margin:30mm 0 0;font-size:8.5pt;letter-spacing:0.12em;text-transform:uppercase;color:${theme.palette.muted};">Bookmaker by Investours</p>
+      <p style="margin:0 0 6mm;font-size:6.5pt;letter-spacing:0.22em;text-transform:uppercase;color:${theme.palette.muted};">${escapeHtml(purposeLabel(book))}</p>
+      <h1 style="margin:0;font-family:${theme.headingFont};font-size:21pt;line-height:1.16;color:${theme.palette.primary};">${escapeHtml(book.title || "Untitled Book")}</h1>
+      ${book.subtitle ? `<p style="margin:3.5mm auto 0;max-width:88mm;font-size:9.5pt;line-height:1.5;color:${theme.palette.muted};">${escapeHtml(book.subtitle)}</p>` : ""}
+      <div style="width:17mm;height:2px;background:${theme.palette.accent};margin:8mm auto;"></div>
+      ${authorName ? `<p style="margin:0;font-family:${theme.headingFont};font-size:10.5pt;color:${theme.palette.text};">${escapeHtml(authorName)}</p>` : ""}
+      <p style="margin:4mm 0 0;font-size:7pt;color:${theme.palette.muted};">Created ${escapeHtml(formatBookDate(book.created_at))}</p>
+      <p style="margin:20mm 0 0;font-size:6pt;letter-spacing:0.12em;text-transform:uppercase;color:${theme.palette.muted};">Bookmaker by Investours</p>
     </div>
     ${footerHtml()}
   </section>`;
@@ -221,18 +221,18 @@ function tocPageHtml(book: BookmakerBook, theme: BookTheme): string {
   const rows = chapters
     .map(
       (chapter, index) =>
-        `<li class="toc-entry" data-chapter="${index + 1}" style="display:flex;align-items:baseline;gap:8px;margin:0 0 11px;font-family:${theme.bodyFont};font-size:12pt;color:${theme.palette.text};">
-          <span style="width:8mm;color:${theme.palette.accent};font-weight:700;">${String(index + 1).padStart(2, "0")}</span>
+        `<li class="toc-entry" data-chapter="${index + 1}" style="display:flex;align-items:baseline;gap:6px;margin:0 0 8px;font-family:${theme.bodyFont};font-size:8.5pt;color:${theme.palette.text};">
+          <span style="width:6mm;color:${theme.palette.accent};font-weight:700;">${String(index + 1).padStart(2, "0")}</span>
           <span style="flex:1;border-bottom:1px dotted rgba(120,120,120,0.45);padding-bottom:2px;">${escapeHtml(chapter.title)}</span>
-          <span class="toc-page" style="min-width:8mm;text-align:right;color:${theme.palette.muted};font-size:10pt;"></span>
+          <span class="toc-page" style="min-width:6mm;text-align:right;color:${theme.palette.muted};font-size:7pt;"></span>
         </li>`,
     )
     .join("");
 
   return `<section class="page front-page">
     <div class="page-content" style="font-family:${theme.bodyFont};">
-      <p style="margin:0 0 4mm;font-size:9pt;letter-spacing:0.22em;text-transform:uppercase;color:${theme.palette.accent};">Contents</p>
-      <h1 style="margin:0 0 10mm;font-family:${theme.headingFont};font-size:24pt;color:${theme.palette.primary};">What's inside</h1>
+      <p style="margin:0 0 3mm;font-size:6.5pt;letter-spacing:0.22em;text-transform:uppercase;color:${theme.palette.accent};">Contents</p>
+      <h1 style="margin:0 0 7mm;font-family:${theme.headingFont};font-size:18pt;color:${theme.palette.primary};">What's inside</h1>
       <ol style="margin:0;padding:0;list-style:none;">${rows || `<li style="color:${theme.palette.muted};">Your outline will appear here.</li>`}</ol>
     </div>
     ${footerHtml()}
@@ -249,9 +249,9 @@ function chapterFlowHtml(chapter: BookChapter, index: number, theme: BookTheme):
     .map((block) => `<div class="flow-block">${renderBlocksToHtml([block], theme)}</div>`)
     .join("");
   return `<div class="flow-block chapter-open" data-chapter="${index + 1}" style="page-break-before:always;">
-      <div style="margin-bottom:6mm;padding-bottom:4mm;border-bottom:2px solid ${theme.palette.accent};">
-        <p style="margin:0 0 2mm;font-family:${theme.bodyFont};font-size:8.5pt;letter-spacing:0.2em;text-transform:uppercase;color:${theme.palette.muted};">Chapter ${index + 1}</p>
-        <h2 style="margin:0;font-family:${theme.headingFont};font-size:26pt;line-height:1.14;color:${theme.palette.primary};">${escapeHtml(chapter.title)}</h2>
+      <div style="margin-bottom:4mm;padding-bottom:3mm;border-bottom:2px solid ${theme.palette.accent};">
+        <p style="margin:0 0 1.5mm;font-family:${theme.bodyFont};font-size:6.5pt;letter-spacing:0.2em;text-transform:uppercase;color:${theme.palette.muted};">Chapter ${index + 1}</p>
+        <h2 style="margin:0;font-family:${theme.headingFont};font-size:19pt;line-height:1.15;color:${theme.palette.primary};">${escapeHtml(chapter.title)}</h2>
       </div>
     </div>
     ${blockHtml}`;
@@ -262,7 +262,7 @@ function pageTemplateHtml(): string {
 }
 
 const PRINT_CSS = `
-  @page { size: A4; margin: 0; }
+  @page { size: A5; margin: 0; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { margin: 0; padding: 0; }
   body { background: #e8e6ee; font-family: 'DM Sans', Arial, sans-serif; color: #1f1730; }
@@ -272,12 +272,12 @@ const PRINT_CSS = `
   .toolbar button { border: 0; border-radius: 8px; padding: 9px 16px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; background: #b58b2a; color: #16101f; }
   .toolbar button.secondary { background: rgba(255,255,255,0.14); color: #fff; }
   #book-pages { padding: 18px 0 40px; }
-  .page { position: relative; width: 210mm; height: 297mm; margin: 0 auto 10mm; background: #fff; box-shadow: 0 4px 22px rgba(31,23,48,0.16); padding: ${A4.marginTop}mm ${A4.marginSide}mm ${A4.marginBottom}mm; overflow: hidden; page-break-after: always; break-after: page; }
+  .page { position: relative; width: ${A5.width}mm; height: ${A5.height}mm; margin: 0 auto 10mm; background: #fff; box-shadow: 0 4px 22px rgba(31,23,48,0.16); padding: ${A5.marginTop}mm ${A5.marginSide}mm ${A5.marginBottom}mm; overflow: hidden; page-break-after: always; break-after: page; }
   .page:last-child { page-break-after: auto; break-after: auto; }
   .cover-page { padding: 0; }
-  .page-content { height: ${A4.height - A4.marginTop - A4.marginBottom}mm; overflow: hidden; position: relative; }
-  .page-footer { position: absolute; left: ${A4.marginSide}mm; right: ${A4.marginSide}mm; bottom: ${A4.footerBottom}mm; display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid #e6e1ee; padding-top: 2mm; font-size: 8pt; letter-spacing: 0.04em; color: #8a8298; }
-  #book-flow { position: absolute; left: -9999px; top: 0; width: ${A4.width - A4.marginSide * 2}mm; visibility: hidden; }
+  .page-content { height: ${A5.height - A5.marginTop - A5.marginBottom}mm; overflow: hidden; position: relative; }
+  .page-footer { position: absolute; left: ${A5.marginSide}mm; right: ${A5.marginSide}mm; bottom: ${A5.footerBottom}mm; display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid #e6e1ee; padding-top: 1.5mm; font-size: 6.5pt; letter-spacing: 0.04em; color: #8a8298; }
+  #book-flow { position: absolute; left: -9999px; top: 0; width: ${A5.width - A5.marginSide * 2}mm; visibility: hidden; }
   .flow-block { break-inside: avoid; page-break-inside: avoid; }
   .flow-block > *:first-child { margin-top: 0; }
   .flow-block > *:last-child { margin-bottom: 0; }
@@ -370,7 +370,7 @@ export function buildBookDocument(book: BookmakerBook, options: BookExportOption
   <div class="toolbar">
     <div>
       <strong>${escapeHtml(book.title || "Your book")}</strong>
-      <p>${escapeHtml(book.length)} book · ${words} words · A4 print-ready</p>
+      <p>${escapeHtml(book.length)} book · ${words} words · A5 print-ready</p>
     </div>
     <div class="actions">
       <button class="secondary" onclick="window.close()">Close</button>
@@ -393,7 +393,7 @@ export function buildBookDocument(book: BookmakerBook, options: BookExportOption
 }
 
 /**
- * Opens the print-ready A4 document in a new window. The browser's print
+ * Opens the print-ready A5 document in a new window. The browser's print
  * dialog is the PDF export path (no extra dependency, no server render).
  */
 export function downloadBookPDF(book: BookmakerBook, options: BookExportOptions = {}): boolean {

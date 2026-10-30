@@ -61,13 +61,13 @@ const SAMPLE_BOOK = createBlankBook({
 const benefits = [
   {
     icon: Mic,
-    title: "Start with a voice note",
+    title: "Start with a voice note or text",
     description: "Describe your idea in your own words — type it or record it. Bookmaker turns it into a real book plan.",
   },
   {
     icon: FileText,
-    title: "Outline before you pay",
-    description: "Get a title, subtitle and chapter-by-chapter outline free. Edit every line until it sounds like you.",
+    title: "Outline comes first",
+    description: "Get a title, subtitle and chapter-by-chapter outline. Edit every line until it sounds like you.",
   },
   {
     icon: Layers,
@@ -82,7 +82,7 @@ const benefits = [
   {
     icon: Smartphone,
     title: "A PDF people can read on a phone",
-    description: "Cover, title page, contents, clear headings and page numbers in a clean, print-ready A4 layout.",
+    description: "Cover, title page, contents, clear headings and page numbers in a clean, print-ready A5 layout.",
   },
   {
     icon: Headphones,
@@ -92,14 +92,14 @@ const benefits = [
   {
     icon: ShieldCheck,
     title: "Credits you control",
-    description: "See the exact cost before anything runs. Edits are free, and failed AI operations are refunded.",
+    description: "See the exact cost before anything runs. Edits never use credits, and failed AI operations are refunded.",
   },
 ];
 
 const steps = [
   { title: "Tell us your idea", description: "A sentence, a paragraph or a voice note. No blank-page panic." },
   { title: "Choose the reader and purpose", description: "Audience, goal, language and length — so the book fits its job." },
-  { title: "Review your free outline", description: "Edit the title, chapters and summaries until the structure is right." },
+  { title: "Review your outline", description: "Edit the title, chapters and summaries until the structure is right." },
   { title: "Write, edit and design", description: "Generate the manuscript, refine chapters and add a cover when you are ready." },
   { title: "Export, publish or narrate", description: "Download a PDF, follow the publishing tutorials, or create a downloadable audiobook." },
 ];
@@ -123,7 +123,7 @@ const BookmakerLanding = () => {
         >
           <div className="min-w-0 text-center lg:text-left">
             <Badge variant="outline" className="mb-4 gap-1">
-              <BookOpen className="h-3 w-3 text-primary" /> Bookmaker by Investours
+              <BookOpen className="h-3 w-3 text-primary" /> BookMaker AI by Investours
             </Badge>
             <h1 className="mb-3 text-balance text-[1.75rem] font-bold leading-[1.12] text-foreground sm:mb-4 sm:text-4xl sm:leading-tight md:text-6xl">
               Turn Your Knowledge Into <span className="text-primary">Digital Income</span>
@@ -132,14 +132,14 @@ const BookmakerLanding = () => {
               Create your first ebook in minutes!
             </p>
             <p className="mx-auto mb-5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:mb-6 sm:text-base lg:mx-0">
-              You already know something worth sharing. Bookmaker helps you shape it into a
-              professionally written, beautifully designed ebook — with a free outline, editable
+              You already know something worth sharing. Bookmaker AI helps you shape it into a
+              professionally written, beautifully designed ebook — with an editable outline,
               chapters, useful visuals, a phone-ready PDF and an AI-narrated audiobook.
             </p>
             <div className="mb-5 flex flex-col flex-wrap items-stretch justify-center gap-3 sm:flex-row lg:justify-start">
               <Button asChild size="xl" variant="hero" className="w-full px-5 sm:w-auto sm:px-10">
                 <Link to="/bookmaker/create">
-                  Create My Ebook Free <ArrowRight className="ml-1.5 h-5 w-5" />
+                  Create My Ebook <ArrowRight className="ml-1.5 h-5 w-5" />
                 </Link>
               </Button>
               <Button
@@ -159,7 +159,7 @@ const BookmakerLanding = () => {
                 <Coins className="h-4 w-4 shrink-0 text-primary" /> AI credits from as low as ₦2,720
               </span>
               <span className="flex items-center gap-1.5">
-                <Check className="h-4 w-4 shrink-0 text-green-600" /> Free outline, no card required
+                <Check className="h-4 w-4 shrink-0 text-green-600" /> Edit the outline before spending credits
               </span>
             </div>
           </div>
@@ -173,7 +173,7 @@ const BookmakerLanding = () => {
               <CoverPreview book={SAMPLE_BOOK} authorName="Investours Creator" />
             </motion.div>
             <div className="absolute -bottom-4 left-0 z-20 w-[60%] max-w-[210px] rounded-2xl border border-border bg-card/95 p-3 shadow-xl backdrop-blur sm:-left-4 sm:bottom-0 sm:w-[62%] sm:p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Free outline</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Outline preview</p>
               <p className="mt-1 text-xs font-semibold leading-snug sm:text-sm">8 chapters, mapped to your reader</p>
               <div className="mt-2 space-y-1.5 sm:mt-3">
                 {[1, 2, 3].map((n) => (
@@ -245,7 +245,7 @@ const BookmakerLanding = () => {
           <div className="mx-auto mb-6 max-w-2xl text-center sm:mb-8">
             <h2 className="mb-2 text-xl font-bold text-foreground sm:text-2xl">Choose your book size</h2>
             <p className="text-sm text-muted-foreground sm:text-base">
-              Start with a free outline on every size. Credits are only used when the AI writes.
+              Start with an outline on every size. Credits are only used when the AI writes.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3 md:gap-5">
@@ -279,7 +279,7 @@ const BookmakerLanding = () => {
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-600" />
-                      Free title and outline
+                      Title and outline included
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4 text-green-600" />
@@ -294,7 +294,7 @@ const BookmakerLanding = () => {
             ))}
           </div>
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            Chapter rewrite 1 credit · Visual rewrite 1 credit · Cover 1 credit · Audiobook 3 credits · Manual edits and PDF export are free.
+            Chapter rewrite 1 credit · Visual rewrite 1 credit · Cover 1 credit · Audiobook 2 credits · Manual edits and PDF export are available.
           </p>
         </motion.section>
 
@@ -335,13 +335,12 @@ const BookmakerLanding = () => {
             </CardHeader>
             <CardContent className="p-5 pt-0 sm:p-6 sm:pt-0">
               <p className="mx-auto mb-5 max-w-xl text-sm text-primary-foreground/85">
-                Start with a free outline. Pay only when you are ready for the AI to write, design
-                and export your book.
+                Start with a voice note or simple text. BookMaker AI takes over the writing and designing then you export your book.
               </p>
               <div className="mx-auto flex w-full max-w-xs flex-col justify-center gap-3 sm:max-w-none sm:flex-row">
                 <Button asChild size="xl" className="h-auto min-h-14 w-full whitespace-normal bg-background px-5 py-3 leading-snug text-primary hover:bg-background/90 sm:w-auto sm:px-10">
                   <Link to="/bookmaker/create">
-                    Create My Ebook Free <ArrowRight className="ml-2 h-5 w-5 shrink-0" />
+                    Create My Ebook <ArrowRight className="ml-2 h-5 w-5 shrink-0" />
                   </Link>
                 </Button>
                 <Button asChild size="xl" variant="outline" className="h-auto min-h-14 w-full whitespace-normal border-primary-foreground/40 bg-transparent px-5 py-3 leading-snug text-primary-foreground hover:bg-primary-foreground/10 sm:w-auto sm:px-10">

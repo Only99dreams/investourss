@@ -177,7 +177,7 @@ export function BookmakerHistorySection() {
             <div>
               <h3 className="text-lg font-semibold">No ebooks yet</h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                Turn your knowledge into a digital product. Start with a free title and outline — you only use credits when you are ready to write.
+                Turn your knowledge into a digital product.
               </p>
             </div>
             <Button onClick={() => navigate("/bookmaker/create")} size="lg" className="gap-2">
@@ -279,13 +279,13 @@ export function BookmakerHistorySection() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">How Bookmaker credits work</CardTitle>
           <CardDescription>
-            One balance for writing, rewriting, cover design and narration. Manual edits and PDF export are free.
+            Credit usage for writing, rewriting, cover design and narration. Manual edits use no credits and PDF export is available.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
           <p>Short book: 2 credits · Medium: 4 credits · Long: 6 credits</p>
           <p>Chapter rewrite: 1 credit · Visual refresh: 1 credit · Cover: 1 credit</p>
-          <p>Audiobook narration: 3 credits · PDF export: free</p>
+          <p>Audiobook narration: 2 credits</p>
           <p>Failed AI operations are refunded automatically.</p>
         </CardContent>
       </Card>

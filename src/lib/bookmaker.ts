@@ -1,5 +1,5 @@
 // Shared types and configuration for Bookmaker by Investours.
-// Keep this file free of React/DOM imports so the wizard, preview and export
+// Keep this file independent of React/DOM imports so the wizard, preview and export
 // helpers can all use the same definitions.
 
 import type { CSSProperties } from "react";
@@ -156,7 +156,7 @@ export function audiobookVoiceLabel(voiceKey: string | null | undefined): string
 }
 
 export function audiobookCostForLength(_length: BookLength): number {
-  return 3;
+  return 2;
 }
 
 export interface AudiobookChapter {
@@ -262,7 +262,7 @@ export const DEFAULT_ENTITLEMENT: BookmakerEntitlement = {
     chapter_regeneration: 1,
     visual_regeneration: 1,
     cover_generation: 1,
-    audiobook: 3,
+    audiobook: 2,
     full_regeneration_short: 2,
     full_regeneration_medium: 4,
     full_regeneration_long: 6,
@@ -391,7 +391,7 @@ export const CREDIT_COSTS = {
   chapterRegeneration: 1,
   visualRegeneration: 1,
   coverGeneration: 1,
-  audiobook: 3,
+  audiobook: 2,
   outline: 0,
   manualEdit: 0,
   pdfExport: 0,

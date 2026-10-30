@@ -1,6 +1,6 @@
 # Bookmaker by Investours
 
-Bookmaker turns a creator's idea into a complete ebook: free title and outline, editable
+Bookmaker turns a creator's idea into a complete ebook: editable title and outline, a full
 manuscript, context-aware visuals, a typographic cover, a print-ready PDF and an AI-narrated
 audiobook. It shares the existing Investours credit packs and subscription allowance.
 
@@ -13,12 +13,13 @@ audiobook. It shares the existing Investours credit packs and subscription allow
 | `/dashboard/bookmaker` | Member's saved ebooks, audiobooks, credits and PDF downloads |
 
 The wizard accepts text or a browser voice note. A draft is kept in `localStorage` until the
-free outline has been saved, so a detour to login or to buy credits never loses the idea.
+outline has been saved, so a detour to login or to buy credits never loses the idea.
 
 ## Database
 
 Migration: `supabase/migrations/20261029000000_bookmaker_mvp.sql`
 Audiobook migration: `supabase/migrations/20261030000000_bookmaker_audiobook.sql`
+Audiobook price migration: `supabase/migrations/20261030000002_bookmaker_audiobook_price.sql`
 
 | Object | Purpose |
 | --- | --- |
@@ -46,7 +47,7 @@ Bookmaker mirrors the active pack total into `profiles.audit_credits`.
 
 | Action | Cost |
 | --- | --- |
-| Outline / title / chapter structure | 0 (free, still logged for idempotency) |
+| Outline / title / chapter structure | 0 (still logged for idempotency) |
 | Short manuscript (1,500–3,000 words, 3–5 chapters) | 2 |
 | Medium manuscript (4,000–7,000 words, 6–10 chapters) | 4 |
 | Long manuscript (8,000–12,000 words, 10–15 chapters) | 6 |
@@ -54,7 +55,7 @@ Bookmaker mirrors the active pack total into `profiles.audit_credits`.
 | Rewrite one chapter | 1 |
 | Refresh one visual block | 1 |
 | Generate a new cover | 1 |
-| Audiobook narration (whole book, chapter by chapter) | 3 |
+| Audiobook narration (whole book, chapter by chapter) | 2 |
 | Manual edits, uploaded covers, PDF export, audio assembly | 0 |
 
 Subscription included credits per period: monthly 3, quarterly 6, bi-annual 9, annual 15;
@@ -74,7 +75,7 @@ B2B quarterly 6, B2B annual 15. Subscription credits are spent before packs.
   the pass progresses, so a refresh or closed tab can resume without a second charge.
 - A failed AI call invokes `bookmaker_fail_operation`, refunding the reservation.
 - Approved chapters are sent as `lockedChapters` during full regeneration and are not touched.
-- Re-running an already generated chapter inside a reservation is free and returns the saved copy.
+- Re-running an already generated chapter inside a reservation does not charge and returns the saved copy.
 
 ## Edge function
 
@@ -108,7 +109,7 @@ actions it is the 1-based chapter number.
 
 Narration is generated server-side in `supabase/functions/bookmaker/index.ts`:
 
-1. `start_audiobook` reserves 3 credits for the whole book, pins the narrator voice and the list of
+1. `start_audiobook` reserves 2 credits for the whole book, pins the narrator voice and the list of
    written chapters, then clears any previous audio so a new voice replaces it cleanly.
 2. `audiobook_chapter` cleans markdown down to speakable prose, splits it into ≤190-character
    chunks (Orpheus accepts at most 200 per request), requests WAV from Groq, joins the chunks with
@@ -119,7 +120,7 @@ Narration is generated server-side in `supabase/functions/bookmaker/index.ts`:
    chapter-by-chapter downloads as the fallback.
 
 Only English and Arabic manuscripts can be narrated. Other languages still keep PDF export and the
-browser's read-aloud feature. WAV keeps the implementation dependency-free but large (~3 MB per
+browser's read-aloud feature. WAV has no audio-library dependency but is large (~3 MB per
 minute at 24 kHz mono 16-bit), so chapters are downloadable individually.
 
 ## Visual markup
@@ -161,11 +162,11 @@ caption: A simple three-stage journey the reader can copy.
 
 Prompts require at least one useful visual per chapter and forbid invented statistics, studies,
 quotes or sources. Charts must use supplied or clearly labelled illustrative figures. Diagrams
-are limited to 3–6 nodes and charts to 3–6 bars so they remain readable on phones and A4.
+are limited to 3–6 nodes and charts to 3–6 bars so they remain readable on phones and A5.
 
 ## PDF export
 
-`src/lib/bookExport.ts` builds an A4 print document with cover, title page, contents, repeated
+`src/lib/bookExport.ts` builds an A5 print document with cover, title page, contents, repeated
 table headers, page numbers and JavaScript pagination. Export opens a new window and uses the
 browser's print dialog (`Save as PDF`). No PDF dependency is required. Enable background
 graphics in the print dialog so the cover and SVG visuals print correctly.
@@ -201,11 +202,11 @@ over the manual additions in `src/integrations/supabase/types.ts`.
    one, and the book becomes `manuscript_ready`.
 4. Reload mid-generation → “Resume writing” continues the same reservation without a second charge.
 5. Stop mid-generation → ungenerated chapters are refunded.
-6. Edit a chapter manually → free; approve it; run full regeneration → approved chapter is kept.
+6. Edit a chapter manually → no credits used; approve it; run full regeneration → approved chapter is kept.
 7. Rewrite a chapter and refresh a visual → 1 credit each, surrounding content unchanged.
 8. Generate a cover, upload a portrait and a landscape image → no cropping or distortion.
-9. Export PDF → cover, contents, headings, page numbers and visuals print on A4.
-10. Generate an audiobook → 3 credits are reserved, each chapter appears with its own player and
+9. Export PDF → cover, contents, headings, page numbers and visuals print on A5.
+10. Generate an audiobook → 2 credits are reserved, each chapter appears with its own player and
     download, and the completed pass can be combined into one WAV.
 11. Start narration, reload mid-pass → narration resumes from the narrator card without a second
     charge; stop early and confirm the unfinished chapters are refunded.

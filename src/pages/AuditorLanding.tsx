@@ -131,9 +131,9 @@ const AuditorLanding = () => {
                 <h2 className="text-2xl font-bold mb-2">Turn Your Knowledge Into Digital Income</h2>
                 <p className="text-sm text-primary font-medium mb-2">Create your first ebook in minutes!</p>
                 <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  Share your idea by text or voice note. Get a free outline, then write, edit and
+                  Share your idea by text or voice note. Start with an outline, then write, edit and
                   design a complete ebook with useful visuals, a cover and a smartphone-friendly PDF.
-                  AI credits from as low as ₦2,720 — and your free outline costs nothing.
+                  AI credits from as low as ₦2,720, used only when the AI writes.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5"><Mic className="w-3.5 h-3.5 text-primary" /> Voice or text ideas</span>
@@ -144,7 +144,7 @@ const AuditorLanding = () => {
               <div className="flex flex-col gap-2 sm:flex-row md:flex-col">
                 <Button asChild size="lg">
                   <Link to="/bookmaker/create">
-                    Create My Ebook Free <ArrowRight className="w-4 h-4 ml-2" />
+                    Create My Ebook <ArrowRight className="w-4 h-4 ml-2" />
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline">
