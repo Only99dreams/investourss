@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Twitter, Instagram, Youtube, MessageCircle } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
-const doctorSteps = [
-  { emoji: "🩺", label: "Examines your finances", emojiLabel: "stethoscope" },
-  { emoji: "🔍", label: "Detects problems", emojiLabel: "magnifying glass" },
-  { emoji: "📊", label: "Explains your financial health", emojiLabel: "bar chart" },
-  { emoji: "💡", label: "Guides your next step", emojiLabel: "lightbulb" },
+const gains = [
+  "Turn your knowledge, skills or useful ideas into ebooks and audio versions.",
+  "Generate complete manuscripts with professionally designed interiors.",
+  "Download your finished ebook as a PDF, ready to prepare for sale.",
+  "Learn how to identify buyers, promote your products and fulfil orders.",
+  "Reach customers and sell your digital books around the world.",
 ];
 
 const Welcome = () => {
@@ -40,40 +41,49 @@ const Welcome = () => {
             />
           </motion.div>
 
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.35 }}
+            className="text-sm sm:text-base text-muted-foreground mb-2 sm:mb-3"
+          >
+            Welcome to Investours
+          </motion.p>
+
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
             className="text-[1.9rem] leading-tight min-[380px]:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-3 sm:mb-4 text-balance"
           >
-            Welcome to <span className="text-primary">Investours</span>
+            BookMaker <span className="text-primary">AI</span>
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.5 }}
-            className="text-lg sm:text-xl md:text-2xl text-primary font-medium mb-1 sm:mb-1.5"
+            className="text-lg sm:text-xl md:text-2xl font-medium text-foreground mb-3 sm:mb-4 text-balance"
           >
-            AI Financial Auditor
-          </motion.p>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.55 }}
-            className="text-sm sm:text-base md:text-lg text-foreground mb-3 sm:mb-4"
-          >
-            <em>Your Money Doctor</em>
+            Turn Your Knowledge Into Digital Income.
           </motion.p>
 
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.6 }}
-            className="text-sm sm:text-base md:text-lg text-muted-foreground mb-8 sm:mb-10 leading-relaxed text-pretty"
+            className="text-sm sm:text-base md:text-lg text-muted-foreground mb-2 leading-relaxed text-pretty"
           >
-            Understand your money. Detect financial leakages. Improve your financial health.
+            Create professional ebooks with AI, complete with audio versions.
+          </motion.p>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.65 }}
+            className="text-sm sm:text-base md:text-lg text-foreground font-medium mb-8 sm:mb-10 leading-relaxed text-pretty"
+          >
+            Get started with AI credits for as low as ₦2,720.
           </motion.p>
 
           {/* Primary CTA */}
@@ -83,9 +93,9 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.8 }}
             className="mb-5 sm:mb-6"
           >
-            <Link to="/auth" className="block w-full sm:inline-block">
+            <Link to="/bookmaker" className="block w-full sm:inline-block">
               <Button variant="hero" size="xl" className="group w-full sm:w-auto px-6 min-[380px]:px-8 sm:px-10">
-                Get Started Now
+                Start Now
                 <motion.span
                   className="ml-2 inline-block"
                   animate={{ x: [0, 4, 0] }}
@@ -97,29 +107,24 @@ const Welcome = () => {
             </Link>
           </motion.div>
 
-          {/* What your Money Doctor does */}
+          {/* What you gain */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 1.1 }}
             className="mb-10 sm:mb-12"
           >
-            <h2 className="text-base sm:text-lg font-bold text-foreground mb-4 sm:mb-5">
-              What your Money Doctor does
+            <h2 className="text-base sm:text-lg font-bold text-foreground mb-4 sm:mb-5 text-center">
+              What You Gain
             </h2>
-            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2 sm:gap-3 text-muted-foreground text-left">
-              {doctorSteps.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center gap-2.5 sm:gap-3 rounded-xl bg-secondary/70 border border-border/50 px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm"
-                >
-                  <span className="text-base sm:text-lg shrink-0" aria-label={item.emojiLabel}>
-                    {item.emoji}
-                  </span>
-                  <span className="leading-snug">{item.label}</span>
-                </div>
+            <ul className="space-y-3 text-sm sm:text-base text-muted-foreground text-left">
+              {gains.map((gain) => (
+                <li key={gain} className="flex gap-3">
+                  <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                  <span className="leading-relaxed">{gain}</span>
+                </li>
               ))}
-            </div>
+            </ul>
           </motion.div>
 
           {/* Social Media Links */}
