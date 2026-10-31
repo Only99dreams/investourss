@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { CreditPackCheckout } from "@/components/community/CreditPackCheckout";
 import { SUBSCRIPTION_PLANS, SubscriptionPayment } from "@/components/SubscriptionPayment";
+import { BOOKMAKER_CREDITS_CHANGED } from "@/lib/bookmakerApi";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -59,6 +60,7 @@ export function BookmakerPurchaseDialog({
       title: "Purchase complete",
       description: "Your credits are ready to use on this book.",
     });
+    window.dispatchEvent(new Event(BOOKMAKER_CREDITS_CHANGED));
     onPurchased();
     close();
   };

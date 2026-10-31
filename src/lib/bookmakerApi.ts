@@ -13,6 +13,9 @@ const AUDIO_BUCKET = "bookmaker-audio";
 // Media buckets are private; links are re-signed well inside a normal session.
 const MEDIA_URL_TTL = 60 * 60 * 6;
 
+/** Fired after credits are bought so balance displays can refetch. */
+export const BOOKMAKER_CREDITS_CHANGED = "bookmaker:credits-changed";
+
 function storagePathFromUrl(url: string | null | undefined, bucket: string): string | null {
   if (!url) return null;
   const clean = url.split("?")[0];
@@ -117,6 +120,83 @@ export async function previewNarratorVoice(voice: string): Promise<string> {
     throw new Error(String(response.message || "The narrator preview could not be prepared."));
   }
   return url;
+}
+
+export interface AudioDownloadStatus {
+  success: boolean;
+  free_limit?: number;
+  cost?: number;
+  items?: Record<string, number>;
+  message?: string;
+}
+
+export interface AudioDownloadResult {
+  success: boolean;
+  free?: boolean;
+  cost?: number;
+  used?: number;
+  limit?: number;
+  remaining?: number;
+  reason?: string;
+  message?: string;
+  duplicate?: boolean;
+  entitlement?: BookmakerEntitlement;
+}
+
+/**
+ * The generated types predate the new download RPCs, so the call goes through
+ * one loose signature. It stays bound to the client because supabase-js reads
+ * `this.rest` inside rpc().
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const bookmakerRpc = (supabase.rpc as any).bind(supabase) as (
+  fn: string,
+  args: Record<string, unknown>,
+) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+
+async function callBookmakerRpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await bookmakerRpc(fn, args);
+  if (error) throw new Error(error.message);
+  return data as T;
+}
+
+function withDefaults(entitlement: BookmakerEntitlement): BookmakerEntitlement {
+  return {
+    ...DEFAULT_ENTITLEMENT,
+    ...entitlement,
+    costs: { ...DEFAULT_ENTITLEMENT.costs, ...(entitlement.costs ?? {}) },
+  };
+}
+
+/** Free downloads used for this book, per chapter and for the complete book. */
+export async function getAudioDownloadStatus(bookId: string): Promise<AudioDownloadStatus> {
+  try {
+    return await callBookmakerRpc<AudioDownloadStatus>("bookmaker_audio_download_status", {
+      p_book_id: bookId,
+    });
+  } catch (error) {
+    console.error("audio download status:", error);
+    return { success: false };
+  }
+}
+
+/**
+ * Records one audiobook download. The server grants three free downloads per
+ * chapter and per complete book, then charges 2/4/6 pack credits by length.
+ */
+export async function consumeAudioDownload(bookId: string, itemKey: string): Promise<AudioDownloadResult> {
+  const result = await callBookmakerRpc<AudioDownloadResult>("bookmaker_consume_audio_download", {
+    p_book_id: bookId,
+    p_item_key: itemKey,
+    p_idempotency_key: makeIdempotencyKey("audio_download", `${bookId}:${itemKey}`),
+  });
+  if (result.entitlement) {
+    result.entitlement = withDefaults(result.entitlement);
+  }
+  if (!result.free && (result.cost ?? 0) > 0) {
+    window.dispatchEvent(new Event(BOOKMAKER_CREDITS_CHANGED));
+  }
+  return result;
 }
 
 export async function getBookmakerEntitlement(): Promise<BookmakerEntitlement> {

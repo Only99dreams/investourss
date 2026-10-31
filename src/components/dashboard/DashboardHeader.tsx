@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Menu, Search, Crown } from "lucide-react";
+import { Bell, CalendarClock, Menu, Search, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { getBookmakerEntitlement, BOOKMAKER_CREDITS_CHANGED } from "@/lib/bookmakerApi";
 import { cn } from "@/lib/utils";
 import { Coins } from "lucide-react";
 
@@ -17,43 +18,53 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
   const { profile, user } = useAuth();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [payg, setPayg] = useState<{ label: string; credits: number } | null>(null);
+  const [credits, setCredits] = useState<{
+    total: number;
+    subscription: number;
+    packs: number;
+  } | null>(null);
+  const [periodEnd, setPeriodEnd] = useState<string | null>(null);
 
-  // Pay-as-you-go status shown beside the user's current-plan pill: which
-  // pack tier they hold and how many credits remain.
+  // Credits shown in the header are the same balance Bookmaker spends:
+  // subscription credits plus unexpired pack credits. Refetch on focus so a
+  // purchase made in another tab is reflected here.
   useEffect(() => {
     const uid = user?.id ?? profile?.id;
-    if (!uid) return;
+    if (!uid) {
+      setCredits(null);
+      setPeriodEnd(null);
+      return;
+    }
     let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("user_credit_packs")
-        .select("pack_name, credits_remaining, expires_at")
-        .eq("user_id", uid)
-        .eq("status", "active");
+    const loadCredits = async () => {
+      const entitlement = await getBookmakerEntitlement();
       if (cancelled) return;
-      const now = Date.now();
-      const active = (data ?? []).filter(
-        (p: { expires_at: string | null }) => !p.expires_at || new Date(p.expires_at).getTime() > now,
-      );
-      const credits = active.reduce(
-        (sum: number, p: { credits_remaining: number | null }) => sum + (p.credits_remaining ?? 0),
-        0,
-      );
-      const best = [...active].sort(
-        (a: { credits_remaining: number | null }, b: { credits_remaining: number | null }) =>
-          (b.credits_remaining ?? 0) - (a.credits_remaining ?? 0),
-      )[0] as { pack_name?: string } | undefined;
-      setPayg(
-        active.length > 0
-          ? { label: best?.pack_name ?? "Pay-as-you-go", credits }
-          : { label: "No active pack", credits: 0 },
-      );
-    })();
+      setCredits({
+        total: entitlement.total_available,
+        subscription: entitlement.subscription_credits_remaining,
+        packs: entitlement.pack_credits_remaining,
+      });
+      setPeriodEnd(entitlement.subscription_period_end ?? null);
+    };
+    void loadCredits();
+    window.addEventListener("focus", loadCredits);
+    window.addEventListener(BOOKMAKER_CREDITS_CHANGED, loadCredits);
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", loadCredits);
+      window.removeEventListener(BOOKMAKER_CREDITS_CHANGED, loadCredits);
     };
   }, [user?.id, profile?.id]);
+
+  const expiryValue = profile?.subscription_expires_at ?? periodEnd;
+  const expiryDate = expiryValue ? new Date(expiryValue) : null;
+  const daysLeft = expiryDate
+    ? Math.ceil((expiryDate.getTime() - Date.now()) / 86_400_000)
+    : null;
+  const expiryLabel = expiryDate
+    ? expiryDate.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })
+    : null;
+  const expired = daysLeft !== null && daysLeft < 0;
 
   useEffect(() => {
     const fetchUnreadCount = async () => {
@@ -176,14 +187,35 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
             )}
           </div>
 
-          {payg && (
+          {credits && (
             <div
               className="px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 bg-gold/10 text-gold"
-              title={`Pay-as-you-go: ${payg.label}`}
+              title={`${credits.subscription} subscription credit${credits.subscription === 1 ? "" : "s"} + ${credits.packs} pack credit${credits.packs === 1 ? "" : "s"}`}
             >
               <Coins className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden sm:inline">{payg.label} · </span>
-              {payg.credits} cr
+              {credits.total} credit{credits.total === 1 ? "" : "s"}
+            </div>
+          )}
+
+          {expiryLabel && (
+            <div
+              className={cn(
+                "px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1",
+                expired
+                  ? "bg-destructive/10 text-destructive"
+                  : daysLeft !== null && daysLeft <= 7
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-muted text-muted-foreground",
+              )}
+              title={
+                expired
+                  ? `Subscription expired on ${expiryLabel}`
+                  : `Subscription ends ${expiryLabel}${daysLeft !== null ? ` (${daysLeft} day${daysLeft === 1 ? "" : "s"} left)` : ""}`
+              }
+            >
+              <CalendarClock className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">{expired ? "Expired " : "Ends "}</span>
+              {expiryLabel}
             </div>
           )}
         </div>

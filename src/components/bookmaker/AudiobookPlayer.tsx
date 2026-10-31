@@ -17,10 +17,12 @@ import {
   type AudiobookChapter,
   type AudiobookFullFile,
   type BookmakerBook,
+  type BookmakerEntitlement,
   audiobookVoiceLabel,
   formatDuration,
 } from "@/lib/bookmaker";
-import { resolveAudiobookUrls } from "@/lib/bookmakerApi";
+import { consumeAudioDownload, getAudioDownloadStatus, resolveAudiobookUrls } from "@/lib/bookmakerApi";
+import { useToast } from "@/hooks/use-toast";
 
 interface AudiobookPlayerProps {
   book: BookmakerBook;
@@ -34,6 +36,8 @@ interface AudiobookPlayerProps {
   onResume?: () => void;
   onStop?: () => void;
   stopping?: boolean;
+  onNeedCredits?: () => void;
+  onEntitlement?: (entitlement: BookmakerEntitlement) => void;
   className?: string;
 }
 
@@ -54,8 +58,11 @@ export function AudiobookPlayer({
   onResume,
   onStop,
   stopping = false,
+  onNeedCredits,
+  onEntitlement,
   className,
 }: AudiobookPlayerProps) {
+  const { toast } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [activeNumber, setActiveNumber] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -78,6 +85,29 @@ export function AudiobookPlayer({
   const percent = totalToNarrate > 0 ? Math.min(100, Math.round((done / totalToNarrate) * 100)) : 0;
 
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [downloadLimits, setDownloadLimits] = useState<{
+    freeLimit: number;
+    cost: number;
+    items: Record<string, number>;
+  }>({ freeLimit: 3, cost: 4, items: {} });
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [needsCredits, setNeedsCredits] = useState(false);
+
+  useEffect(() => {
+    if (!audiobook) return;
+    let alive = true;
+    void getAudioDownloadStatus(book.id).then((status) => {
+      if (!alive || !status.success) return;
+      setDownloadLimits({
+        freeLimit: Number(status.free_limit) || 3,
+        cost: Number(status.cost) || 4,
+        items: status.items ?? {},
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [audiobook, book.id]);
 
   useEffect(() => {
     let alive = true;
@@ -194,18 +224,69 @@ export function AudiobookPlayer({
     }
   };
 
-  const downloadAll = async () => {
+  const downloadHint = (itemKey: string, compact: boolean) => {
+    const used = downloadLimits.items[itemKey] ?? 0;
+    const left = Math.max(downloadLimits.freeLimit - used, 0);
+    if (left > 0) {
+      return compact ? `${left}/${downloadLimits.freeLimit} free` : `${left} of ${downloadLimits.freeLimit} free downloads left`;
+    }
+    return compact ? `${downloadLimits.cost} credits` : `${downloadLimits.cost} credits per download`;
+  };
+
+  /** Asks the server to grant one download before anything is saved. */
+  const requestDownload = async (itemKey: string) => {
+    setDownloadError(null);
+    setNeedsCredits(false);
+    try {
+      const result = await consumeAudioDownload(book.id, itemKey);
+      if (result.entitlement) onEntitlement?.(result.entitlement);
+      if (!result.success) {
+        setDownloadError(result.message || "This download could not start.");
+        setNeedsCredits(result.reason === "insufficient_credits");
+        return false;
+      }
+      setDownloadLimits((current) => ({
+        ...current,
+        items: {
+          ...current.items,
+          [itemKey]: Number(result.used ?? (current.items[itemKey] ?? 0) + 1),
+        },
+      }));
+      if (!result.free) {
+        toast({
+          title: "Download charged",
+          description: `${result.cost ?? 0} credit${(result.cost ?? 0) === 1 ? "" : "s"} used from your credit pack.`,
+        });
+      }
+      return true;
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "This download could not start.");
+      return false;
+    }
+  };
+
+  const downloadChapter = async (chapter: AudiobookChapter) => {
+    const source = sourceFor(chapter);
+    if (!source || downloading) return;
+    if (!(await requestDownload(`chapter-${chapter.number}`))) return;
+    await saveAudio(source, downloadName(`chapter-${chapter.number}`), chapter.bytes);
+  };
+
+  const downloadFull = async () => {
+    if (downloadAllPending || downloading) return;
     const fullSource = sourceFor(full);
     if (fullSource) {
+      if (!(await requestDownload("full"))) return;
       await saveAudio(fullSource, downloadName("full"), full?.bytes);
       return;
     }
-    if (!onAssemble || assembling || busy || downloadAllPending) return;
+    if (!onAssemble || assembling || busy) return;
     setDownloadAllPending(true);
     try {
       const updated = await onAssemble();
       const combined = updated?.audiobook?.full;
       if (!combined) return;
+      if (!(await requestDownload("full"))) return;
       // The combined file was just written, so sign it directly instead of
       // waiting for the parent to hand back a refreshed book.
       const combinedSource = combined.path
@@ -278,6 +359,17 @@ export function AudiobookPlayer({
         </div>
       ) : null}
 
+      {downloadError ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          <span className="min-w-0 flex-1 break-words">{downloadError}</span>
+          {needsCredits && onNeedCredits ? (
+            <Button size="sm" variant="outline" onClick={onNeedCredits} className="shrink-0">
+              Buy credits
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {chapters.length > 0 ? (
         <div className="space-y-2">
           {full ? (
@@ -285,7 +377,8 @@ export function AudiobookPlayer({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">Complete audiobook</p>
                 <p className="text-[11px] text-muted-foreground">
-                  {full.durationSeconds ? `${formatDuration(full.durationSeconds)} · ` : ""}one WAV file
+                  {full.durationSeconds ? `${formatDuration(full.durationSeconds)} · ` : ""}one WAV file ·{" "}
+                  {downloadHint("full", false)}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -294,8 +387,8 @@ export function AudiobookPlayer({
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => void saveAudio(sourceFor(full), downloadName("full"), full.bytes)}
-                  disabled={!sourceFor(full) || downloading === downloadName("full")}
+                  onClick={() => void downloadFull()}
+                  disabled={!sourceFor(full) || downloadAllPending || downloading === downloadName("full")}
                   className="gap-1.5"
                 >
                   {downloading === downloadName("full") ? (
@@ -335,7 +428,8 @@ export function AudiobookPlayer({
                     <p className="truncate text-[11px] text-muted-foreground">
                       Chapter {chapter.number}
                       {chapter.durationSeconds ? ` · ${formatDuration(chapter.durationSeconds)}` : ""}
-                      {busyChapter === Number(chapter.number) ? " · narrating…" : ""}
+                      {busyChapter === Number(chapter.number) ? " · narrating…" : ""} ·{" "}
+                      {downloadHint(`chapter-${chapter.number}`, true)}
                     </p>
                   </div>
                   {busyChapter === Number(chapter.number) ? (
@@ -344,7 +438,7 @@ export function AudiobookPlayer({
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => void saveAudio(source, downloadName(`chapter-${chapter.number}`), chapter.bytes)}
+                      onClick={() => void downloadChapter(chapter)}
                       disabled={!source || downloading === downloadName(`chapter-${chapter.number}`)}
                       className="h-8 w-8 shrink-0"
                       aria-label={`Download chapter ${chapter.number}`}
@@ -366,7 +460,7 @@ export function AudiobookPlayer({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void downloadAll()}
+                onClick={() => void downloadFull()}
                 disabled={assembling || busy || downloadAllPending}
                 className="flex-1 gap-1.5"
               >
@@ -401,6 +495,11 @@ export function AudiobookPlayer({
               </Button>
             ) : null}
           </div>
+
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            Each chapter and the complete audiobook include {downloadLimits.freeLimit} free downloads. After that, a
+            download costs {downloadLimits.cost} credits for this {book.length} book, paid from your credit pack.
+          </p>
         </div>
       ) : busy ? null : status === "generating" && onResume ? (
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">

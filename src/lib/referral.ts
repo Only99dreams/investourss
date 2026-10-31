@@ -67,10 +67,12 @@ export async function callReferralRpc(
   fn: string,
   args: Record<string, unknown>,
 ): Promise<RpcResult> {
-  const rpc = supabase.rpc as unknown as (
-    name: string,
-    params: Record<string, unknown>,
-  ) => PromiseLike<RpcResult>;
+  const rpc = (
+    supabase.rpc as unknown as (
+      name: string,
+      params: Record<string, unknown>,
+    ) => PromiseLike<RpcResult>
+  ).bind(supabase);
   return rpc(fn, args);
 }
 

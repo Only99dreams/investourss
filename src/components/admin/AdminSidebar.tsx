@@ -28,7 +28,8 @@ import {
   Tag,
   BarChart3,
   Clock,
-  Trophy
+  Trophy,
+  BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ const menuItems = [
   { icon: Brain, label: "AI Tools", path: "/admin/ai-tools" },
   { icon: BarChart3, label: "BP Stats", path: "/admin/business-plan-stats" },
   { icon: ScanSearch, label: "Auditor Analytics", path: "/admin/audit-analytics" },
+  { icon: BookOpen, label: "BookMaker AI", path: "/admin/bookmaker-ai" },
   { icon: Package, label: "Audit Packs", path: "/admin/audit-packs" },
   { icon: Star, label: "Featured Products", path: "/admin/featured-solutions" },
   { icon: Clock, label: "Audit Orders", path: "/admin/audit-orders" },

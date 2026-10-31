@@ -22,6 +22,7 @@ import {
   Plus,
   Printer,
   RefreshCw,
+  RotateCcw,
   Sparkles,
   Square,
   Trash2,
@@ -178,9 +179,38 @@ const readDraft = (): IdeaDraft => {
   }
 };
 
+// Keeps manually inserted pictures small enough to live in the chapter text.
+const compressImageForBook = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("That file could not be read."));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("That file is not a readable image."));
+      image.onload = () => {
+        const scale = Math.min(1, 1200 / image.width, 1600 / image.height);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("Your browser could not process that image."));
+          return;
+        }
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.78));
+      };
+      image.src = String(reader.result ?? "");
+    };
+    reader.readAsDataURL(file);
+  });
+
 type GateState =
   | { kind: "start"; cost: number }
   | { kind: "full"; cost: number }
+  | { kind: "rework"; cost: number }
   | { kind: "chapter"; cost: number; index: number; instruction: string }
   | { kind: "visual"; cost: number; index: number; blockIndex: number; instruction: string }
   | { kind: "cover"; cost: number; style: string }
@@ -256,6 +286,9 @@ const Bookmaker = () => {
   const [editingChapter, setEditingChapter] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
+  const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [gate, setGate] = useState<GateState | null>(null);
   const [gateBusy, setGateBusy] = useState(false);
@@ -278,6 +311,7 @@ const Bookmaker = () => {
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState<string | null>(null);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const [previewSample, setPreviewSample] = useState<{ url: string; voice: string } | null>(null);
 
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -822,6 +856,57 @@ const Bookmaker = () => {
     }
   };
 
+  const insertPicture = async (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Choose an image",
+        description: "PNG, JPG, WEBP and GIF files are supported.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      toast({
+        title: "That picture is too large",
+        description: "Use an image under 12 MB. It is resized automatically when inserted.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setImageBusy(true);
+    try {
+      const dataUrl = await compressImageForBook(file);
+      const node = editTextareaRef.current;
+      const start = node?.selectionStart ?? editContent.length;
+      const end = node?.selectionEnd ?? editContent.length;
+      const block = `:::figure Figure\nsrc: ${dataUrl}\ncaption: Add a caption for this picture.\n:::`;
+      const before = editContent.slice(0, start).replace(/\s+$/, "");
+      const after = editContent.slice(end).replace(/^\s+/, "");
+      const next = `${before}${before ? "\n\n" : ""}${block}${after ? `\n\n${after}` : ""}\n`;
+      setEditContent(next);
+      requestAnimationFrame(() => {
+        node?.focus();
+        const caret = before.length + (before ? 2 : 0) + block.length;
+        node?.setSelectionRange(caret, caret);
+      });
+      toast({
+        title: "Picture inserted",
+        description: "Edit the caption if you like, then save the chapter.",
+      });
+    } catch (err) {
+      toast({
+        title: "Could not insert the picture",
+        description: err instanceof Error ? err.message : "Please try another image.",
+        variant: "destructive",
+      });
+    } finally {
+      setImageBusy(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  };
+
   const handleToggleApproved = async (index: number) => {
     if (!book || writing) return;
     try {
@@ -953,7 +1038,7 @@ const Bookmaker = () => {
 
   const beginReservation = async (
     target: BookmakerBook,
-    mode: "initial_book" | "full_regeneration",
+    mode: "initial_book" | "full_regeneration" | "full_rework",
     locked: number[],
   ) => {
     setWriting(true);
@@ -1174,25 +1259,23 @@ const Bookmaker = () => {
   }, [audioBusy, book, runAudiobookChapters]);
 
   const handlePreviewVoice = async (voiceKey: string) => {
-    const element = previewAudioRef.current;
-    if (!element) return;
-    if (previewingVoice === voiceKey) {
-      element.pause();
-      setPreviewingVoice(null);
+    if (previewSample?.voice === voiceKey) {
+      const element = previewAudioRef.current;
+      if (!element) return;
+      if (element.paused) void element.play().catch(() => undefined);
+      else element.pause();
       return;
     }
 
-    element.pause();
-    setPreviewingVoice(null);
     setPreviewLoading(voiceKey);
     try {
       const url = previewUrls[voiceKey] ?? (await previewNarratorVoice(voiceKey));
       if (!previewUrls[voiceKey]) {
         setPreviewUrls((current) => ({ ...current, [voiceKey]: url }));
       }
-      element.src = url;
-      await element.play();
-      setPreviewingVoice(voiceKey);
+      // The sample renders in a native player, so playback still works when the
+      // browser refuses to start audio that was fetched after the click.
+      setPreviewSample({ url, voice: voiceKey });
     } catch (err) {
       toast({
         title: "Preview unavailable",
@@ -1202,6 +1285,28 @@ const Bookmaker = () => {
     } finally {
       setPreviewLoading(null);
     }
+  };
+
+  useEffect(() => {
+    const element = previewAudioRef.current;
+    if (!element || !previewSample) return;
+    void element.play().catch(() => undefined);
+  }, [previewSample]);
+
+  const handlePreviewError = () => {
+    if (!previewSample) return;
+    setPreviewUrls((current) => {
+      const next = { ...current };
+      delete next[previewSample.voice];
+      return next;
+    });
+    setPreviewSample(null);
+    setPreviewingVoice(null);
+    toast({
+      title: "Sample unavailable",
+      description: "The narrator sample could not play. Tap play to fetch a fresh one.",
+      variant: "destructive",
+    });
   };
 
   const handleStopAudiobook = async () => {
@@ -1583,15 +1688,33 @@ const Bookmaker = () => {
     setGate({ kind: "full", cost: activeCost });
   };
 
+  const openReworkGate = () => {
+    if (!book) return;
+    if (!user) {
+      redirectToLogin();
+      return;
+    }
+    if (planLimitReached) {
+      toast({ title: "Plan limit reached", description: planLimitMessage, variant: "destructive" });
+      return;
+    }
+    setGate({ kind: "rework", cost: activeCost });
+  };
+
   const confirmGate = async () => {
     const current = gate;
     if (!current || !book) return;
     setGateBusy(true);
     try {
-      if (current.kind === "start" || current.kind === "full") {
+      if (current.kind === "start" || current.kind === "full" || current.kind === "rework") {
         const saved = await persistOutline();
         if (!saved) return;
-        const mode = current.kind === "full" ? "full_regeneration" : "initial_book";
+        const mode =
+          current.kind === "rework"
+            ? "full_rework"
+            : current.kind === "full"
+              ? "full_regeneration"
+              : "initial_book";
         const locked = current.kind === "full" ? approvedChapters : [];
         setGate(null);
         await beginReservation(saved, mode, locked);
@@ -1672,13 +1795,15 @@ const Bookmaker = () => {
         ? missingChapterCount > 0
           ? "Write the remaining chapters"
           : "Regenerate the unapproved chapters"
-        : gate.kind === "chapter"
-          ? "Rewrite this chapter"
-          : gate.kind === "visual"
-            ? "Refresh this visual"
-            : gate.kind === "audiobook"
-              ? "Narrate this book"
-              : "Design a cover";
+        : gate.kind === "rework"
+          ? "Rework the book from the beginning"
+          : gate.kind === "chapter"
+            ? "Rewrite this chapter"
+            : gate.kind === "visual"
+              ? "Refresh this visual"
+              : gate.kind === "audiobook"
+                ? "Narrate this book"
+                : "Design a cover";
 
   const gateDescription = !gate
     ? ""
@@ -1688,7 +1813,9 @@ const Bookmaker = () => {
         ? missingChapterCount > 0
           ? `${approvedChapters.length} approved chapter${approvedChapters.length === 1 ? "" : "s"} will stay exactly as they are. Only the ${missingChapterCount} missing chapter${missingChapterCount === 1 ? "" : "s"} will be written.`
           : `${approvedChapters.length} approved chapter${approvedChapters.length === 1 ? "" : "s"} will stay exactly as they are. Only the remaining chapters are rewritten.`
-        : gate.kind === "chapter"
+        : gate.kind === "rework"
+          ? `Every chapter is rewritten from the saved outline, including approved chapters. This uses ${gate.cost} credits and one ebook slot from your plan allowance, just like starting the book again.`
+          : gate.kind === "chapter"
           ? "Only this chapter changes. Your other chapters, approved content and manual edits stay untouched."
           : gate.kind === "visual"
             ? "Only this visual block is rewritten. The surrounding chapter stays the same."
@@ -2608,6 +2735,7 @@ const Bookmaker = () => {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <Textarea
+                        ref={editTextareaRef}
                         value={editContent}
                         onChange={(event) => setEditContent(event.target.value)}
                         rows={22}
@@ -2617,6 +2745,29 @@ const Bookmaker = () => {
                       <p className="text-xs text-muted-foreground">
                         Markdown and the visual blocks ({":::callout"}, {":::keypoints"}, {":::checklist"}, {":::diagram"}, {":::chart"}, {":::figure"}) are supported.
                       </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          ref={imageInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(event) => void insertPicture(event.target.files?.[0] ?? null)}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => imageInputRef.current?.click()}
+                          disabled={imageBusy || savingEdit}
+                          className="gap-2"
+                        >
+                          {imageBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                          Insert picture
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          Pictures are resized automatically and embedded where your cursor is.
+                        </span>
+                      </div>
                       <div className="flex flex-wrap justify-end gap-2">
                         <Button variant="ghost" onClick={() => setEditingChapter(null)} disabled={savingEdit}>
                           Cancel
@@ -2678,6 +2829,22 @@ const Bookmaker = () => {
                       >
                         <RefreshCw className="h-4 w-4" />{" "}
                         {missingChapterCount > 0 ? "Write remaining chapters" : "Regenerate unapproved"} · {activeCost} credits
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                      <div className="text-sm text-muted-foreground">
+                        <p className="font-medium text-foreground">Rework from the beginning</p>
+                        <p className="text-xs">
+                          Rewrite every chapter from the current outline, including approved chapters. Costs the same as writing the book again and uses one ebook slot from your plan.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={openReworkGate}
+                        disabled={writing || chapters.length === 0}
+                        className="w-full gap-2 sm:w-auto"
+                      >
+                        <RotateCcw className="h-4 w-4" /> Rework from beginning · {activeCost} credits
                       </Button>
                     </div>
                     <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-3">
@@ -3064,12 +3231,18 @@ const Bookmaker = () => {
                             );
                           })}
                         </div>
-                        <audio
-                          ref={previewAudioRef}
-                          preload="none"
-                          className="hidden"
-                          onEnded={() => setPreviewingVoice(null)}
-                        />
+                        {previewSample ? (
+                          <audio
+                            ref={previewAudioRef}
+                            src={previewSample.url}
+                            controls
+                            className="mt-2 h-10 w-full"
+                            onPlay={() => setPreviewingVoice(previewSample.voice)}
+                            onPause={() => setPreviewingVoice(null)}
+                            onEnded={() => setPreviewingVoice(null)}
+                            onError={handlePreviewError}
+                          />
+                        ) : null}
                       </div>
 
                       <Button
@@ -3114,6 +3287,8 @@ const Bookmaker = () => {
                         onResume={() => void handleResumeAudiobook()}
                         onStop={handleStopAudiobook}
                         stopping={audioStopping}
+                        onNeedCredits={() => openPurchase("packs")}
+                        onEntitlement={setEntitlement}
                       />
 
                       <div className="rounded-xl border border-border bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground">
@@ -3162,7 +3337,7 @@ const Bookmaker = () => {
         }}
         packOnly={gate?.kind === "audiobook"}
         confirmLabel={
-          gate?.kind === "start" || gate?.kind === "full"
+          gate?.kind === "start" || gate?.kind === "full" || gate?.kind === "rework"
             ? `Write for ${gate.cost} credits`
             : gate?.kind === "audiobook"
               ? `Narrate for ${gate.cost} credits`

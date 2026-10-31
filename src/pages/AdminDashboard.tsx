@@ -27,6 +27,7 @@ import AuditPacksTab from "@/components/admin/tabs/AuditPacksTab";
 import FeaturedSolutionsTab from "@/components/admin/tabs/FeaturedSolutionsTab";
 import AuditOrdersTab from "@/components/admin/tabs/AuditOrdersTab";
 import AuditAnalyticsTab from "@/components/admin/tabs/AuditAnalyticsTab";
+import BookmakerAITab from "@/components/admin/tabs/BookmakerAITab";
 import SettingsTab from "@/components/admin/tabs/SettingsTab";
 import LeaderboardTab from "@/components/admin/tabs/LeaderboardTab";
 import AdminOverview from "@/components/admin/AdminOverview";
@@ -90,6 +91,7 @@ const AdminDashboard = () => {
             <Route path="featured-solutions" element={<FeaturedSolutionsTab />} />
             <Route path="audit-orders" element={<AuditOrdersTab />} />
             <Route path="audit-analytics" element={<AuditAnalyticsTab />} />
+            <Route path="bookmaker-ai" element={<BookmakerAITab />} />
             <Route path="promo-codes" element={<PromoCodesTab />} />
             <Route path="resources" element={<ResourcesTab />} />
             <Route path="messages" element={<MessagesTab />} />

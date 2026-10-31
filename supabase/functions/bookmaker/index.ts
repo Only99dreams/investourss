@@ -169,9 +169,55 @@ function extractJson(raw: string): any {
   }
 }
 
+// Actual API spend, recorded per operation for the admin dashboard.
+const AI_PRICE_USD = {
+  inputPerToken: 0.15 / 1_000_000,
+  outputPerToken: 0.6 / 1_000_000,
+  ttsPerCharacter: { en: 22 / 1_000_000, ar: 40 / 1_000_000 },
+} as const;
+
+type AiUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  audioCharacters: number;
+  ttsLanguage: "en" | "ar";
+};
+
+const createAiUsage = (): AiUsage => ({
+  inputTokens: 0,
+  outputTokens: 0,
+  audioCharacters: 0,
+  ttsLanguage: "en",
+});
+
+function aiUsageCostUsd(usage: AiUsage): number {
+  return (
+    usage.inputTokens * AI_PRICE_USD.inputPerToken +
+    usage.outputTokens * AI_PRICE_USD.outputPerToken +
+    usage.audioCharacters * AI_PRICE_USD.ttsPerCharacter[usage.ttsLanguage]
+  );
+}
+
+async function recordAiUsage(
+  admin: SupabaseClient,
+  operationId: string | null,
+  usage: AiUsage,
+): Promise<void> {
+  if (!operationId) return;
+  if (usage.inputTokens === 0 && usage.outputTokens === 0 && usage.audioCharacters === 0) return;
+  const { error } = await admin.rpc("bookmaker_record_ai_usage", {
+    p_operation_id: operationId,
+    p_input_tokens: usage.inputTokens,
+    p_output_tokens: usage.outputTokens,
+    p_audio_characters: usage.audioCharacters,
+    p_cost_usd: Number(aiUsageCostUsd(usage).toFixed(6)),
+  });
+  if (error) console.error("bookmaker: could not record AI usage", error);
+}
+
 async function callGroq(
   messages: { role: string; content: string }[],
-  options: { maxTokens?: number; temperature?: number } = {},
+  options: { maxTokens?: number; temperature?: number; usage?: AiUsage } = {},
 ): Promise<string> {
   const apiKey = Deno.env.get("GROQ_API_KEY");
   if (!apiKey) throw new Error("GROQ_API_KEY is not configured");
@@ -208,6 +254,10 @@ async function callGroq(
     const data = await response.json();
     const content = data?.choices?.[0]?.message?.content;
     if (!content) throw new Error("The AI returned an empty response. Please try again.");
+    if (options.usage) {
+      options.usage.inputTokens += Number(data?.usage?.prompt_tokens ?? 0);
+      options.usage.outputTokens += Number(data?.usage?.completion_tokens ?? 0);
+    }
     return String(content);
   } finally {
     clearTimeout(timeout);
@@ -216,7 +266,7 @@ async function callGroq(
 
 async function callGroqJson(
   messages: { role: string; content: string }[],
-  options: { maxTokens?: number; temperature?: number } = {},
+  options: { maxTokens?: number; temperature?: number; usage?: AiUsage } = {},
 ): Promise<any> {
   const raw = await callGroq(messages, options);
   return extractJson(raw);
@@ -425,7 +475,12 @@ function concatWav(parts: Uint8Array[], gapSeconds = 0): Uint8Array {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function callGroqSpeech(input: string, voice: string, model: string): Promise<Uint8Array> {
+async function callGroqSpeech(
+  input: string,
+  voice: string,
+  model: string,
+  usage?: AiUsage,
+): Promise<Uint8Array> {
   const apiKey = Deno.env.get("GROQ_API_KEY");
   if (!apiKey) throw new Error("GROQ_API_KEY is not configured");
 
@@ -451,6 +506,7 @@ async function callGroqSpeech(input: string, voice: string, model: string): Prom
       });
 
       if (response.ok) {
+        if (usage) usage.audioCharacters += input.length;
         return new Uint8Array(await response.arrayBuffer());
       }
 
@@ -500,7 +556,12 @@ async function callGroqSpeech(input: string, voice: string, model: string): Prom
   throw lastError ?? new Error("Narration failed. Please try again.");
 }
 
-async function synthesizeChapter(content: unknown, voice: string, model: string): Promise<Uint8Array> {
+async function synthesizeChapter(
+  content: unknown,
+  voice: string,
+  model: string,
+  usage?: AiUsage,
+): Promise<Uint8Array> {
   const text = speechText(content);
   if (text.length < 20) throw new Error("This chapter is too short to narrate.");
 
@@ -521,7 +582,7 @@ async function synthesizeChapter(content: unknown, voice: string, model: string)
       const index = cursor;
       cursor += 1;
       if (index >= chunks.length) return;
-      parts[index] = await callGroqSpeech(chunks[index], voice, model);
+      parts[index] = await callGroqSpeech(chunks[index], voice, model, usage);
     }
   };
 
@@ -978,6 +1039,7 @@ serve(async (req) => {
           });
         }
 
+        const usage = createAiUsage();
         const parsed = await callGroqJson(
           [
             { role: "system", content: OUTLINE_SYSTEM },
@@ -993,7 +1055,7 @@ Length: ${config.length.label} — exactly ${config.length.chapters} chapters, r
 Book type hints: adapt structure, examples and exercises to the purpose and audience.`,
             },
           ],
-          { maxTokens: 4000, temperature: 0.6 },
+          { maxTokens: 4000, temperature: 0.6, usage },
         );
 
         const outline = normalizeOutline(parsed, config);
@@ -1019,6 +1081,7 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
 
         const completed = await caller.rpc("bookmaker_complete_operation", { p_operation_id: operationId });
         if (completed.error) console.error("bookmaker: complete outline failed", completed.error);
+        await recordAiUsage(admin, operationId, usage);
 
         return json({
           success: true,
@@ -1056,17 +1119,26 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
           }, 400);
         }
 
-        const operation = body?.operation === "full_regeneration" ? "full_regeneration" : "initial_book";
+        // "full_rework" restarts the whole book from the saved outline and
+        // ignores approvals; "full_regeneration" keeps approved chapters.
+        const requestedMode = String(body?.operation ?? "");
+        const operation = requestedMode === "full_rework"
+          ? "full_rework"
+          : requestedMode === "full_regeneration"
+            ? "full_regeneration"
+            : "initial_book";
+        const isRework = operation === "full_rework";
         const allIndexes = outlineChapters.map((_: unknown, i: number) => i);
 
         // A saved outline must never be shorter than chapters that already
         // contain content. Otherwise chapter numbers shift and approved work
-        // would be relabelled with a different outline chapter's title.
+        // would be relabelled with a different outline chapter's title. A full
+        // rework replaces everything, so it is exempt and trims extras below.
         const writtenNumbers = chaptersArray(book)
           .map((chapter: any) => Number(chapter?.number))
           .filter((number: number) => Number.isInteger(number) && number > 0);
         const highestWrittenNumber = writtenNumbers.length > 0 ? Math.max(...writtenNumbers) : 0;
-        if (highestWrittenNumber > outlineChapters.length) {
+        if (!isRework && highestWrittenNumber > outlineChapters.length) {
           return json({
             success: false,
             reason: "outline_changed",
@@ -1078,12 +1150,12 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
           : [];
         // Approved chapters are locked server-side too. A stale or tampered
         // client must never overwrite work the author already approved.
-        const approvedLocked = chaptersArray(book)
+        const approvedLocked = isRework ? [] : chaptersArray(book)
           .filter((chapter: any) => chapter?.status === "approved" && String(chapter?.content ?? "").trim().length > 0)
           .map((chapter: any) => Number(chapter?.number) - 1)
           .filter((index: number) => Number.isInteger(index) && index >= 0 && index < outlineChapters.length);
-        const locked = [...new Set([...requestedLocked, ...approvedLocked])].sort((a, b) => a - b);
-        const generateChapters = allIndexes.filter((i: number) => !locked.includes(i));
+        const locked = isRework ? [] : [...new Set([...requestedLocked, ...approvedLocked])].sort((a, b) => a - b);
+        const generateChapters = isRework ? allIndexes : allIndexes.filter((i: number) => !locked.includes(i));
 
         if (generateChapters.length === 0) {
           return json({ success: false, message: "All chapters are approved. Unlock at least one chapter to regenerate." }, 400);
@@ -1116,7 +1188,11 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
 
         if (reserved.data.duplicate) {
           const openOperationType = String(openOperation?.operation ?? "");
-          if (openOperationType !== "initial_book" && openOperationType !== "full_regeneration") {
+          if (
+            openOperationType !== "initial_book" &&
+            openOperationType !== "full_regeneration" &&
+            openOperationType !== "full_rework"
+          ) {
             return json({
               success: false,
               reason: "operation_in_progress",
@@ -1142,6 +1218,23 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
             entitlement: reserved.data.entitlement,
             message: "A generation is already in progress for this book.",
           });
+        }
+
+        // A rework replaces the manuscript, so any chapters left over from a
+        // longer previous outline are removed before writing starts.
+        if (isRework) {
+          const existingChapters = chaptersArray(book);
+          const trimmed = existingChapters.filter(
+            (chapter: any) => Number(chapter?.number) <= outlineChapters.length,
+          );
+          if (trimmed.length !== existingChapters.length) {
+            const { error: trimError } = await admin
+              .from("bookmaker_books")
+              .update({ chapters: trimmed })
+              .eq("id", bookId)
+              .eq("user_id", userId);
+            if (trimError) throw trimError;
+          }
         }
 
         await admin
@@ -1226,7 +1319,11 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
           });
         }
 
-        if (operationType !== "initial_book" && operationType !== "full_regeneration") {
+        if (
+          operationType !== "initial_book" &&
+          operationType !== "full_regeneration" &&
+          operationType !== "full_rework"
+        ) {
           return json({
             success: false,
             reason: "operation_in_progress",
@@ -1278,7 +1375,7 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
         if (!op || op.status !== "pending") {
           return json({ success: false, message: "This generation is no longer active. Start again or resume from your book.", reason: "stale_operation" }, 409);
         }
-        if (op.operation !== "initial_book" && op.operation !== "full_regeneration") {
+        if (op.operation !== "initial_book" && op.operation !== "full_regeneration" && op.operation !== "full_rework") {
           return json({ success: false, message: "This reservation was not for a manuscript. Start writing to continue.", reason: "stale_operation" }, 409);
         }
 
@@ -1320,6 +1417,7 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
           });
         }
 
+        const usage = createAiUsage();
         const parsed = await callGroqJson(
           [
             {
@@ -1330,7 +1428,7 @@ ${VISUAL_GUIDE}`,
             },
             { role: "user", content: chapterPrompt(book, outlineChapter, number, outlineChapters.length) },
           ],
-          { maxTokens: 6500, temperature: 0.7 },
+          { maxTokens: 6500, temperature: 0.7, usage },
         );
 
         const content = stripLeadingHeading(String(parsed?.content ?? ""));
@@ -1363,6 +1461,7 @@ ${VISUAL_GUIDE}`,
           p_total_chapters: outlineChapters.length,
         });
         if (progress.error) console.error("bookmaker: chapter progress failed", progress.error);
+        await recordAiUsage(admin, operationIdValue, usage);
 
         return json({
           success: true,
@@ -1404,7 +1503,7 @@ ${VISUAL_GUIDE}`,
         // Safe retry: a manuscript that was already settled must not fail just
         // because the browser retried the request after a network hiccup.
         if (operation.status === "completed") {
-          if (!["initial_book", "full_regeneration"].includes(String(operation.operation))) {
+          if (!["initial_book", "full_regeneration", "full_rework"].includes(String(operation.operation))) {
             return json({ success: false, message: "This generation is no longer active." }, 409);
           }
           const entitlement = await caller.rpc("bookmaker_get_entitlement");
@@ -1420,7 +1519,7 @@ ${VISUAL_GUIDE}`,
         if (operation.status !== "pending") {
           return json({ success: false, message: "This generation is no longer active." }, 409);
         }
-        if (["initial_book", "full_regeneration"].includes(String(operation.operation))) {
+        if (["initial_book", "full_regeneration", "full_rework"].includes(String(operation.operation))) {
           const requested = Array.isArray(operation?.metadata?.generate_chapters)
             ? operation.metadata.generate_chapters.map((n: unknown) => Number(n))
             : [];
@@ -1591,6 +1690,7 @@ ${VISUAL_GUIDE}`,
           };
           const existing = chaptersArray(book).find((c: any) => Number(c?.number) === chapterIndex + 1);
 
+          const usage = createAiUsage();
           const parsed = await callGroqJson(
             [
               {
@@ -1611,7 +1711,7 @@ ${truncateText(existing?.content, 9000) || "(not written yet)"}
 ---`,
               },
             ],
-            { maxTokens: 6500, temperature: 0.75 },
+            { maxTokens: 6500, temperature: 0.75, usage },
           );
 
           const content = stripLeadingHeading(String(parsed?.content ?? ""));
@@ -1638,6 +1738,7 @@ ${truncateText(existing?.content, 9000) || "(not written yet)"}
 
           const completed = await caller.rpc("bookmaker_complete_operation", { p_operation_id: operationId });
           if (completed.error) throw completed.error;
+          await recordAiUsage(admin, operationId, usage);
 
           await admin
             .from("bookmaker_books")
@@ -1730,6 +1831,7 @@ ${truncateText(existing?.content, 9000) || "(not written yet)"}
         try {
           const before = String(chapter.content).slice(Math.max(0, target.start - 900), target.start);
           const after = String(chapter.content).slice(target.end, target.end + 900);
+          const usage = createAiUsage();
           const raw = await callGroq(
             [
               {
@@ -1760,7 +1862,7 @@ Author instruction: ${clampText(body?.instruction, 500) || "Make this visual cle
 Return only the replacement visual block.`,
               },
             ],
-            { maxTokens: 1800, temperature: 0.7 },
+            { maxTokens: 1800, temperature: 0.7, usage },
           );
 
           let replacement = String(raw ?? "").trim().replace(/^```(?:\w+)?\s*/i, "").replace(/```\s*$/i, "").trim();
@@ -1793,6 +1895,7 @@ Return only the replacement visual block.`,
 
           const completed = await caller.rpc("bookmaker_complete_operation", { p_operation_id: operationId });
           if (completed.error) throw completed.error;
+          await recordAiUsage(admin, operationId, usage);
 
           return json({
             success: true,
@@ -2014,7 +2117,9 @@ Return only the replacement visual block.`,
 
         const voice = String(op.metadata?.voice ?? "autumn");
         const model = String(op.metadata?.model ?? AUDIO_MODELS.en);
-        const wav = await synthesizeChapter(chapter.content, voice, model);
+        const usage = createAiUsage();
+        usage.ttsLanguage = String(op.metadata?.language ?? "en") === "ar" ? "ar" : "en";
+        const wav = await synthesizeChapter(chapter.content, voice, model, usage);
         const parsed = parseWav(wav);
         const path = `${userId}/${bookId}/chapter-${chapterNumber}.wav`;
         await storeNarration(admin, path, wav);
@@ -2058,6 +2163,7 @@ Return only the replacement visual block.`,
           p_total_chapters: requested.length,
         });
         if (progress.error) console.error("bookmaker: audio chapter progress failed", progress.error);
+        await recordAiUsage(admin, operationIdValue, usage);
 
         return json({
           success: true,
@@ -2296,6 +2402,7 @@ Return only the replacement visual block.`,
         }
 
         try {
+          const usage = createAiUsage();
           const parsed = await callGroqJson(
             [
               {
@@ -2341,7 +2448,7 @@ Chapter themes: ${(book.outline?.chapters ?? []).slice(0, 8).map((chapter: any) 
 Requested style: ${clampText(body?.style, 80) || "art director's choice"}`,
               },
             ],
-            { maxTokens: 1200, temperature: 0.8 },
+            { maxTokens: 1200, temperature: 0.8, usage },
           );
 
           const isHex = (v: unknown) => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
@@ -2386,6 +2493,7 @@ Requested style: ${clampText(body?.style, 80) || "art director's choice"}`,
 
           const completed = await caller.rpc("bookmaker_complete_operation", { p_operation_id: operationId });
           if (completed.error) throw completed.error;
+          await recordAiUsage(admin, operationId, usage);
 
           return json({
             success: true,

@@ -7,7 +7,7 @@ import investoursLogo from "@/assets/investours-logo.png";
 
 const gains = [
   "Turn your knowledge, skills or useful ideas into ebooks and audio versions.",
-  "Generate complete manuscripts with professionally designed interiors.",
+  "Generate complete manuscripts with professionally designed interiors in the majority of languages spoken worldwide, including local and regional languages.",
   "Download your finished ebook as a PDF, ready to prepare for sale.",
   "Learn how to identify buyers, promote your products and fulfil orders.",
   "Reach customers and sell your digital books around the world.",
@@ -77,7 +77,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="text-sm sm:text-base md:text-lg text-muted-foreground mb-2 leading-relaxed text-pretty"
           >
-            Create professional ebooks with AI, complete with audio versions.
+            Create professional ebooks with AI in <b>MULTIPLE LANGUAGES,</b> with optional English audio versions
           </motion.p>
 
           <motion.p
@@ -97,7 +97,7 @@ const Welcome = () => {
             className="mb-5 sm:mb-6"
           >
             <Link
-              to={user ? "/bookmaker" : "/signup"}
+              to={user ? "/bookmaker" : "/auth?mode=login"}
               onClick={(event) => {
                 if (isLoading) event.preventDefault();
               }}

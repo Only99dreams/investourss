@@ -42,7 +42,7 @@ const App = () => (
           <ReferralCapture />
           <Routes>
             <Route path="/" element={<Welcome />} />
-            <Route path="/home" element={<AuditorLanding />} />
+            <Route path="/home" element={<BookmakerLanding />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignupTypeSelection />} />
             <Route path="/ambassador" element={<EnterprisePartners />} />

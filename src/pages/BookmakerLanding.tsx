@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -26,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CoverPreview } from "@/components/bookmaker/CoverPreview";
 import { BookmakerPurchaseDialog } from "@/components/bookmaker/BookmakerPurchaseDialog";
 import { createBlankBook, LENGTH_OPTIONS } from "@/lib/bookmaker";
+import CommunitySection from "@/components/home/CommunitySection";
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -108,6 +109,13 @@ const steps = [
 
 const BookmakerLanding = () => {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  // This page is both the home page (/home) and the Bookmaker product page
+  // (/bookmaker). The activity feed belongs on the home page only.
+  const isHomeRoute = pathname === "/home";
+
+  const openPurchase = () => setPurchaseOpen(true);
 
   return (
     <div className="min-h-screen gradient-hero flex flex-col relative overflow-hidden">
@@ -137,22 +145,30 @@ const BookmakerLanding = () => {
             </p>
             <p className="mx-auto mb-5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:mb-6 sm:text-base lg:mx-0">
               You already know something worth sharing. Bookmaker AI helps you shape it into a
-              professionally written, beautifully designed ebook — with an editable outline,
+              professionally written, beautifully designed ebook in <b>MOST LANGUAGES SPOKEN WORLDWIDE</b> — with an editable outline,
               chapters, useful visuals, a phone-ready PDF and an AI-narrated audiobook.
             </p>
-            <div className="mb-5 flex flex-col flex-wrap items-stretch justify-center gap-3 sm:flex-row lg:justify-start">
-              <Button asChild size="xl" variant="hero" className="w-full px-5 sm:w-auto sm:px-10">
+            <div className="mb-5 flex w-full flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-center lg:justify-start">
+              <Button asChild size="xl" variant="hero" className="w-full px-5 sm:w-auto sm:px-8">
                 <Link to="/bookmaker/create">
-                  Create My Ebook <ArrowRight className="ml-1.5 h-5 w-5" />
+                  Create My Ebook <ArrowRight className="h-5 w-5" />
                 </Link>
+              </Button>
+              <Button
+                asChild
+                size="xl"
+                variant="outline"
+                className="h-auto min-h-14 w-full whitespace-normal px-4 py-3 text-center text-base leading-snug sm:w-auto sm:px-6 sm:text-lg"
+              >
+                <Link to="/ambassador">Enterprise Partners Program</Link>
               </Button>
               <Button
                 size="xl"
                 variant="outline"
-                onClick={() => setPurchaseOpen(true)}
-                className="h-auto min-h-14 w-full whitespace-normal px-5 py-3 text-center text-base leading-snug sm:w-auto sm:px-10 sm:text-lg"
+                onClick={openPurchase}
+                className="h-auto min-h-14 w-full whitespace-normal px-4 py-3 text-center text-base leading-snug sm:w-auto sm:px-6 sm:text-lg"
               >
-                Buy AI Credits<span className="hidden sm:inline">&nbsp;&amp; Create Your First Ebook</span>
+                Buy AI Credits<span className="hidden lg:inline">&nbsp;&amp; Create Your First Ebook</span>
                 <ArrowRight className="ml-1.5 hidden h-5 w-5 shrink-0 sm:inline-block" />
               </Button>
             </div>
@@ -160,13 +176,10 @@ const BookmakerLanding = () => {
               <span className="flex items-center gap-1.5">
                 <Coins className="h-4 w-4 shrink-0 text-primary" /> AI credits from as low as ₦2,720
               </span>
-              <span className="flex items-center gap-1.5">
-                <Check className="h-4 w-4 shrink-0 text-green-600" /> Edit the outline before spending credits
-              </span>
             </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-sm pb-8 sm:pb-0 lg:max-w-md">
+          <div className="relative mx-auto w-full max-w-sm lg:max-w-md">
             <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
@@ -174,7 +187,7 @@ const BookmakerLanding = () => {
             >
               <CoverPreview book={SAMPLE_BOOK} authorName="Investours Creator" />
             </motion.div>
-            <div className="absolute -bottom-4 left-0 z-20 w-[60%] max-w-[210px] rounded-2xl border border-border bg-card/95 p-3 shadow-xl backdrop-blur sm:-left-4 sm:bottom-0 sm:w-[62%] sm:p-4">
+            <div className="relative z-20 mx-auto mt-4 w-[86%] max-w-[250px] rounded-2xl border border-border bg-card/95 p-3 shadow-xl backdrop-blur sm:absolute sm:-bottom-0 sm:-left-4 sm:mt-0 sm:w-[62%] sm:max-w-[210px] sm:p-4">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Outline preview</p>
               <p className="mt-1 text-xs font-semibold leading-snug sm:text-sm">8 chapters, mapped to your reader</p>
               <div className="mt-2 space-y-1.5 sm:mt-3">
@@ -349,7 +362,7 @@ const BookmakerLanding = () => {
                 <Button
                   size="xl"
                   variant="outline"
-                  onClick={() => setPurchaseOpen(true)}
+                  onClick={openPurchase}
                   className="h-auto min-h-14 w-full whitespace-normal border-primary-foreground/40 bg-transparent px-5 py-3 leading-snug text-primary-foreground hover:bg-primary-foreground/10 sm:w-auto sm:px-10"
                 >
                   View credit packs
@@ -362,6 +375,14 @@ const BookmakerLanding = () => {
           </Card>
         </motion.section>
       </main>
+
+      {/* Home page keeps the activity feed and everything below it. This
+          component also serves /bookmaker, where the feed doesn't belong. */}
+      {isHomeRoute && (
+        <div className="relative z-10">
+          <CommunitySection />
+        </div>
+      )}
 
       <BookmakerPurchaseDialog
         open={purchaseOpen}

@@ -43,6 +43,11 @@ const escapeHtml = (value: unknown): string =>
 function safeUrl(value: unknown): string | null {
   const url = String(value ?? "").trim();
   if (/^https?:\/\//i.test(url) || url.startsWith("#")) return url.replace(/"/g, "%22");
+  // Pictures inserted in the manual editor are embedded as data URLs. Only
+  // raster image types are accepted, and the size cap keeps chapters sane.
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(url) && url.length <= 4_000_000) {
+    return url;
+  }
   return null;
 }
 
