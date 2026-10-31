@@ -1,7 +1,8 @@
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import type { BookmakerBook, CoverLayout } from "@/lib/bookmaker";
 import { COVER_LAYOUTS, coverLayoutForStyle, coverPalette, purposeLabel, resolveTheme } from "@/lib/bookmaker";
+import { resolveBookCoverUrl } from "@/lib/bookmakerApi";
 import { coverBackdropSvg, coverMotifSvg } from "@/lib/bookExport";
 
 interface CoverPreviewProps {
@@ -19,7 +20,26 @@ interface CoverPreviewProps {
 export function CoverPreview({ book, authorName, className, compact = false }: CoverPreviewProps) {
   const theme = resolveTheme(book);
   const cover = book.cover;
-  const isUploaded = cover?.kind === "uploaded" && Boolean(cover.url);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+
+  // Uploaded covers live in a private bucket, so every viewer resolves a fresh
+  // signed link for their own book instead of using a permanent public URL.
+  useEffect(() => {
+    let alive = true;
+    if (cover?.kind !== "uploaded" || (!cover.path && !cover.url)) {
+      setCoverUrl(null);
+      return;
+    }
+    setCoverUrl(null);
+    void resolveBookCoverUrl(cover).then((url) => {
+      if (alive) setCoverUrl(url);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [cover]);
+
+  const isUploaded = cover?.kind === "uploaded" && Boolean(cover.path || cover.url);
 
   if (isUploaded) {
     return (
@@ -27,11 +47,15 @@ export function CoverPreview({ book, authorName, className, compact = false }: C
         className={cn("relative aspect-[2/3] overflow-hidden rounded-xl border border-border/60 bg-muted", className)}
         aria-label={`Cover of ${book.title || "your book"}`}
       >
-        <img
-          src={cover.url}
-          alt={`Cover of ${book.title || "your book"}`}
-          className="absolute inset-0 h-full w-full object-contain"
-        />
+        {coverUrl ? (
+          <img
+            src={coverUrl}
+            alt={`Cover of ${book.title || "your book"}`}
+            className="absolute inset-0 h-full w-full object-contain"
+          />
+        ) : (
+          <div className="absolute inset-0 animate-pulse bg-muted" aria-hidden="true" />
+        )}
       </div>
     );
   }
@@ -94,19 +118,6 @@ export function CoverPreview({ book, authorName, className, compact = false }: C
         }}
       >
         <div>
-          <p
-            style={{
-              margin: 0,
-              fontFamily: theme.bodyFont,
-              fontSize: "clamp(5px, 2.1cqw, 10px)",
-              letterSpacing: "0.22em",
-              textTransform: "uppercase",
-              opacity: 0.78,
-              marginBottom: layout === "centered" ? "7%" : "9%",
-            }}
-          >
-            Bookmaker by Investours
-          </p>
           <h3
             style={{
               margin: 0,

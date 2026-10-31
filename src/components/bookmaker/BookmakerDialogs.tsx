@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, Coins, Loader2, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import {
   Dialog,
@@ -11,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { type BookmakerEntitlement, purchaseUrl } from "@/lib/bookmaker";
+import { type BookmakerEntitlement } from "@/lib/bookmaker";
 
 interface CreditGateDialogProps {
   open: boolean;
@@ -20,10 +19,13 @@ interface CreditGateDialogProps {
   description?: string;
   cost: number;
   entitlement: BookmakerEntitlement;
-  bookId?: string | null;
   confirmLabel?: string;
   busy?: boolean;
   onConfirm: () => void;
+  /** Opens the in-page purchase dialog when the balance is short. */
+  onPurchase?: (kind: "packs" | "subscribe") => void;
+  /** Narration can only be paid from credit packs, never plan credits. */
+  packOnly?: boolean;
   children?: ReactNode;
   note?: ReactNode;
 }
@@ -41,19 +43,21 @@ export function CreditGateDialog({
   description,
   cost,
   entitlement,
-  bookId,
   confirmLabel,
   busy = false,
   onConfirm,
+  onPurchase,
+  packOnly = false,
   children,
   note,
 }: CreditGateDialogProps) {
   const total = entitlement?.total_available ?? 0;
   const subscription = entitlement?.subscription_credits_remaining ?? 0;
   const packs = entitlement?.pack_credits_remaining ?? 0;
-  const shortfall = Math.max(cost - total, 0);
+  const available = packOnly ? packs : total;
+  const shortfall = Math.max(cost - available, 0);
   const canAfford = shortfall === 0;
-  const fromSubscription = Math.min(subscription, cost);
+  const fromSubscription = packOnly ? 0 : Math.min(subscription, cost);
   const fromPacks = Math.max(Math.min(packs, cost - fromSubscription), 0);
 
   return (
@@ -83,26 +87,47 @@ export function CreditGateDialog({
             </div>
 
             <div className="mt-3 space-y-1.5 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Subscription credits</span>
-                <span className="font-medium">{subscription}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Credit pack balance</span>
-                <span className="font-medium">{packs}</span>
-              </div>
-              <div className="flex items-center justify-between border-t border-primary/15 pt-1.5">
-                <span className="font-medium">Total available</span>
-                <span className="font-bold">{total}</span>
-              </div>
+              {packOnly ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Platform credits (credit packs)</span>
+                    <span className="font-medium">{packs}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Subscription credits</span>
+                    <span className="text-xs text-muted-foreground">Not usable for narration</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-primary/15 pt-1.5">
+                    <span className="font-medium">Available for narration</span>
+                    <span className="font-bold">{packs}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Subscription credits</span>
+                    <span className="font-medium">{subscription}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Credit pack balance</span>
+                    <span className="font-medium">{packs}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-primary/15 pt-1.5">
+                    <span className="font-medium">Total available</span>
+                    <span className="font-bold">{total}</span>
+                  </div>
+                </>
+              )}
             </div>
 
             {canAfford ? (
               <p className="mt-3 text-xs text-muted-foreground">
-                {fromSubscription > 0
-                  ? `${fromSubscription} subscription credit${fromSubscription === 1 ? "" : "s"} will be used first`
-                  : "Credit pack balance will be used"}
-                {fromPacks > 0 ? `, then ${fromPacks} pack credit${fromPacks === 1 ? "" : "s"}.` : "."}
+                {packOnly
+                  ? `${fromPacks} platform credit${fromPacks === 1 ? "" : "s"} from your credit pack will be used.`
+                  : fromSubscription > 0
+                    ? `${fromSubscription} subscription credit${fromSubscription === 1 ? "" : "s"} will be used first`
+                    : "Credit pack balance will be used"}
+                {packOnly ? "" : fromPacks > 0 ? `, then ${fromPacks} pack credit${fromPacks === 1 ? "" : "s"}.` : "."}
               </p>
             ) : null}
           </div>
@@ -112,22 +137,22 @@ export function CreditGateDialog({
           {!canAfford ? (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
               <p className="flex items-center gap-2 font-semibold">
-                <Wallet className="h-4 w-4" /> You need {shortfall} more credit{shortfall === 1 ? "" : "s"}
+                <Wallet className="h-4 w-4" /> You need {shortfall} more {packOnly ? "platform " : ""}credit{shortfall === 1 ? "" : "s"}
               </p>
               <p className="mt-1 text-xs leading-relaxed text-amber-800">
-                Your book, outline and edits are already saved. Buy credits or subscribe in a new tab, then come back to this book from My Books.
+                {packOnly
+                  ? "Audiobook narration is paid only with platform credits from a credit pack. Subscription credits and plan allowances cannot be used. Your book, outline and edits are already saved."
+                  : "Your book, outline and edits are already saved. Buy credits or subscribe right here, then continue with this book."}
               </p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <Button asChild size="sm" className="flex-1">
-                  <a href={purchaseUrl(bookId, "packs")} target="_blank" rel="noreferrer">
-                    Buy AI credits <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                  </a>
+                <Button size="sm" className="flex-1" onClick={() => onPurchase?.("packs")}>
+                  Buy AI credits <ArrowRight className="ml-1 h-3.5 w-3.5" />
                 </Button>
-                <Button asChild size="sm" variant="outline" className="flex-1">
-                  <a href={purchaseUrl(bookId, "subscribe")} target="_blank" rel="noreferrer">
+                {packOnly ? null : (
+                  <Button size="sm" variant="outline" className="flex-1" onClick={() => onPurchase?.("subscribe")}>
                     <Sparkles className="mr-1 h-3.5 w-3.5" /> Subscribe
-                  </a>
-                </Button>
+                  </Button>
+                )}
               </div>
             </div>
           ) : null}

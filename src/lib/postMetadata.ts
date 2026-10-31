@@ -18,7 +18,7 @@
  * not assumed.
  */
 
-import { parseVideoLink, siblingThumbnailUrl, attachmentThumbnail } from "./video.js";
+import { parseVideoLink, siblingThumbnailUrl, attachmentThumbnail, isPdfUrl } from "./video.js";
 import { isAiwcCategory, AIWC_OG_DESCRIPTION } from "./share.js";
 
 /** The subset of a post that sharing needs. */
@@ -34,7 +34,7 @@ export interface ShareablePost {
   comments_count?: number | null;
 }
 
-export type PreviewKind = "image" | "video-poster" | "none";
+export type PreviewKind = "image" | "video-poster" | "pdf-preview" | "none";
 
 export interface PostPreview {
   /**
@@ -120,9 +120,11 @@ function truncate(text: string, max: number): string {
  *   3. an uploaded video yields the frame stored beside it, flagged for
  *      verification - older posts predate frame capture, and emitting a URL that
  *      404s produces a broken preview
- *   4. otherwise nothing, and no og:image is advertised at all
+ *   4. an uploaded PDF yields the first page stored beside it, also flagged for
+ *      verification for the same reason
+ *   5. otherwise nothing, and no og:image is advertised at all
  *
- * On (4): a post with no media is shared as text. That is what the post is, and
+ * On (5): a post with no media is shared as text. That is what the post is, and
  * a preview showing the site logo would claim it has a picture when it does not.
  *
  * The schema has a single `attachment_url`, so a post has at most one piece of
@@ -178,6 +180,20 @@ export function derivePostPreview(
         alt,
       };
     }
+  }
+
+  const candidate = url ? siblingThumbnailUrl(url) : null;
+  if (candidate && (type === "pdf" || (type === "document" && isPdfUrl(url)))) {
+    return {
+      image: candidate,
+      kind: "pdf-preview",
+      needsVerification: true,
+      width: CAPTURED_FRAME.width,
+      height: CAPTURED_FRAME.height,
+      alt: authorName
+        ? `Ebook PDF shared by ${authorName} on Investours`
+        : "Ebook PDF shared on Investours",
+    };
   }
 
   return {

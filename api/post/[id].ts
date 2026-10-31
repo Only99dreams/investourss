@@ -137,7 +137,20 @@ function renderMedia(post: ShareablePost, poster: string | null): string {
       `<a href="${escapeHtml(url)}">Download it</a>.</video>`;
   }
 
-  if (post.attachment_type === "document") {
+  if (post.attachment_type === "document" || post.attachment_type === "pdf") {
+    const isPdf =
+      post.attachment_type === "pdf" || /\.pdf(\?|#|$)/i.test(url);
+    if (isPdf) {
+      const label = escapeHtml("View the ebook (PDF)");
+      return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" ` +
+        `style="display:block;text-decoration:none">` +
+        (poster
+          ? `<img src="${escapeHtml(poster)}" alt="${escapeHtml("Ebook PDF preview")}" ` +
+            `style="width:100%;max-width:360px;height:auto;border-radius:12px;display:block;border:1px solid #e2e8f0" loading="eager" />`
+          : "") +
+        `<span style="display:inline-block;margin-top:8px;font-weight:600;color:#2563eb">${label}</span>` +
+        `</a>`;
+    }
     return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">` +
       `Download the attached document</a></p>`;
   }

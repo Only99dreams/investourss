@@ -31,7 +31,7 @@ export function isAiwcCategory(value?: string | null): boolean {
 /**
  * The write-up attached to every AIWC share.
  */
-export const AIWC_SHARE_TEXT = `🚀 I’m competing in the Investours Creativity & Enterprise Challenge!
+export const AIWC_SHARE_TEXT = `🚀 I'm competing in the Investours Creativity & Enterprise Challenge!
 🏆 Competing for a share of the ₦1,500,000+ prize pool!
 🤖 To vote for me, unlock Investours' AI-powered tools starting at just ₦2,720.
 🗳️ You get premium AI access, and your vote instantly validates my entry!
@@ -42,7 +42,7 @@ export const AIWC_SHARE_TEXT = `🚀 I’m competing in the Investours Creativit
  * the full write-up would be truncated mid-sentence anyway.
  */
 export const AIWC_OG_DESCRIPTION =
-  "I’m competing in the Investours Creativity & Enterprise Challenge! " +
+  "I'm competing in the Investours Creativity & Enterprise Challenge! " +
   "Competing for a share of the ₦1,500,000+ prize pool!";
 
 /**

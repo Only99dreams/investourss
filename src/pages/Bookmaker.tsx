@@ -18,6 +18,7 @@ import {
   Mic,
   MicOff,
   Palette,
+  Play,
   Plus,
   Printer,
   RefreshCw,
@@ -41,6 +42,7 @@ import { BookPreview } from "@/components/bookmaker/BookPreview";
 import { CoverPreview } from "@/components/bookmaker/CoverPreview";
 import { AudiobookPlayer } from "@/components/bookmaker/AudiobookPlayer";
 import { CreditGateDialog } from "@/components/bookmaker/BookmakerDialogs";
+import { BookmakerPurchaseDialog } from "@/components/bookmaker/BookmakerPurchaseDialog";
 import {
   AUDIENCES,
   DEFAULT_ENTITLEMENT,
@@ -68,7 +70,6 @@ import {
   formatBookDate,
   lengthLabel,
   makeIdempotencyKey,
-  purchaseUrl,
   purposeLabel,
   resolveTheme,
   validateConfiguration,
@@ -76,11 +77,14 @@ import {
   wordCount,
 } from "@/lib/bookmaker";
 import {
+  consumeBookDownload,
   deleteBookmakerBook,
   fetchBookmakerBook,
   getBookmakerEntitlement,
   invokeBookmaker,
+  previewNarratorVoice,
   rememberBook,
+  resolveBookCoverUrl,
   saveBookmakerBook,
   uploadBookCover,
 } from "@/lib/bookmakerApi";
@@ -88,6 +92,18 @@ import { downloadBookPDF, openBookPrintPreview } from "@/lib/bookExport";
 import { cn } from "@/lib/utils";
 
 const DRAFT_KEY = "bookmaker:draft";
+
+/** Uploaded covers must match the A5 page: 148 × 210 mm at 300 dpi. */
+const COVER_ASPECT = 148 / 210;
+const COVER_MIN_WIDTH = 1200;
+const COVER_MIN_HEIGHT = 1700;
+
+async function readImageSize(file: File): Promise<{ width: number; height: number }> {
+  const bitmap = await createImageBitmap(file);
+  const size = { width: bitmap.width, height: bitmap.height };
+  bitmap.close();
+  return size;
+}
 
 interface IdeaDraft {
   idea: string;
@@ -201,6 +217,14 @@ const Bookmaker = () => {
   const [loadingBook, setLoadingBook] = useState(Boolean(queryBookId));
   const [entitlement, setEntitlement] = useState<BookmakerEntitlement>(DEFAULT_ENTITLEMENT);
   const [refreshingCredits, setRefreshingCredits] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [purchaseView, setPurchaseView] = useState<"packs" | "subscribe" | null>(null);
+
+  const openPurchase = (view: "packs" | "subscribe" | null = null) => {
+    setPurchaseView(view);
+    setPurchaseOpen(true);
+  };
 
   const [idea, setIdea] = useState(initialDraft.idea);
   const [ideaInputMode, setIdeaInputMode] = useState<"text" | "voice">(initialDraft.ideaInputMode);
@@ -215,6 +239,8 @@ const Bookmaker = () => {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [outline, setOutline] = useState<BookOutline>(emptyOutline());
+  const [abstract, setAbstract] = useState("");
+  const [author, setAuthor] = useState("");
 
   const [generatingOutline, setGeneratingOutline] = useState(false);
   const [savingOutline, setSavingOutline] = useState(false);
@@ -236,6 +262,12 @@ const Bookmaker = () => {
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverStyle, setCoverStyle] = useState("auto");
 
+  const [exportPreset, setExportPreset] = useState<"stage1" | "stage2" | "full" | "custom">("full");
+  const [exportCover, setExportCover] = useState(true);
+  const [exportAbstract, setExportAbstract] = useState(true);
+  const [exportOutline, setExportOutline] = useState(false);
+  const [exportChapters, setExportChapters] = useState<number[] | "all">("all");
+
   const [audioVoice, setAudioVoice] = useState<string>(() => defaultAudiobookVoice(initialDraft.language));
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioChapter, setAudioChapter] = useState<number | null>(null);
@@ -243,6 +275,9 @@ const Bookmaker = () => {
   const [audioError, setAudioError] = useState<string | null>(null);
   const [audioStopping, setAudioStopping] = useState(false);
   const [assembling, setAssembling] = useState(false);
+  const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
 
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -250,6 +285,7 @@ const Bookmaker = () => {
   const cancelRef = useRef(false);
   const audioCancelRef = useRef(false);
   const autoResumeAudioRef = useRef(false);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const loadedBookIdRef = useRef<string | null>(null);
@@ -289,7 +325,56 @@ const Bookmaker = () => {
           : 1
     : 0;
   const canVisit = (index: number) => index <= Math.max(furthestStep, step);
-  const authorName = profile?.full_name?.trim() || undefined;
+  // The author printed on the book is chosen by the member, never inferred
+  // from the platform account.
+  const authorName = author.trim() || undefined;
+
+  const exportableChapters = useMemo(
+    () =>
+      chapters
+        .filter((chapter) => chapter.content)
+        .map((chapter, index) => ({ number: Number(chapter.number) || index + 1, title: chapter.title })),
+    [chapters],
+  );
+  const exportChapterNumbers =
+    exportChapters === "all" ? exportableChapters.map((chapter) => chapter.number) : exportChapters;
+  const exportChapterCount = exportChapterNumbers.length;
+  const canExport = Boolean(book) && (exportCover || exportOutline || exportAbstract || exportChapterCount > 0);
+  const downloadLimit = Math.max(0, Number(entitlement.download_limit ?? 0));
+  const freeDownloadsLeft = Math.max(downloadLimit - (book?.download_count ?? 0), 0);
+  const downloadCost = Math.max(1, Number(entitlement.download_cost ?? 1));
+
+  const applyExportPreset = (preset: "stage1" | "stage2" | "full") => {
+    setExportPreset(preset);
+    if (preset === "stage1") {
+      setExportCover(true);
+      setExportAbstract(true);
+      setExportOutline(true);
+      setExportChapters([]);
+      return;
+    }
+    if (preset === "stage2") {
+      setExportCover(true);
+      setExportAbstract(true);
+      setExportOutline(true);
+      setExportChapters(exportableChapters.some((chapter) => chapter.number === 1) ? [1] : []);
+      return;
+    }
+    setExportCover(true);
+    setExportAbstract(true);
+    setExportOutline(false);
+    setExportChapters("all");
+  };
+
+  const toggleExportChapter = (number: number) => {
+    setExportPreset("custom");
+    setExportChapters((current) => {
+      const active = current === "all" ? exportableChapters.map((chapter) => chapter.number) : current;
+      return active.includes(number)
+        ? active.filter((item) => item !== number)
+        : [...active, number].sort((a, b) => a - b);
+    });
+  };
 
   const audioLanguage = audiobookLanguageFor(book?.language ?? language);
   const audioVoices = audiobookVoicesFor(book?.language ?? language);
@@ -322,6 +407,8 @@ const Bookmaker = () => {
     setTitle(next.title || "");
     setSubtitle(next.subtitle || "");
     setOutline(next.outline?.chapters?.length ? next.outline : emptyOutline());
+    setAbstract(next.outline?.abstract ?? "");
+    setAuthor(next.outline?.author ?? "");
     setIdea(next.idea || "");
     setIdeaInputMode(next.idea_input_mode === "voice" ? "voice" : "text");
     setAudience(next.audience || "general");
@@ -599,6 +686,8 @@ const Bookmaker = () => {
       setTitle(nextBook.title || "");
       setSubtitle(nextBook.subtitle || "");
       setOutline(nextBook.outline ?? emptyOutline());
+      setAbstract(nextBook.outline?.abstract ?? "");
+      setAuthor((current) => current || nextBook.outline?.author || "");
       setLength(nextBook.length || length);
       setStep(2);
       setPendingResume(false);
@@ -638,10 +727,14 @@ const Bookmaker = () => {
       const saved = await saveBookmakerBook(book.id, {
         title: title.trim() || book.title || "Untitled book",
         subtitle: subtitle.trim() || null,
-        outline: { chapters: nextChapters },
+        outline: { chapters: nextChapters, abstract: abstract.trim(), author: author.trim() },
       });
       setBook(saved);
-      setOutline(saved.outline?.chapters?.length ? saved.outline : { chapters: nextChapters });
+      setOutline(
+        saved.outline?.chapters?.length
+          ? saved.outline
+          : { chapters: nextChapters, abstract: abstract.trim(), author: author.trim() },
+      );
       return saved;
     } finally {
       setSavingOutline(false);
@@ -896,6 +989,15 @@ const Bookmaker = () => {
           });
           return;
         }
+        if (response.reason === "plan_limit") {
+          await refreshEntitlement();
+          toast({
+            title: "Plan limit reached",
+            description: String(response.message || planLimitMessage),
+            variant: "destructive",
+          });
+          return;
+        }
         toast({
           title: "Could not start writing",
           description: String(response.message || "Please try again."),
@@ -1000,7 +1102,9 @@ const Bookmaker = () => {
       idempotencyKey: makeIdempotencyKey("audiobook", book.id),
     });
     if (!response.success) {
-      if (response.reason === "insufficient_credits") await refreshEntitlement();
+      if (response.reason === "insufficient_credits" || response.reason === "plan_limit") {
+        await refreshEntitlement();
+      }
       toast({
         title: "Narration did not start",
         description: String(response.message || "Please try again."),
@@ -1039,9 +1143,10 @@ const Bookmaker = () => {
       });
       return;
     }
+    // Narration is platform-credit only, so the plan's ebook allowance does
+    // not apply here.
     setGate({ kind: "audiobook", cost: audioCost, voice: activeAudioVoice });
   };
-
   const handleResumeAudiobook = useCallback(async () => {
     if (!book || audioBusy) return;
     const operationId = book.audiobook?.operationId;
@@ -1067,6 +1172,37 @@ const Bookmaker = () => {
       setAudioError(err instanceof Error ? err.message : "Narration could not resume.");
     }
   }, [audioBusy, book, runAudiobookChapters]);
+
+  const handlePreviewVoice = async (voiceKey: string) => {
+    const element = previewAudioRef.current;
+    if (!element) return;
+    if (previewingVoice === voiceKey) {
+      element.pause();
+      setPreviewingVoice(null);
+      return;
+    }
+
+    element.pause();
+    setPreviewingVoice(null);
+    setPreviewLoading(voiceKey);
+    try {
+      const url = previewUrls[voiceKey] ?? (await previewNarratorVoice(voiceKey));
+      if (!previewUrls[voiceKey]) {
+        setPreviewUrls((current) => ({ ...current, [voiceKey]: url }));
+      }
+      element.src = url;
+      await element.play();
+      setPreviewingVoice(voiceKey);
+    } catch (err) {
+      toast({
+        title: "Preview unavailable",
+        description: err instanceof Error ? err.message : "The narrator sample could not be prepared.",
+        variant: "destructive",
+      });
+    } finally {
+      setPreviewLoading(null);
+    }
+  };
 
   const handleStopAudiobook = async () => {
     if (!book || audioStopping) return;
@@ -1099,8 +1235,8 @@ const Bookmaker = () => {
     }
   };
 
-  const handleAssembleAudiobook = async () => {
-    if (!book || assembling) return;
+  const handleAssembleAudiobook = async (): Promise<BookmakerBook | null> => {
+    if (!book || assembling) return null;
     setAssembling(true);
     try {
       const response = await invokeBookmaker({ action: "assemble_audiobook", bookId: book.id });
@@ -1110,19 +1246,22 @@ const Bookmaker = () => {
           description: String(response.message || "Please try again or download the chapters separately."),
           variant: "destructive",
         });
-        return;
+        return null;
       }
-      if (response.book) setBook(response.book as BookmakerBook);
+      const updated = response.book ? (response.book as BookmakerBook) : null;
+      if (updated) setBook(updated);
       toast({
         title: "One file ready",
         description: "Your full audiobook is ready to play or download.",
       });
+      return updated;
     } catch (err) {
       toast({
         title: "Could not combine the audio",
         description: err instanceof Error ? err.message : "Please download the chapters separately.",
         variant: "destructive",
       });
+      return null;
     } finally {
       setAssembling(false);
     }
@@ -1223,12 +1362,28 @@ const Bookmaker = () => {
     if (!file || !book || !user) return;
     setCoverBusy(true);
     try {
-      const url = await uploadBookCover(user.id, book.id, file);
+      const { width, height } = await readImageSize(file);
+      if (height <= width) {
+        throw new Error("Covers must be portrait. Upload an A5-shaped page, 1748 × 2480 px.");
+      }
+      if (width < COVER_MIN_WIDTH || height < COVER_MIN_HEIGHT) {
+        throw new Error(
+          `This cover is ${width} × ${height} px. Upload at least ${COVER_MIN_WIDTH} × ${COVER_MIN_HEIGHT} px, ideally 1748 × 2480 px (A5).`,
+        );
+      }
+      const ratio = width / height;
+      if (Math.abs(ratio - COVER_ASPECT) > COVER_ASPECT * 0.03) {
+        throw new Error(
+          `This cover is ${width} × ${height} px. A5 pages need the 1748 × 2480 px shape, so resize it to that ratio to avoid trimming.`,
+        );
+      }
+      const uploaded = await uploadBookCover(user.id, book.id, file);
       const saved = await saveBookmakerBook(book.id, {
         cover: {
           ...(book.cover ?? { kind: "none" }),
           kind: "uploaded",
-          url,
+          url: uploaded.url,
+          path: uploaded.path,
           updatedAt: new Date().toISOString(),
         },
       });
@@ -1280,20 +1435,86 @@ const Bookmaker = () => {
     }
   };
 
-  const handleExport = (autoPrint: boolean) => {
-    if (!book || !hasChapters) {
-      toast({ title: "Nothing to export yet", description: "Write at least one chapter first." });
-      return;
-    }
-    const success = autoPrint
-      ? downloadBookPDF(book, { authorName })
-      : openBookPrintPreview(book, { authorName });
-    if (!success) {
+  const handleExport = async (autoPrint: boolean) => {
+    if (!book || exportBusy) return;
+    // Open the destination window before any await so the browser treats it as
+    // part of the click and the credit check cannot trip the popup blocker.
+    const targetWindow = window.open("", "_blank");
+    if (!targetWindow) {
       toast({
         title: "Popup blocked",
         description: "Allow popups for Investours so the print-ready book can open.",
         variant: "destructive",
       });
+      return;
+    }
+    if (!canExport) {
+      targetWindow.close();
+      toast({
+        title: "Choose what to export",
+        description: "Select the cover, abstract, outline or at least one chapter.",
+      });
+      return;
+    }
+    const sections = {
+      cover: exportCover,
+      // The full book keeps its title page; challenge bundles start the
+      // submission with the cover so nothing extra pads the page count.
+      titlePage: exportPreset === "full",
+      abstract: exportAbstract,
+      outline: exportOutline,
+      chapters: exportChapters,
+    };
+
+    setExportBusy(true);
+    try {
+      const download = await consumeBookDownload(book.id);
+      if (download.entitlement) setEntitlement(download.entitlement);
+      if (!download.success) {
+        targetWindow.close();
+        toast({
+          title: "Download unavailable",
+          description:
+            download.reason === "insufficient_credits"
+              ? `Your free downloads for this book are used up. Buy credits or upgrade your plan to download again with ${downloadCost} credit.`
+              : download.message || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (typeof download.download_count === "number") {
+        const nextCount = download.download_count;
+        setBook((current) => (current ? { ...current, download_count: nextCount } : current));
+      }
+
+      const coverUrl = exportCover ? await resolveBookCoverUrl(book.cover) : null;
+      const success = autoPrint
+        ? downloadBookPDF(book, { authorName, sections, targetWindow, coverUrl: coverUrl ?? undefined })
+        : openBookPrintPreview(book, { authorName, sections, targetWindow, coverUrl: coverUrl ?? undefined });
+      if (!success) {
+        targetWindow.close();
+        toast({
+          title: "Popup blocked",
+          description: "Allow popups for Investours so the print-ready book can open.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: download.free ? "Download started" : "1 credit used",
+        description: download.free
+          ? "This download was included in your plan."
+          : "Your free downloads for this book are used up, so 1 credit was applied.",
+      });
+    } catch (err) {
+      targetWindow.close();
+      toast({
+        title: "Download failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportBusy(false);
     }
   };
 
@@ -1317,6 +1538,8 @@ const Bookmaker = () => {
     setTitle("");
     setSubtitle("");
     setOutline(emptyOutline());
+    setAbstract("");
+    setAuthor("");
     setEditingChapter(null);
     setWriteError(null);
     setPendingResume(false);
@@ -1346,6 +1569,10 @@ const Bookmaker = () => {
     if (!book) return;
     if (!user) {
       redirectToLogin();
+      return;
+    }
+    if (planLimitReached) {
+      toast({ title: "Plan limit reached", description: planLimitMessage, variant: "destructive" });
       return;
     }
     setGate({ kind: "start", cost: activeCost });
@@ -1466,7 +1693,7 @@ const Bookmaker = () => {
           : gate.kind === "visual"
             ? "Only this visual block is rewritten. The surrounding chapter stays the same."
             : gate.kind === "audiobook"
-              ? "One credit reservation for the whole book. Each finished chapter is saved as it is voiced, and unused chapters are refunded if you stop early."
+              ? "Paid once for the whole book with platform credits from a credit pack. Each finished chapter is saved as it is voiced, and unused chapters are refunded if you stop early."
               : "One typographic cover design matched to the book's audience, purpose and title. You can upload your own cover instead at any time.";
 
   const activeWritingTitle =
@@ -1478,6 +1705,11 @@ const Bookmaker = () => {
 
   const shortfall = Math.max(activeCost - entitlement.total_available, 0);
   const startShortfall = Math.max(startCost - entitlement.total_available, 0);
+  const planLimitReached = entitlement.plan_items_remaining === 0;
+  const planLimitMessage =
+    entitlement.plan_items_limit != null
+      ? `Your plan includes ${entitlement.plan_items_limit} ebook creations this period. Upgrade your plan to keep creating.`
+      : "Your plan's ebook allowance is used up for this period.";
 
   if (loadingBook) {
     return (
@@ -1517,8 +1749,8 @@ const Bookmaker = () => {
             <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
               <Link to="/dashboard/bookmaker">My Books</Link>
             </Button>
-            <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
-              <Link to={purchaseUrl(book?.id ?? null, "packs")}>Buy credits</Link>
+            <Button variant="outline" size="sm" className="hidden sm:inline-flex" onClick={() => openPurchase("packs")}>
+              Buy credits
             </Button>
             <Button asChild variant="ghost" size="icon" className="h-9 w-9 sm:hidden" aria-label="My books">
               <Link to="/dashboard/bookmaker">
@@ -1943,13 +2175,29 @@ const Bookmaker = () => {
                     </span>
                     <span className="font-semibold">{entitlement.total_available}</span>
                   </div>
-                  {startShortfall > 0 ? (
+                  {entitlement.subscription_active && entitlement.plan_items_limit != null ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Ebook allowance</span>
+                      <span className={cn("font-semibold", planLimitReached && "text-destructive")}>
+                        {entitlement.plan_items_used ?? 0} of {entitlement.plan_items_limit} used
+                      </span>
+                    </div>
+                  ) : null}
+                  {planLimitReached ? (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                      <p className="font-medium">Plan limit reached</p>
+                      <p className="mt-1">{planLimitMessage}</p>
+                      <Button size="sm" className="mt-2 w-full" onClick={() => openPurchase("subscribe")}>
+                        Upgrade plan
+                      </Button>
+                    </div>
+                  ) : startShortfall > 0 ? (
                     <>
                       <p className="text-xs text-amber-700">
                         You are {startShortfall} credit{startShortfall === 1 ? "" : "s"} short for the manuscript. You can still generate the outline.
                       </p>
-                      <Button asChild size="sm" className="w-full">
-                        <Link to={purchaseUrl(book?.id ?? null, "packs")}>Buy credits</Link>
+                      <Button size="sm" className="w-full" onClick={() => openPurchase("packs")}>
+                        Buy credits
                       </Button>
                     </>
                   ) : (
@@ -2006,6 +2254,45 @@ const Bookmaker = () => {
                           maxLength={220}
                           placeholder="One line that tells the reader what they get"
                         />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">Author &amp; abstract</CardTitle>
+                      <CardDescription>
+                        Decide the name that appears on the book and review the summary written with your outline.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="book-author">Author or creator name</Label>
+                        <Input
+                          id="book-author"
+                          value={author}
+                          onChange={(event) => setAuthor(event.target.value)}
+                          maxLength={80}
+                          placeholder="The name printed on the cover and title page"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Blank leaves the author line off the book. This can be a pen name.
+                        </p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="book-abstract">Abstract</Label>
+                        <Textarea
+                          id="book-abstract"
+                          value={abstract}
+                          onChange={(event) => setAbstract(event.target.value)}
+                          rows={6}
+                          maxLength={1200}
+                          placeholder="A short summary of the book for submissions, catalogues and your cover letter"
+                          className="text-sm"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Used for challenge submissions and the abstract export. {abstract.trim().split(/\s+/).filter(Boolean).length} words.
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
@@ -2138,16 +2425,32 @@ const Bookmaker = () => {
                     </span>
                     <span className="font-semibold">{entitlement.total_available} credits</span>
                   </div>
+                  {entitlement.subscription_active && entitlement.plan_items_limit != null ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Ebook allowance</span>
+                      <span className={cn("font-semibold", planLimitReached && "text-destructive")}>
+                        {entitlement.plan_items_used ?? 0} of {entitlement.plan_items_limit} used
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Manuscript cost</span>
                     <span className="font-semibold">{activeCost} credits</span>
                   </div>
-                  {shortfall > 0 ? (
+                  {planLimitReached ? (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                      <p className="font-medium">Plan limit reached</p>
+                      <p className="mt-1">{planLimitMessage}</p>
+                      <Button size="sm" className="mt-2 w-full" onClick={() => openPurchase("subscribe")}>
+                        Upgrade plan
+                      </Button>
+                    </div>
+                  ) : shortfall > 0 ? (
                     <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
                       <p className="font-medium">Short by {shortfall}</p>
                       <p className="mt-1">Your outline and edits are saved. Buy credits, then come back to this book.</p>
-                      <Button asChild size="sm" className="mt-2 w-full">
-                        <Link to={purchaseUrl(book?.id ?? null, "packs")}>Buy credits</Link>
+                      <Button size="sm" className="mt-2 w-full" onClick={() => openPurchase("packs")}>
+                        Buy credits
                       </Button>
                     </div>
                   ) : (
@@ -2258,10 +2561,15 @@ const Bookmaker = () => {
                       Bookmaker writes one chapter at a time, so you can follow the progress. Your outline and approved content stay exactly as they are.
                     </p>
                   </div>
-                  <Button onClick={openStartGate} size="lg" className="gap-2">
+                  <Button onClick={openStartGate} size="lg" className="gap-2" disabled={planLimitReached}>
                     <Wand2 className="h-4 w-4" /> Write manuscript · {activeCost} credits
                   </Button>
-                  <p className="text-xs text-muted-foreground">Available balance: {entitlement.total_available} credits</p>
+                  <p className="text-xs text-muted-foreground">
+                    Available balance: {entitlement.total_available} credits
+                    {entitlement.plan_items_limit != null
+                      ? ` · Ebook allowance: ${entitlement.plan_items_used ?? 0} of ${entitlement.plan_items_limit} used`
+                      : ""}
+                  </p>
                 </CardContent>
               </Card>
             ) : null}
@@ -2425,7 +2733,8 @@ const Bookmaker = () => {
                     onChange={(event) => void handleCoverUpload(event.target.files?.[0] ?? null)}
                   />
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    JPG, PNG or WebP up to 8 MB. Uploaded covers are fitted to the page without cropping or stretching.
+                    JPG, PNG or WebP up to 8 MB. Use the A5 page size, 1748 × 2480 px (minimum 1200 × 1700 px), so the
+                    cover fills the page without trimming.
                   </p>
                   {book?.cover?.kind !== "none" ? (
                     <Button variant="ghost" size="sm" onClick={handleRemoveCover} disabled={coverBusy} className="w-full text-muted-foreground">
@@ -2478,11 +2787,11 @@ const Bookmaker = () => {
                           )}
                         >
                           <span className="flex gap-1">
-                            {[theme.palette.primary, theme.palette.accent, theme.palette.surface, theme.palette.text].map((colour) => (
+                            {(["primary", "accent", "surface", "text"] as const).map((slot) => (
                               <span
-                                key={colour}
+                                key={slot}
                                 className="h-4 w-4 rounded-full border border-black/10"
-                                style={{ background: colour }}
+                                style={{ background: theme.palette[slot] }}
                               />
                             ))}
                           </span>
@@ -2514,10 +2823,144 @@ const Bookmaker = () => {
                     <Download className="h-5 w-5 text-primary" /> Preview &amp; export
                   </CardTitle>
                   <CardDescription>
-                    A5 pages with a cover, title page, contents, page numbers and smartphone-readable type.
+                    Choose what goes into the file. Every bundle exports as one A5 PDF.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  <div>
+                    <p className="text-xs font-medium text-foreground">Challenge bundles</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      {[
+                        { key: "stage1" as const, label: "Stage 1", hint: "Cover, outline & abstract" },
+                        { key: "stage2" as const, label: "Stage 2", hint: "Stage 1 + chapter 1" },
+                        { key: "full" as const, label: "Full book", hint: "Cover, abstract & all chapters" },
+                      ].map((preset) => (
+                        <button
+                          key={preset.key}
+                          type="button"
+                          onClick={() => applyExportPreset(preset.key)}
+                          className={cn(
+                            "rounded-xl border px-3 py-2 text-left transition-colors",
+                            exportPreset === preset.key ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+                          )}
+                        >
+                          <span className="block text-xs font-semibold">{preset.label}</span>
+                          <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground">{preset.hint}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {[
+                      {
+                        label: "Cover",
+                        active: exportCover,
+                        toggle: () => {
+                          setExportPreset("custom");
+                          setExportCover((value) => !value);
+                        },
+                      },
+                      {
+                        label: "Abstract",
+                        active: exportAbstract,
+                        toggle: () => {
+                          setExportPreset("custom");
+                          setExportAbstract((value) => !value);
+                        },
+                      },
+                      {
+                        label: "Outline",
+                        active: exportOutline,
+                        toggle: () => {
+                          setExportPreset("custom");
+                          setExportOutline((value) => !value);
+                        },
+                      },
+                    ].map((option) => (
+                      <button
+                        key={option.label}
+                        type="button"
+                        onClick={option.toggle}
+                        className={cn(
+                          "flex items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors",
+                          option.active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+                        )}
+                      >
+                        <span className="font-medium">{option.label}</span>
+                        <span
+                          className={cn(
+                            "flex h-4 w-4 items-center justify-center rounded border",
+                            option.active ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                          )}
+                        >
+                          {option.active ? <Check className="h-3 w-3" /> : null}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl border border-border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-foreground">
+                        Chapters{" "}
+                        <span className="text-muted-foreground">
+                          ({exportChapterCount} of {exportableChapters.length})
+                        </span>
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="text-[11px] font-medium text-primary hover:underline"
+                          onClick={() => {
+                            setExportPreset("custom");
+                            setExportChapters("all");
+                          }}
+                        >
+                          All
+                        </button>
+                        <span className="text-[11px] text-muted-foreground">·</span>
+                        <button
+                          type="button"
+                          className="text-[11px] font-medium text-primary hover:underline"
+                          onClick={() => {
+                            setExportPreset("custom");
+                            setExportChapters([]);
+                          }}
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+                    {exportableChapters.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {exportableChapters.map((chapter) => {
+                          const active = exportChapterNumbers.includes(chapter.number);
+                          return (
+                            <button
+                              key={chapter.number}
+                              type="button"
+                              title={chapter.title}
+                              onClick={() => toggleExportChapter(chapter.number)}
+                              className={cn(
+                                "h-7 min-w-7 rounded-md border px-2 text-[11px] font-medium transition-colors",
+                                active
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border text-muted-foreground hover:border-primary/40",
+                              )}
+                            >
+                              {chapter.number}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        No written chapters yet. The cover, outline and abstract can still be exported.
+                      </p>
+                    )}
+                  </div>
+
                   <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
                     <p className="font-medium text-foreground">PDF tips</p>
                     <p className="mt-1">
@@ -2525,18 +2968,33 @@ const Bookmaker = () => {
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button onClick={() => handleExport(false)} variant="outline" className="flex-1 gap-2" disabled={!hasChapters}>
-                      <Printer className="h-4 w-4" /> Open print preview
+                    <Button
+                      onClick={() => void handleExport(false)}
+                      variant="outline"
+                      className="flex-1 gap-2"
+                      disabled={!canExport || exportBusy}
+                    >
+                      {exportBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />} Open print preview
                     </Button>
-                    <Button onClick={() => handleExport(true)} className="flex-1 gap-2" disabled={!hasChapters}>
-                      <Download className="h-4 w-4" /> Save as PDF
+                    <Button
+                      onClick={() => void handleExport(true)}
+                      className="flex-1 gap-2"
+                      disabled={!canExport || exportBusy}
+                    >
+                      {exportBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Save as PDF
                     </Button>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
                     <Button variant="ghost" size="sm" onClick={() => setStep(3)} className="gap-2">
                       <Edit3 className="h-4 w-4" /> Back to manuscript
                     </Button>
-                    <p className="text-xs text-muted-foreground">PDF export is included.</p>
+                    <p className="text-xs text-muted-foreground">
+                      {downloadLimit === 0
+                        ? "Free downloads are included with a credit pack or subscription."
+                        : freeDownloadsLeft > 0
+                          ? `${freeDownloadsLeft} of ${downloadLimit} free downloads left for this book.`
+                          : `Free downloads used · ${downloadCost} credit for each new download.`}
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -2566,23 +3024,52 @@ const Bookmaker = () => {
                         <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                           {audioVoices.map((voice) => {
                             const selected = activeAudioVoice === voice.key;
+                            const previewing = previewingVoice === voice.key;
+                            const loadingPreview = previewLoading === voice.key;
                             return (
-                              <button
+                              <div
                                 key={voice.key}
-                                type="button"
-                                onClick={() => setAudioVoice(voice.key)}
-                                disabled={audioBusy || gateBusy}
                                 className={cn(
-                                  "rounded-lg border px-2.5 py-2 text-left transition-colors disabled:opacity-60",
+                                  "flex items-center gap-1 rounded-lg border py-1.5 pl-2.5 pr-1 transition-colors",
                                   selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:border-primary/40",
                                 )}
                               >
-                                <span className="block text-xs font-medium">{voice.label}</span>
-                                <span className="block truncate text-[10px] text-muted-foreground">{voice.description}</span>
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAudioVoice(voice.key)}
+                                  disabled={audioBusy || gateBusy}
+                                  className="min-w-0 flex-1 text-left disabled:opacity-60"
+                                >
+                                  <span className="block text-xs font-medium">{voice.label}</span>
+                                  <span className="block truncate text-[10px] text-muted-foreground">{voice.description}</span>
+                                </button>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => void handlePreviewVoice(voice.key)}
+                                  disabled={previewLoading !== null}
+                                  className="h-7 w-7 shrink-0 rounded-full"
+                                  aria-label={previewing ? `Stop sample of ${voice.label}` : `Hear ${voice.label}`}
+                                >
+                                  {loadingPreview ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : previewing ? (
+                                    <Square className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <Play className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+                              </div>
                             );
                           })}
                         </div>
+                        <audio
+                          ref={previewAudioRef}
+                          preload="none"
+                          className="hidden"
+                          onEnded={() => setPreviewingVoice(null)}
+                        />
                       </div>
 
                       <Button
@@ -2597,6 +3084,23 @@ const Bookmaker = () => {
                             ? `Narrate again · ${audioCost} credit${audioCost === 1 ? "" : "s"}`
                             : `Create audiobook · ${audioCost} credits`}
                       </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Platform credits only: the whole book costs short 4 credits · medium 8 credits · long 12 credits. Subscription
+                        credits and plan allowances cannot be used for narration.
+                      </p>
+                      {book.audiobook?.status !== "generating" && entitlement.pack_credits_remaining < audioCost ? (
+                        <p className="text-xs text-amber-700">
+                          You have {entitlement.pack_credits_remaining} platform credit
+                          {entitlement.pack_credits_remaining === 1 ? "" : "s"}.{" "}
+                          <button
+                            type="button"
+                            className="underline"
+                            onClick={() => openPurchase("packs")}
+                          >
+                            Buy a credit pack
+                          </button>
+                        </p>
+                      ) : null}
 
                       <AudiobookPlayer
                         book={book}
@@ -2650,9 +3154,13 @@ const Bookmaker = () => {
         description={gateDescription}
         cost={gate?.cost ?? 0}
         entitlement={entitlement}
-        bookId={book?.id}
         busy={gateBusy}
         onConfirm={confirmGate}
+        onPurchase={(kind) => {
+          setGate(null);
+          openPurchase(kind);
+        }}
+        packOnly={gate?.kind === "audiobook"}
         confirmLabel={
           gate?.kind === "start" || gate?.kind === "full"
             ? `Write for ${gate.cost} credits`
@@ -2735,6 +3243,13 @@ const Bookmaker = () => {
           </div>
         ) : null}
       </CreditGateDialog>
+
+      <BookmakerPurchaseDialog
+        open={purchaseOpen}
+        onOpenChange={setPurchaseOpen}
+        initialView={purchaseView ?? undefined}
+        onPurchased={() => void refreshEntitlement()}
+      />
     </div>
   );
 };

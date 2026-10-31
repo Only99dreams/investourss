@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CoverPreview } from "@/components/bookmaker/CoverPreview";
+import { BookmakerPurchaseDialog } from "@/components/bookmaker/BookmakerPurchaseDialog";
 import {
   DEFAULT_ENTITLEMENT,
   type BookmakerBook,
@@ -26,25 +27,34 @@ import {
   bookWordCount,
   formatBookDate,
   lengthLabel,
-  purchaseUrl,
   purposeLabel,
   statusLabel,
 } from "@/lib/bookmaker";
 import {
+  consumeBookDownload,
   deleteBookmakerBook,
   getBookmakerEntitlement,
   listBookmakerBooks,
+  resolveBookCoverUrl,
 } from "@/lib/bookmakerApi";
 import { openBookPrintPreview } from "@/lib/bookExport";
 
 export function BookmakerHistorySection() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [books, setBooks] = useState<BookmakerBook[]>([]);
   const [entitlement, setEntitlement] = useState<BookmakerEntitlement>(DEFAULT_ENTITLEMENT);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [purchaseView, setPurchaseView] = useState<"packs" | "subscribe" | null>(null);
+
+  const openPurchase = (view: "packs" | "subscribe" | null = null) => {
+    setPurchaseView(view);
+    setPurchaseOpen(true);
+  };
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -89,21 +99,78 @@ export function BookmakerHistorySection() {
     }
   };
 
-  const handleExport = (book: BookmakerBook) => {
+  const handleExport = async (book: BookmakerBook) => {
+    if (exportingId) return;
+    // Open the window during the click; the credit check happens after.
+    const targetWindow = window.open("", "_blank");
+    if (!targetWindow) {
+      toast({
+        title: "Popup blocked",
+        description: "Allow popups for Investours so the print-ready book can open.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!(book.chapters ?? []).length) {
+      targetWindow.close();
       toast({
         title: "No manuscript yet",
         description: "Open the book and write the manuscript first.",
       });
       return;
     }
-    const opened = openBookPrintPreview(book, { authorName: profile?.full_name || undefined });
-    if (!opened) {
+    setExportingId(book.id);
+    try {
+      const download = await consumeBookDownload(book.id);
+      if (download.entitlement) setEntitlement(download.entitlement);
+      if (!download.success) {
+        targetWindow.close();
+        toast({
+          title: "Download unavailable",
+          description:
+            download.reason === "insufficient_credits"
+              ? "Your free downloads for this book are used up. Buy credits or upgrade your plan to download again with 1 credit."
+              : download.message || "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const nextCount = download.download_count;
+      if (typeof nextCount === "number") {
+        setBooks((current) =>
+          current.map((item) => (item.id === book.id ? { ...item, download_count: nextCount } : item)),
+        );
+      }
+      const coverUrl = await resolveBookCoverUrl(book.cover);
+      const opened = openBookPrintPreview(book, {
+        authorName: book.outline?.author || undefined,
+        coverUrl: coverUrl ?? undefined,
+        targetWindow,
+      });
+      if (!opened) {
+        targetWindow.close();
+        toast({
+          title: "Popup blocked",
+          description: "Allow popups for Investours so the print-ready book can open.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
-        title: "Popup blocked",
-        description: "Allow popups for Investours so the print-ready book can open.",
+        title: download.free ? "Download started" : "1 credit used",
+        description: download.free
+          ? "This download was included in your plan."
+          : "Your free downloads for this book are used up, so 1 credit was applied.",
+      });
+    } catch (err) {
+      targetWindow.close();
+      toast({
+        title: "Download failed",
+        description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setExportingId(null);
     }
   };
 
@@ -137,11 +204,11 @@ export function BookmakerHistorySection() {
               {entitlement.subscription_credits_remaining} subscription · {entitlement.pack_credits_remaining} pack
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button asChild size="sm">
-                <a href={purchaseUrl(null, "packs")}>Buy credits</a>
+              <Button size="sm" onClick={() => openPurchase("packs")}>
+                Buy credits
               </Button>
-              <Button asChild size="sm" variant="outline">
-                <a href={purchaseUrl(null, "subscribe")}>Subscribe</a>
+              <Button size="sm" variant="outline" onClick={() => openPurchase("subscribe")}>
+                Subscribe
               </Button>
             </div>
           </CardContent>
@@ -191,6 +258,8 @@ export function BookmakerHistorySection() {
           {books.map((book, index) => {
             const chapters = book.chapters ?? [];
             const ready = chapters.length > 0;
+            const downloadLimit = Math.max(0, Number(entitlement.download_limit ?? 0));
+            const freeDownloadsLeft = Math.max(downloadLimit - (book.download_count ?? 0), 0);
             return (
               <motion.div
                 key={book.id}
@@ -202,7 +271,7 @@ export function BookmakerHistorySection() {
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex flex-col gap-4 sm:flex-row">
                       <div className="mx-auto w-24 shrink-0 sm:mx-0">
-                        <CoverPreview book={book} authorName={profile?.full_name || undefined} compact />
+                        <CoverPreview book={book} authorName={book.outline?.author || undefined} compact />
                       </div>
 
                       <div className="min-w-0 flex-1">
@@ -222,6 +291,13 @@ export function BookmakerHistorySection() {
                           <span>{chapters.length} chapters</span>
                           <span>{bookWordCount(book).toLocaleString("en-NG")} words</span>
                           <span>{book.credits_spent} credits used</span>
+                          <span>
+                            {downloadLimit === 0
+                              ? "Downloads use 1 credit"
+                              : freeDownloadsLeft > 0
+                                ? `${freeDownloadsLeft} free download${freeDownloadsLeft === 1 ? "" : "s"} left`
+                                : "1 credit per download"}
+                          </span>
                           <span>Updated {formatBookDate(book.updated_at)}</span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -244,12 +320,17 @@ export function BookmakerHistorySection() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleExport(book)}
-                          disabled={!ready}
+                          onClick={() => void handleExport(book)}
+                          disabled={!ready || exportingId === book.id}
                           className="gap-1.5"
                           title={ready ? "Open print-ready PDF" : "Write the manuscript first"}
                         >
-                          <Download className="h-3.5 w-3.5" /> PDF
+                          {exportingId === book.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}{" "}
+                          PDF
                         </Button>
                         <Button
                           size="sm"
@@ -279,16 +360,28 @@ export function BookmakerHistorySection() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">How Bookmaker credits work</CardTitle>
           <CardDescription>
-            Credit usage for writing, rewriting, cover design and narration. Manual edits use no credits and PDF export is available.
+            Credit usage for writing, rewriting, cover design and narration. Manual edits use no credits, and each book includes free PDF downloads.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
           <p>Short book: 2 credits · Medium: 4 credits · Long: 6 credits</p>
           <p>Chapter rewrite: 1 credit · Visual refresh: 1 credit · Cover: 1 credit</p>
-          <p>Audiobook narration: 2 credits</p>
+          <p>Audiobook narration: Short 4 · Medium 8 · Long 12 credits (platform credits only)</p>
           <p>Failed AI operations are refunded automatically.</p>
+          <p>Free PDF downloads per ebook: Starter 3 · Standard 6 · Annual pack 12</p>
+          <p>Free PDF downloads per ebook: Monthly 3 · Quarterly 6 · Bi-annual 12 · Annual 24</p>
+          <p className="sm:col-span-2">
+            After the free limit, each ebook download uses 1 credit. Playing the audiobook is always free.
+          </p>
         </CardContent>
       </Card>
+
+      <BookmakerPurchaseDialog
+        open={purchaseOpen}
+        onOpenChange={setPurchaseOpen}
+        initialView={purchaseView ?? undefined}
+        onPurchased={() => void load()}
+      />
     </div>
   );
 }

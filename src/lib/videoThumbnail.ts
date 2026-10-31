@@ -16,16 +16,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateVideoThumbnail } from "@/lib/utils";
 import { dataUrlToBlob, siblingThumbnailUrl, videoThumbPath } from "@/lib/video";
 
-const THUMB_BUCKET = "attachments";
+export const THUMB_BUCKET = "attachments";
 
 /** Public URL of a stored path, or null if the URL cannot be built. */
-function publicUrlForPath(path: string): string | null {
+export function publicUrlForPath(path: string): string | null {
   const { data } = supabase.storage.from(THUMB_BUCKET).getPublicUrl(path);
   return data?.publicUrl ?? null;
 }
 
 /** Storage path portion of a public object URL, or null if it isn't one. */
-function pathFromPublicUrl(publicUrl: string): string | null {
+export function pathFromPublicUrl(publicUrl: string): string | null {
   try {
     const parsed = new URL(publicUrl);
     const marker = "/object/public/";

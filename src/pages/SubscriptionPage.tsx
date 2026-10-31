@@ -121,6 +121,7 @@ const SubscriptionPage = () => {
       icon: Crown,
       featured: false,
       features: [
+        '2 ebooks per month on Bookmaker',
         'Unlimited AI Business Plan Generator usage',
         'Unlimited AI Financial Tutor access',
         'Unlimited Scam Detector access',
@@ -142,6 +143,7 @@ const SubscriptionPage = () => {
       featured: false,
       features: [
         'All Monthly Plan features',
+        '6 ebooks per quarter on Bookmaker',
         '11% savings compared to monthly payments',
         'Extended support period',
         'Priority feature access',
@@ -159,6 +161,7 @@ const SubscriptionPage = () => {
       featured: true,
       features: [
         'All Monthly Plan features',
+        '12 ebooks every 6 months on Bookmaker',
         '17% savings compared to monthly payments',
         'Extended support period',
         'Priority feature access',
@@ -176,6 +179,7 @@ const SubscriptionPage = () => {
       featured: false,
       features: [
         'All Bi-Annual Plan features',
+        '24 ebooks per year on Bookmaker',
         'VIP support',
         'Early access to new AI tools and features',
         'Priority participation in selected Investours programs',
@@ -193,6 +197,7 @@ const SubscriptionPage = () => {
       featured: false,
       features: [
         'All Annual Plan features',
+        '6 ebooks per quarter for your team',
         'Dedicated account manager',
         'Custom learning pathways',
         'Organizational analytics dashboard',
@@ -376,6 +381,9 @@ const SubscriptionPage = () => {
           transition={{ delay: 0.4 }}
           className="text-center mt-8 sm:mt-12"
         >
+          <p className="text-xs text-muted-foreground mb-2">
+            Plan allowances cover ebook creation only. Audiobook narration is paid with platform credits from a credit pack.
+          </p>
           <p className="text-xs text-muted-foreground mb-4">
             All prices are exclusive of 7.5% VAT. VAT will be calculated and shown at checkout.
           </p>

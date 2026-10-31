@@ -94,35 +94,53 @@ const DIRECT_VIDEO_EXT = /\.(mp4|m4v|webm|ogv|mov)(\?.*)?$/i;
 
 /** Same as above but path-only, so it can rewrite a storage path in place. */
 const VIDEO_PATH_EXT = /\.(mp4|m4v|webm|ogv|mov)$/i;
+const PDF_PATH_EXT = /\.pdf$/i;
 
-/**
- * Where the poster frame for an uploaded video lives.
- *
- * An uploaded file has no poster derivable from its URL the way a YouTube id
- * is, and the frame the browser generates is a data: URL that is never stored.
- * So the frame is written next to the video under a name both ends can compute
- * independently: `123.mp4` -> `123-thumb.jpg`. Deriving it beats storing it in
- * a column, because the server can then find the poster for every existing
- * video post without a migration or a backfill job.
- */
-export function videoThumbPath(videoPathOrUrl: string): string {
-  return videoPathOrUrl.replace(VIDEO_PATH_EXT, "-thumb.jpg");
+/** True when the attachment URL points at a PDF file. */
+export function isPdfUrl(attachmentUrl?: string | null): boolean {
+  if (!attachmentUrl) return false;
+  try {
+    return PDF_PATH_EXT.test(new URL(attachmentUrl).pathname);
+  } catch {
+    return PDF_PATH_EXT.test(attachmentUrl.split("?")[0].split("#")[0]);
+  }
 }
 
 /**
- * Public URL of the poster frame for an uploaded video, or null when the
- * attachment is not a stored video file.
+ * Where the stored preview image for an uploaded video or PDF lives.
+ *
+ * An uploaded file has no poster derivable from its URL the way a YouTube id
+ * is, and the frame the browser generates is a data: URL that is never stored.
+ * So the preview is written next to the source under a name both ends can
+ * compute independently: `123.mp4` / `123.pdf` -> `123-thumb.jpg`. Deriving it
+ * beats storing it in a column, because the server can then find the preview
+ * for every existing post without a migration or a backfill job.
+ */
+export function attachmentThumbPath(pathOrUrl: string): string {
+  return pathOrUrl
+    .replace(VIDEO_PATH_EXT, "-thumb.jpg")
+    .replace(PDF_PATH_EXT, "-thumb.jpg");
+}
+
+/** Backwards-compatible name for the video-only callers. */
+export function videoThumbPath(videoPathOrUrl: string): string {
+  return attachmentThumbPath(videoPathOrUrl);
+}
+
+/**
+ * Public URL of the stored preview for an uploaded video or PDF, or null when
+ * the attachment is not a stored file we can preview.
  *
  * Returning a candidate is not proof the file exists: older posts predate this
- * and have no frame. Callers that need certainty (the share endpoint) must
+ * and have no preview. Callers that need certainty (the share endpoint) must
  * confirm it before using it, and fall back rather than emit a broken image.
  */
 export function siblingThumbnailUrl(attachmentUrl?: string | null): string | null {
   if (!attachmentUrl) return null;
   try {
     const parsed = new URL(attachmentUrl);
-    if (!VIDEO_PATH_EXT.test(parsed.pathname)) return null;
-    parsed.pathname = videoThumbPath(parsed.pathname);
+    if (!VIDEO_PATH_EXT.test(parsed.pathname) && !PDF_PATH_EXT.test(parsed.pathname)) return null;
+    parsed.pathname = attachmentThumbPath(parsed.pathname);
     return parsed.toString();
   } catch {
     return null;
@@ -189,5 +207,9 @@ export function attachmentThumbnail(
   if (!attachmentUrl) return null;
   if (attachmentType === "image") return attachmentUrl;
   if (attachmentType === "video") return parseVideoLink(attachmentUrl)?.thumbnailUrl ?? null;
+  if (attachmentType === "pdf" || (attachmentType === "document" && isPdfUrl(attachmentUrl))) {
+    // The stored first page, beside the PDF - same convention as video frames.
+    return siblingThumbnailUrl(attachmentUrl);
+  }
   return null;
 }

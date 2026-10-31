@@ -135,6 +135,7 @@ Return ONLY valid JSON with this exact shape:
 {
   "title": "compelling, specific book title",
   "subtitle": "one-line promise or positioning statement",
+  "abstract": "one paragraph, 80-140 words, describing what the book covers, who it is for and what the reader can do afterwards",
   "chapters": [
     {
       "title": "chapter title",
@@ -146,7 +147,8 @@ Return ONLY valid JSON with this exact shape:
 }
 
 Requirements:
-- Write the title, subtitle, chapter titles, summaries and sections in the requested language.
+- Write the title, subtitle, abstract, chapter titles, summaries and sections in the requested language.
+- The abstract must read as a standalone book description: no headings, no bullet lists, no invented credentials.
 - The number of chapters must be exactly the requested number.
 - Chapters must build in a logical order and avoid repetition.
 - Match the tone and structure to the purpose and audience. A workbook needs exercises, a children's book needs simple scenes and repetition, a business book needs frameworks and examples, a memoir needs narrative.
@@ -429,6 +431,7 @@ async function callGroqSpeech(input: string, voice: string, model: string): Prom
 
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    let fatal = false;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60_000);
     try {
@@ -465,12 +468,29 @@ async function callGroqSpeech(input: string, voice: string, model: string): Prom
 
       console.error("bookmaker: TTS error", response.status, text.slice(0, 500));
       if (response.status === 401 || response.status === 403) {
+        fatal = true;
         throw new Error("Narration is not configured on the server.");
       }
-      throw new Error(`Narration failed (${response.status}). Please try again.`);
+
+      let detail = "";
+      let code = "";
+      try {
+        const parsed = JSON.parse(text);
+        detail = String(parsed?.error?.message ?? parsed?.message ?? "").trim();
+        code = String(parsed?.error?.code ?? parsed?.code ?? "").trim();
+      } catch {
+        // Groq sometimes answers with a non-JSON body
+      }
+      if (code === "model_terms_required") {
+        fatal = true;
+        throw new Error(
+          "Groq has not enabled the narration model for this account yet. An organisation admin must accept the Orpheus terms at https://console.groq.com/playground?model=canopylabs%2Forpheus-v1-english, then start the audiobook again.",
+        );
+      }
+      throw new Error(detail ? `Narration failed: ${detail}` : `Narration failed (${response.status}). Please try again.`);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error("Narration failed.");
-      if (attempt === 2) throw lastError;
+      if (fatal || attempt === 2) throw lastError;
       await sleep(900 * (attempt + 1));
     } finally {
       clearTimeout(timeout);
@@ -514,19 +534,27 @@ async function synthesizeChapter(content: unknown, voice: string, model: string)
   return concatWav(parts, 0.12);
 }
 
-async function uploadNarration(
+async function storeNarration(
   admin: SupabaseClient,
   path: string,
   wav: Uint8Array,
-): Promise<string> {
+): Promise<void> {
   const { error } = await admin.storage.from(AUDIO_BUCKET).upload(path, wav, {
     cacheControl: "3600",
     upsert: true,
     contentType: "audio/wav",
   });
   if (error) throw error;
-  const { data } = admin.storage.from(AUDIO_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+}
+
+// The audio bucket is private, so members never receive a permanent URL. The
+// player signs the stored object paths on demand instead.
+async function signNarration(admin: SupabaseClient, path: string, expiresIn = 60 * 60): Promise<string> {
+  const { data, error } = await admin.storage.from(AUDIO_BUCKET).createSignedUrl(path, expiresIn);
+  if (error || !data?.signedUrl) {
+    throw error ?? new Error("Could not prepare the narration file.");
+  }
+  return data.signedUrl;
 }
 
 
@@ -705,6 +733,7 @@ function normalizeOutline(parsed: any, config: ReturnType<typeof normalizeConfig
   return {
     title: clampText(parsed?.title, 160) || "Untitled Book",
     subtitle: clampText(parsed?.subtitle, 220),
+    abstract: clampText(parsed?.abstract, 1200),
     chapters: normalized,
   };
 }
@@ -979,7 +1008,7 @@ Book type hints: adapt structure, examples and exercises to the purpose and audi
             title: filled.title,
             subtitle: filled.subtitle,
             length: config.lengthKey,
-            outline: { chapters: filled.chapters },
+            outline: { chapters: filled.chapters, abstract: filled.abstract, author: book?.outline?.author ?? "" },
             status: "outline_ready",
           })
           .eq("id", bookId)
@@ -1779,7 +1808,7 @@ Return only the replacement visual block.`,
       }
 
       // ---------------------------------------------------------------------
-      // Narrate the whole book (2 credits, chapter by chapter)
+      // Narrate the whole book (4/8/12 credits by length, chapter by chapter)
       // ---------------------------------------------------------------------
       case "start_audiobook": {
         const bookId = String(body?.bookId ?? "").trim();
@@ -1988,12 +2017,11 @@ Return only the replacement visual block.`,
         const wav = await synthesizeChapter(chapter.content, voice, model);
         const parsed = parseWav(wav);
         const path = `${userId}/${bookId}/chapter-${chapterNumber}.wav`;
-        const baseUrl = await uploadNarration(admin, path, wav);
+        await storeNarration(admin, path, wav);
         const updatedAt = new Date().toISOString();
         const entry = {
           number: chapterNumber,
           title: clampText(chapter.title, 160) || `Chapter ${chapterNumber}`,
-          url: `${baseUrl}?v=${Date.parse(updatedAt)}`,
           path,
           voice,
           characters: speechText(chapter.content).length,
@@ -2039,6 +2067,29 @@ Return only the replacement visual block.`,
           totalChapters: requested.length,
           book: saved,
         });
+      }
+
+      // ---------------------------------------------------------------------
+      // Narrator preview (0 credits, cached per voice)
+      // ---------------------------------------------------------------------
+      case "preview_voice": {
+        const voiceKey = String(body?.voice ?? "").trim();
+        const voice = AUDIO_VOICES[voiceKey];
+        if (!voice) return json({ success: false, message: "Choose a narrator to preview." }, 400);
+
+        const fileName = `${voiceKey}.wav`;
+        const path = `previews/${fileName}`;
+        const { data: existing } = await admin.storage.from(AUDIO_BUCKET).list("previews", { limit: 100 });
+        if ((existing ?? []).some((file) => file.name === fileName)) {
+          return json({ success: true, voice: voiceKey, url: await signNarration(admin, path), cached: true });
+        }
+
+        const sample = voice.language === "ar"
+          ? "هكذا سيبدو كتابك عندما يقرأه هذا الراوي. يمكنك تغيير الراوي في أي وقت قبل إنشاء الكتاب الصوتي."
+          : "This is how your book will sound when this narrator reads it. You can switch narrators any time before creating the audiobook.";
+        const wav = await synthesizeChapter(sample, voiceKey, AUDIO_MODELS[voice.language]);
+        await storeNarration(admin, path, wav);
+        return json({ success: true, voice: voiceKey, url: await signNarration(admin, path), cached: false });
       }
 
       // ---------------------------------------------------------------------
@@ -2171,10 +2222,9 @@ Return only the replacement visual block.`,
 
         const parsed = parseWav(wav);
         const path = `${userId}/${bookId}/audiobook.wav`;
-        const baseUrl = await uploadNarration(admin, path, wav);
+        await storeNarration(admin, path, wav);
         const updatedAt = new Date().toISOString();
         const full = {
-          url: `${baseUrl}?v=${Date.parse(updatedAt)}`,
           path,
           bytes: wav.byteLength,
           durationSeconds: Math.round(parsed.data.length / parsed.bytesPerSecond),

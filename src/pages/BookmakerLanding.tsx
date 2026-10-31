@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -23,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CoverPreview } from "@/components/bookmaker/CoverPreview";
+import { BookmakerPurchaseDialog } from "@/components/bookmaker/BookmakerPurchaseDialog";
 import { createBlankBook, LENGTH_OPTIONS } from "@/lib/bookmaker";
 
 const fadeUp = {
@@ -105,6 +107,8 @@ const steps = [
 ];
 
 const BookmakerLanding = () => {
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
+
   return (
     <div className="min-h-screen gradient-hero flex flex-col relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -143,15 +147,13 @@ const BookmakerLanding = () => {
                 </Link>
               </Button>
               <Button
-                asChild
                 size="xl"
                 variant="outline"
+                onClick={() => setPurchaseOpen(true)}
                 className="h-auto min-h-14 w-full whitespace-normal px-5 py-3 text-center text-base leading-snug sm:w-auto sm:px-10 sm:text-lg"
               >
-                <Link to="/pricing?from=bookmaker">
-                  Buy AI Credits<span className="hidden sm:inline">&nbsp;&amp; Create Your First Ebook</span>
-                  <ArrowRight className="ml-1.5 hidden h-5 w-5 shrink-0 sm:inline-block" />
-                </Link>
+                Buy AI Credits<span className="hidden sm:inline">&nbsp;&amp; Create Your First Ebook</span>
+                <ArrowRight className="ml-1.5 hidden h-5 w-5 shrink-0 sm:inline-block" />
               </Button>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted-foreground sm:gap-x-5 sm:text-sm lg:justify-start">
@@ -294,7 +296,8 @@ const BookmakerLanding = () => {
             ))}
           </div>
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            Chapter rewrite 1 credit · Visual rewrite 1 credit · Cover 1 credit · Audiobook 2 credits · Manual edits and PDF export are available.
+            Chapter rewrite 1 credit · Visual rewrite 1 credit · Cover 1 credit · Audiobook narration uses platform credits: 4 credits short,
+            8 medium, 12 long · Manual edits are free · Free PDF downloads are included with every plan, then 1 credit per download.
           </p>
         </motion.section>
 
@@ -343,8 +346,13 @@ const BookmakerLanding = () => {
                     Create My Ebook <ArrowRight className="ml-2 h-5 w-5 shrink-0" />
                   </Link>
                 </Button>
-                <Button asChild size="xl" variant="outline" className="h-auto min-h-14 w-full whitespace-normal border-primary-foreground/40 bg-transparent px-5 py-3 leading-snug text-primary-foreground hover:bg-primary-foreground/10 sm:w-auto sm:px-10">
-                  <Link to="/pricing?from=bookmaker">View credit packs</Link>
+                <Button
+                  size="xl"
+                  variant="outline"
+                  onClick={() => setPurchaseOpen(true)}
+                  className="h-auto min-h-14 w-full whitespace-normal border-primary-foreground/40 bg-transparent px-5 py-3 leading-snug text-primary-foreground hover:bg-primary-foreground/10 sm:w-auto sm:px-10"
+                >
+                  View credit packs
                 </Button>
               </div>
               <p className="mt-3 text-xs text-primary-foreground/70">
@@ -354,6 +362,13 @@ const BookmakerLanding = () => {
           </Card>
         </motion.section>
       </main>
+
+      <BookmakerPurchaseDialog
+        open={purchaseOpen}
+        onOpenChange={setPurchaseOpen}
+        initialView="packs"
+        onPurchased={() => setPurchaseOpen(false)}
+      />
 
       <Footer />
     </div>

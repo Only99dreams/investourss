@@ -11,10 +11,34 @@ import {
 } from "./bookmaker";
 import { escapeHtml, parseBookMarkup, renderBlocksToHtml, renderInline } from "./bookmakerMarkup";
 
+/** 1-based chapter numbers, or "all" written chapters. */
+export type ChapterSelection = number[] | "all";
+
+export interface BookExportSections {
+  cover?: boolean;
+  titlePage?: boolean;
+  abstract?: boolean;
+  outline?: boolean;
+  chapters?: ChapterSelection;
+}
+
 export interface BookExportOptions {
   authorName?: string;
   autoPrint?: boolean;
+  sections?: BookExportSections;
+  /** Signed link for a cover stored in the private bucket. */
+  coverUrl?: string;
+  /** Pre-opened window, so a credit check can finish without tripping popup blockers. */
+  targetWindow?: Window | null;
 }
+
+const DEFAULT_SECTIONS: Required<BookExportSections> = {
+  cover: true,
+  titlePage: true,
+  abstract: true,
+  outline: false,
+  chapters: "all",
+};
 
 const A5 = {
   width: 148,
@@ -146,7 +170,6 @@ function generatedCoverArt(book: BookmakerBook, theme: BookTheme, authorName?: s
   const headline = design?.headline || book.title || "Your Book Title";
   const subheadline = design?.subheadline || book.subtitle || "";
   const tagline = design?.tagline || purposeLabel(book);
-  const kicker = "BOOKMAKER BY INVESTOURS";
   const headlineSize =
     headline.length > 72
       ? "21pt"
@@ -177,7 +200,6 @@ function generatedCoverArt(book: BookmakerBook, theme: BookTheme, authorName?: s
     ${splitBand}
     ${frame}
     <div style="position:relative;z-index:2;">
-      <div style="font-family:${theme.bodyFont};font-size:6pt;letter-spacing:0.24em;text-transform:uppercase;opacity:0.78;margin-bottom:${layout === "centered" ? "8.5mm" : "11mm"};">${escapeHtml(kicker)}</div>
       <h1 style="margin:0;font-family:${theme.headingFont};font-size:${headlineSize};line-height:1.05;letter-spacing:${style === "bold-editorial" ? "-0.02em" : "0"};text-wrap:balance;overflow-wrap:anywhere;max-width:${layout === "centered" ? "108mm" : "115mm"};">${escapeHtml(headline)}</h1>
       ${subheadline ? `<p style="margin:${subheadlineMargin};font-family:${theme.bodyFont};font-size:${headline.length > 60 ? "8.5pt" : "9.5pt"};line-height:1.45;opacity:0.88;overflow-wrap:anywhere;max-width:${layout === "centered" ? "99mm" : "100mm"};${layout === "centered" ? "margin-left:auto;margin-right:auto;" : ""}">${escapeHtml(subheadline)}</p>` : ""}
     </div>
@@ -189,13 +211,18 @@ function generatedCoverArt(book: BookmakerBook, theme: BookTheme, authorName?: s
   </div>`;
 }
 
-export function coverPageHtml(book: BookmakerBook, theme: BookTheme, authorName?: string): string {
+export function coverPageHtml(
+  book: BookmakerBook,
+  theme: BookTheme,
+  authorName?: string,
+  coverUrl?: string,
+): string {
   const cover = book.cover;
-  const uploaded = cover?.kind === "uploaded" && cover.url;
+  const uploaded = cover?.kind === "uploaded" && (coverUrl || cover.url);
   return `<section class="page cover-page" aria-label="Book cover">
     ${
       uploaded
-        ? `<div style="width:100%;height:100%;background:${theme.palette.surface};display:flex;align-items:center;justify-content:center;"><img src="${escapeHtml(cover.url)}" alt="${escapeHtml(book.title || "Book cover")}" style="width:100%;height:100%;object-fit:contain;display:block;" /></div>`
+        ? `<div style="width:100%;height:100%;background:${theme.palette.surface};display:flex;align-items:center;justify-content:center;"><img src="${escapeHtml(coverUrl || cover.url)}" alt="${escapeHtml(book.title || "Book cover")}" style="width:100%;height:100%;object-fit:contain;display:block;" /></div>`
         : generatedCoverArt(book, theme, authorName)
     }
   </section>`;
@@ -210,19 +237,50 @@ function titlePageHtml(book: BookmakerBook, theme: BookTheme, authorName?: strin
       <div style="width:17mm;height:2px;background:${theme.palette.accent};margin:8mm auto;"></div>
       ${authorName ? `<p style="margin:0;font-family:${theme.headingFont};font-size:10.5pt;color:${theme.palette.text};">${escapeHtml(authorName)}</p>` : ""}
       <p style="margin:4mm 0 0;font-size:7pt;color:${theme.palette.muted};">Created ${escapeHtml(formatBookDate(book.created_at))}</p>
-      <p style="margin:20mm 0 0;font-size:6pt;letter-spacing:0.12em;text-transform:uppercase;color:${theme.palette.muted};">Bookmaker by Investours</p>
     </div>
     ${footerHtml()}
   </section>`;
 }
 
-function tocPageHtml(book: BookmakerBook, theme: BookTheme): string {
-  const chapters = book.chapters?.length ? book.chapters : book.outline?.chapters ?? [];
+function abstractPageHtml(book: BookmakerBook, theme: BookTheme): string {
+  const abstract = (book.outline?.abstract ?? "").trim();
+  if (!abstract) return "";
+  const body = renderBlocksToHtml(parseBookMarkup(abstract), theme);
+  return `<section class="page front-page">
+    <div class="page-content" style="font-family:${theme.bodyFont};">
+      <p style="margin:0 0 3mm;font-size:6.5pt;letter-spacing:0.22em;text-transform:uppercase;color:${theme.palette.accent};">Abstract</p>
+      <h1 style="margin:0 0 6mm;font-family:${theme.headingFont};font-size:18pt;color:${theme.palette.primary};">About this book</h1>
+      <div style="font-size:9.5pt;line-height:1.6;color:${theme.palette.text};">${body}</div>
+    </div>
+    ${footerHtml()}
+  </section>`;
+}
+
+function outlineBlocksHtml(book: BookmakerBook, theme: BookTheme): string {
+  const outlineChapters = book.outline?.chapters ?? [];
+  if (!outlineChapters.length) return "";
+  const heading = `<div class="flow-block page-start" style="margin-bottom:6mm;">
+      <p style="margin:0 0 2mm;font-family:${theme.bodyFont};font-size:6.5pt;letter-spacing:0.2em;text-transform:uppercase;color:${theme.palette.accent};">Outline</p>
+      <h1 style="margin:0;font-family:${theme.headingFont};font-size:18pt;line-height:1.2;color:${theme.palette.primary};">What this book covers</h1>
+    </div>`;
+  const entries = outlineChapters
+    .map(
+      (chapter, index) => `<div class="flow-block" style="padding:3mm 0;border-top:1px solid #e6e1ee;">
+        <p style="margin:0 0 1mm;font-family:${theme.bodyFont};font-size:6.5pt;letter-spacing:0.16em;text-transform:uppercase;color:${theme.palette.muted};">Chapter ${index + 1}</p>
+        <h2 style="margin:0 0 1.5mm;font-family:${theme.headingFont};font-size:11.5pt;line-height:1.25;color:${theme.palette.primary};">${escapeHtml(chapter.title)}</h2>
+        ${chapter.summary ? `<p style="margin:0;font-family:${theme.bodyFont};font-size:8.5pt;line-height:1.45;color:${theme.palette.text};">${escapeHtml(chapter.summary)}</p>` : ""}
+      </div>`,
+    )
+    .join("");
+  return heading + entries;
+}
+
+function tocPageHtml(theme: BookTheme, chapters: { number: number; title: string }[]): string {
   const rows = chapters
     .map(
-      (chapter, index) =>
-        `<li class="toc-entry" data-chapter="${index + 1}" style="display:flex;align-items:baseline;gap:6px;margin:0 0 8px;font-family:${theme.bodyFont};font-size:8.5pt;color:${theme.palette.text};">
-          <span style="width:6mm;color:${theme.palette.accent};font-weight:700;">${String(index + 1).padStart(2, "0")}</span>
+      (chapter) =>
+        `<li class="toc-entry" data-chapter="${chapter.number}" style="display:flex;align-items:baseline;gap:6px;margin:0 0 8px;font-family:${theme.bodyFont};font-size:8.5pt;color:${theme.palette.text};">
+          <span style="width:6mm;color:${theme.palette.accent};font-weight:700;">${String(chapter.number).padStart(2, "0")}</span>
           <span style="flex:1;border-bottom:1px dotted rgba(120,120,120,0.45);padding-bottom:2px;">${escapeHtml(chapter.title)}</span>
           <span class="toc-page" style="min-width:6mm;text-align:right;color:${theme.palette.muted};font-size:7pt;"></span>
         </li>`,
@@ -240,17 +298,17 @@ function tocPageHtml(book: BookmakerBook, theme: BookTheme): string {
 }
 
 function footerHtml(): string {
-  return `<div class="page-footer"><span>Bookmaker by Investours</span><span class="footer-page"></span></div>`;
+  return `<div class="page-footer"><span class="footer-page"></span></div>`;
 }
 
-function chapterFlowHtml(chapter: BookChapter, index: number, theme: BookTheme): string {
+function chapterFlowHtml(chapter: BookChapter, number: number, theme: BookTheme): string {
   const blocks = parseBookMarkup(chapter.content);
   const blockHtml = blocks
     .map((block) => `<div class="flow-block">${renderBlocksToHtml([block], theme)}</div>`)
     .join("");
-  return `<div class="flow-block chapter-open" data-chapter="${index + 1}" style="page-break-before:always;">
+  return `<div class="flow-block chapter-open" data-chapter="${number}" style="page-break-before:always;">
       <div style="margin-bottom:4mm;padding-bottom:3mm;border-bottom:2px solid ${theme.palette.accent};">
-        <p style="margin:0 0 1.5mm;font-family:${theme.bodyFont};font-size:6.5pt;letter-spacing:0.2em;text-transform:uppercase;color:${theme.palette.muted};">Chapter ${index + 1}</p>
+        <p style="margin:0 0 1.5mm;font-family:${theme.bodyFont};font-size:6.5pt;letter-spacing:0.2em;text-transform:uppercase;color:${theme.palette.muted};">Chapter ${number}</p>
         <h2 style="margin:0;font-family:${theme.headingFont};font-size:19pt;line-height:1.15;color:${theme.palette.primary};">${escapeHtml(chapter.title)}</h2>
       </div>
     </div>
@@ -276,7 +334,7 @@ const PRINT_CSS = `
   .page:last-child { page-break-after: auto; break-after: auto; }
   .cover-page { padding: 0; }
   .page-content { height: ${A5.height - A5.marginTop - A5.marginBottom}mm; overflow: hidden; position: relative; }
-  .page-footer { position: absolute; left: ${A5.marginSide}mm; right: ${A5.marginSide}mm; bottom: ${A5.footerBottom}mm; display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid #e6e1ee; padding-top: 1.5mm; font-size: 6.5pt; letter-spacing: 0.04em; color: #8a8298; }
+  .page-footer { position: absolute; left: ${A5.marginSide}mm; right: ${A5.marginSide}mm; bottom: ${A5.footerBottom}mm; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e6e1ee; padding-top: 1.5mm; font-size: 6.5pt; letter-spacing: 0.04em; color: #8a8298; }
   #book-flow { position: absolute; left: -9999px; top: 0; width: ${A5.width - A5.marginSide * 2}mm; visibility: hidden; }
   .flow-block { break-inside: avoid; page-break-inside: avoid; }
   .flow-block > *:first-child { margin-top: 0; }
@@ -309,7 +367,7 @@ const PAGINATION_SCRIPT = `
     }
 
     items.forEach(function (item) {
-      var startsChapter = item.classList.contains('chapter-open');
+      var startsChapter = item.classList.contains('chapter-open') || item.classList.contains('page-start');
       if (!content || (startsChapter && content.childElementCount > 0)) newPage();
       content.appendChild(item);
       if (content.scrollHeight > content.clientHeight + 2 && content.childElementCount > 1) {
@@ -352,11 +410,50 @@ const PAGINATION_SCRIPT = `
 export function buildBookDocument(book: BookmakerBook, options: BookExportOptions = {}): string {
   const theme = resolveTheme(book);
   const authorName = options.authorName?.trim() || "";
-  const chapters = (book.chapters ?? []).filter((chapter) => chapter && chapter.content);
-  const flow = chapters.length
-    ? chapters.map((chapter, index) => chapterFlowHtml(chapter, index, theme)).join("")
-    : `<div class="flow-block"><p style="font-size:12pt;color:${theme.palette.muted};">This book does not have a manuscript yet. Return to Bookmaker to write it.</p></div>`;
+  const sections: Required<BookExportSections> = {
+    cover: options.sections?.cover ?? DEFAULT_SECTIONS.cover,
+    titlePage: options.sections?.titlePage ?? DEFAULT_SECTIONS.titlePage,
+    abstract: options.sections?.abstract ?? DEFAULT_SECTIONS.abstract,
+    outline: options.sections?.outline ?? DEFAULT_SECTIONS.outline,
+    chapters: options.sections?.chapters ?? DEFAULT_SECTIONS.chapters,
+  };
+  const selection = sections.chapters;
+
+  const written = (book.chapters ?? [])
+    .map((chapter, index) => ({ chapter, number: Number(chapter.number) || index + 1 }))
+    .filter((entry) => entry.chapter && entry.chapter.content);
+  const selected =
+    selection === "all"
+      ? written
+      : written.filter((entry) => selection.includes(entry.number));
+
+  const frontPages: string[] = [];
+  if (sections.cover) frontPages.push(coverPageHtml(book, theme, authorName, options.coverUrl));
+  if (sections.titlePage) frontPages.push(titlePageHtml(book, theme, authorName));
+  if (sections.abstract) {
+    const page = abstractPageHtml(book, theme);
+    if (page) frontPages.push(page);
+  }
+  if (selected.length) {
+    frontPages.push(tocPageHtml(theme, selected.map(({ chapter, number }) => ({ number, title: chapter.title }))));
+  }
+
+  const outlineHtml = sections.outline ? outlineBlocksHtml(book, theme) : "";
+  const chapterHtml = selected.map(({ chapter, number }) => chapterFlowHtml(chapter, number, theme)).join("");
+  let flow = outlineHtml + chapterHtml;
+  if (!flow && !frontPages.length) {
+    flow = `<div class="flow-block"><p style="font-size:12pt;color:${theme.palette.muted};">This selection has no pages yet. Choose at least one section to export.</p></div>`;
+  }
+
   const words = bookWordCount(book).toLocaleString("en-NG");
+  const bundle = [
+    sections.cover ? "cover" : "",
+    sections.abstract && (book.outline?.abstract ?? "").trim() ? "abstract" : "",
+    sections.outline ? "outline" : "",
+    selected.length ? `${selected.length} chapter${selected.length === 1 ? "" : "s"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -370,7 +467,7 @@ export function buildBookDocument(book: BookmakerBook, options: BookExportOption
   <div class="toolbar">
     <div>
       <strong>${escapeHtml(book.title || "Your book")}</strong>
-      <p>${escapeHtml(book.length)} book · ${words} words · A5 print-ready</p>
+      <p>${escapeHtml(book.length)} book · ${words} words · A5 print-ready${bundle ? ` · ${escapeHtml(bundle)}` : ""}</p>
     </div>
     <div class="actions">
       <button class="secondary" onclick="window.close()">Close</button>
@@ -379,9 +476,7 @@ export function buildBookDocument(book: BookmakerBook, options: BookExportOption
   </div>
 
   <main id="book-pages">
-    ${coverPageHtml(book, theme, authorName)}
-    ${titlePageHtml(book, theme, authorName)}
-    ${tocPageHtml(book, theme)}
+    ${frontPages.join("\n    ")}
   </main>
 
   <div id="book-flow">${flow}</div>
@@ -398,7 +493,7 @@ export function buildBookDocument(book: BookmakerBook, options: BookExportOption
  */
 export function downloadBookPDF(book: BookmakerBook, options: BookExportOptions = {}): boolean {
   const html = buildBookDocument(book, { autoPrint: true, ...options });
-  const win = window.open("", "_blank");
+  const win = options.targetWindow ?? window.open("", "_blank");
   if (!win) {
     alert("Please allow popups so Bookmaker can prepare your PDF.");
     return false;
@@ -412,7 +507,7 @@ export function downloadBookPDF(book: BookmakerBook, options: BookExportOptions 
 
 export function openBookPrintPreview(book: BookmakerBook, options: BookExportOptions = {}): boolean {
   const html = buildBookDocument(book, { autoPrint: false, ...options });
-  const win = window.open("", "_blank");
+  const win = options.targetWindow ?? window.open("", "_blank");
   if (!win) {
     alert("Please allow popups so Bookmaker can show the print preview.");
     return false;

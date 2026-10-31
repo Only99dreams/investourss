@@ -30,7 +30,7 @@ interface PaystackTransaction {
 
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
 
-const planDetails = {
+export const SUBSCRIPTION_PLANS = {
   monthly:    { name: 'Premium Monthly',    price: 7650,   period: 'month',    savings: null },
   quarterly:  { name: 'Premium Quarterly',  price: 20400,  period: '3 months', savings: 'Save ₦2,550' },
   biennial:   { name: 'Premium Bi-annual',  price: 38250,  period: '6 months', savings: 'Save ₦7,650' },
@@ -56,7 +56,7 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
   const [promoLoading, setPromoLoading] = useState(false);
   const [activating, setActivating] = useState(false);
 
-  const currentPlan = planDetails[planType];
+  const currentPlan = SUBSCRIPTION_PLANS[planType];
 
   // ── Automatic confirmation ──────────────────────────────────────────────
   // If the client-side activation call fails, the Paystack webhook

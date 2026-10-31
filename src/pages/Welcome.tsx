@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Twitter, Instagram, Youtube, MessageCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import investoursLogo from "@/assets/investours-logo.png";
 
 const gains = [
@@ -13,6 +14,8 @@ const gains = [
 ];
 
 const Welcome = () => {
+  const { user, isLoading } = useAuth();
+
   return (
     <div className="min-h-screen min-h-[100svh] flex flex-col relative overflow-hidden gradient-hero">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -93,7 +96,13 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.8 }}
             className="mb-5 sm:mb-6"
           >
-            <Link to="/bookmaker" className="block w-full sm:inline-block">
+            <Link
+              to={user ? "/bookmaker" : "/signup"}
+              onClick={(event) => {
+                if (isLoading) event.preventDefault();
+              }}
+              className="block w-full sm:inline-block"
+            >
               <Button variant="hero" size="xl" className="group w-full sm:w-auto px-6 min-[380px]:px-8 sm:px-10">
                 Start Now
                 <motion.span

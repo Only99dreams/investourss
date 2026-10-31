@@ -1600,6 +1600,7 @@ export type Database = {
           audiobook: Json
           metadata: Json
           credits_spent: number
+          download_count: number
           created_at: string
           updated_at: string
         }
@@ -1626,6 +1627,7 @@ export type Database = {
           audiobook?: Json
           metadata?: Json
           credits_spent?: number
+          download_count?: number
           created_at?: string
           updated_at?: string
         }
@@ -1652,6 +1654,7 @@ export type Database = {
           audiobook?: Json
           metadata?: Json
           credits_spent?: number
+          download_count?: number
           created_at?: string
           updated_at?: string
         }
@@ -1901,6 +1904,13 @@ export type Database = {
       }
       bookmaker_get_entitlement: {
         Args: Record<string, never>
+        Returns: Json
+      }
+      bookmaker_consume_download: {
+        Args: {
+          p_book_id: string
+          p_idempotency_key: string
+        }
         Returns: Json
       }
       bookmaker_reserve_operation: {

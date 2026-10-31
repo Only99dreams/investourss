@@ -25,6 +25,10 @@ export interface OutlineChapter {
 }
 
 export interface BookOutline {
+  /** Short summary of the whole book, written with the outline. */
+  abstract?: string;
+  /** Author or creator name printed on the cover and title page. */
+  author?: string;
   chapters: OutlineChapter[];
 }
 
@@ -98,6 +102,7 @@ export function coverLayoutForStyle(style: string | undefined): CoverLayout {
 export interface BookCover {
   kind: "none" | "generated" | "uploaded";
   url?: string;
+  path?: string;
   design?: CoverDesign;
   updatedAt?: string;
 }
@@ -155,14 +160,14 @@ export function audiobookVoiceLabel(voiceKey: string | null | undefined): string
   return voice ? `${voice.label} · ${voice.description}` : "Choose a narrator";
 }
 
-export function audiobookCostForLength(_length: BookLength): number {
-  return 2;
+export function audiobookCostForLength(length: BookLength): number {
+  return LENGTHS[length]?.audiobookCredits ?? LENGTHS.medium.audiobookCredits;
 }
 
 export interface AudiobookChapter {
   number: number;
   title: string;
-  url: string;
+  url?: string;
   path?: string;
   voice?: string;
   characters?: number;
@@ -172,7 +177,7 @@ export interface AudiobookChapter {
 }
 
 export interface AudiobookFullFile {
-  url: string;
+  url?: string;
   path?: string;
   bytes?: number;
   durationSeconds?: number;
@@ -230,6 +235,8 @@ export interface BookmakerBook {
   audiobook: AudiobookState | null;
   metadata: Record<string, unknown> | null;
   credits_spent: number;
+  /** PDF downloads taken for this book, free and paid. Server-owned. */
+  download_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -242,8 +249,18 @@ export interface BookmakerEntitlement {
   subscription_credits_granted: number;
   subscription_credits_used: number;
   subscription_period_end?: string | null;
+  /** Ebooks + audiobooks allowed by the plan in the current period. */
+  plan_items_limit?: number | null;
+  plan_items_used?: number;
+  plan_items_remaining?: number | null;
   pack_credits_remaining: number;
   total_available: number;
+  /** Free PDF downloads allowed per book by the current plan or pack. */
+  download_limit?: number;
+  /** Credits charged per download once the free allowance is used. */
+  download_cost?: number;
+  /** Narration is paid from credit packs only, never plan credits. */
+  audiobook_pack_only?: boolean;
   costs: Record<string, number>;
 }
 
@@ -253,8 +270,14 @@ export const DEFAULT_ENTITLEMENT: BookmakerEntitlement = {
   subscription_credits_remaining: 0,
   subscription_credits_granted: 0,
   subscription_credits_used: 0,
+  plan_items_limit: null,
+  plan_items_used: 0,
+  plan_items_remaining: null,
   pack_credits_remaining: 0,
   total_available: 0,
+  download_limit: 0,
+  download_cost: 1,
+  audiobook_pack_only: true,
   costs: {
     short: 2,
     medium: 4,
@@ -262,7 +285,10 @@ export const DEFAULT_ENTITLEMENT: BookmakerEntitlement = {
     chapter_regeneration: 1,
     visual_regeneration: 1,
     cover_generation: 1,
-    audiobook: 2,
+    audiobook_short: 4,
+    audiobook_medium: 8,
+    audiobook_long: 12,
+    book_download: 1,
     full_regeneration_short: 2,
     full_regeneration_medium: 4,
     full_regeneration_long: 6,
@@ -347,6 +373,7 @@ export interface LengthOption {
   chapters: [number, number];
   chapterTarget: number;
   credits: number;
+  audiobookCredits: number;
   description: string;
 }
 
@@ -359,6 +386,7 @@ export const LENGTHS: Record<BookLength, LengthOption> = {
     chapters: [3, 5],
     chapterTarget: 4,
     credits: 2,
+    audiobookCredits: 4,
     description: "A focused guide or lead magnet. Fast to read and share.",
   },
   medium: {
@@ -369,6 +397,7 @@ export const LENGTHS: Record<BookLength, LengthOption> = {
     chapters: [6, 10],
     chapterTarget: 8,
     credits: 4,
+    audiobookCredits: 8,
     description: "A complete short book with room for examples and exercises.",
   },
   long: {
@@ -379,6 +408,7 @@ export const LENGTHS: Record<BookLength, LengthOption> = {
     chapters: [10, 15],
     chapterTarget: 12,
     credits: 6,
+    audiobookCredits: 12,
     description: "A substantial book for a course, client or authority position.",
   },
 };
@@ -391,7 +421,8 @@ export const CREDIT_COSTS = {
   chapterRegeneration: 1,
   visualRegeneration: 1,
   coverGeneration: 1,
-  audiobook: 2,
+  audiobook: (length: BookLength) => LENGTHS[length].audiobookCredits,
+  bookDownload: 1,
   outline: 0,
   manualEdit: 0,
   pdfExport: 0,
@@ -515,7 +546,7 @@ export const THEME_PRESETS: Record<ThemePresetKey, BookTheme> = {
 export const THEME_KEYS = Object.keys(THEME_PRESETS) as ThemePresetKey[];
 
 export function emptyOutline(): BookOutline {
-  return { chapters: [] };
+  return { abstract: "", author: "", chapters: [] };
 }
 
 export function createBlankBook(overrides: Partial<BookmakerBook> = {}): BookmakerBook {
@@ -543,6 +574,7 @@ export function createBlankBook(overrides: Partial<BookmakerBook> = {}): Bookmak
     audiobook: null,
     metadata: {},
     credits_spent: 0,
+    download_count: 0,
     created_at: now,
     updated_at: now,
     ...overrides,
@@ -735,14 +767,6 @@ export function coverPalette(book: Pick<BookmakerBook, "cover" | "theme" | "purp
       text: theme.palette.background,
     };
   return ensureCoverContrast(palette);
-}
-
-/** URL that safely returns the member to the book after buying credits. */
-export function purchaseUrl(bookId: string | null, kind: "packs" | "subscribe" = "packs"): string {
-  const base = kind === "subscribe" ? "/subscribe" : "/pricing";
-  const params = new URLSearchParams({ from: "bookmaker" });
-  if (bookId) params.set("book", bookId);
-  return `${base}?${params.toString()}`;
 }
 
 export function checkoutReturnUrl(bookId: string | null): string {

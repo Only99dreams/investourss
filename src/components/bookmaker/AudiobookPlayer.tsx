@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   Download,
   Headphones,
-  ListMusic,
   Loader2,
   Pause,
   Play,
@@ -16,10 +15,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   type AudiobookChapter,
+  type AudiobookFullFile,
   type BookmakerBook,
   audiobookVoiceLabel,
   formatDuration,
 } from "@/lib/bookmaker";
+import { resolveAudiobookUrls } from "@/lib/bookmakerApi";
 
 interface AudiobookPlayerProps {
   book: BookmakerBook;
@@ -28,7 +29,7 @@ interface AudiobookPlayerProps {
   progress?: { done: number; total: number };
   assembling?: boolean;
   error?: string | null;
-  onAssemble?: () => void;
+  onAssemble?: () => Promise<BookmakerBook | null>;
   onRegenerate?: () => void;
   onResume?: () => void;
   onStop?: () => void;
@@ -37,9 +38,9 @@ interface AudiobookPlayerProps {
 }
 
 /**
- * Chapter-by-chapter narration player. Audio is served straight from the
- * public storage bucket, so playback, seeking and downloads never need another
- * edge-function round trip.
+ * Chapter-by-chapter narration player. Narration lives in a private bucket, so
+ * the player signs the stored object paths for the owner and plays/downloads
+ * those short-lived links without another edge-function round trip.
  */
 export function AudiobookPlayer({
   book,
@@ -60,6 +61,7 @@ export function AudiobookPlayer({
   const [playing, setPlaying] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [downloadAllPending, setDownloadAllPending] = useState(false);
 
   const audiobook = book.audiobook ?? null;
   const chapters = useMemo<AudiobookChapter[]>(
@@ -74,6 +76,27 @@ export function AudiobookPlayer({
   const totalToNarrate = progress?.total ?? writtenChapters.length;
   const done = progress?.done ?? chapters.length;
   const percent = totalToNarrate > 0 ? Math.min(100, Math.round((done / totalToNarrate) * 100)) : 0;
+
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let alive = true;
+    if (!audiobook) {
+      setSignedUrls({});
+      return;
+    }
+    void resolveAudiobookUrls(audiobook).then((urls) => {
+      if (alive) setSignedUrls(urls);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [audiobook]);
+
+  const sourceFor = (entry: AudiobookChapter | AudiobookFullFile | null | undefined) => {
+    if (!entry) return "";
+    return (entry.path ? signedUrls[entry.path] : "") || entry.url || "";
+  };
 
   // Stop playback when the selected source disappears (e.g. the user starts a
   // new narration pass and the old files are replaced).
@@ -97,6 +120,12 @@ export function AudiobookPlayer({
     if (!element) return;
     setPlaybackError(null);
 
+    const source = sourceFor(chapter);
+    if (!source) {
+      setPlaybackError("This chapter is still loading. Try again in a moment.");
+      return;
+    }
+
     if (activeNumber === Number(chapter.number)) {
       if (element.paused) {
         void element.play().catch(() => setPlaybackError("Your browser blocked playback. Tap play again."));
@@ -107,21 +136,22 @@ export function AudiobookPlayer({
     }
 
     setActiveNumber(Number(chapter.number));
-    element.src = chapter.url;
+    element.src = source;
     element.currentTime = 0;
     void element.play().catch(() => setPlaybackError("This audio could not start. Try downloading the chapter instead."));
   };
 
   const playFull = () => {
     const element = audioRef.current;
-    if (!element || !full?.url) return;
+    const source = sourceFor(full);
+    if (!element || !source) return;
     setPlaybackError(null);
     setActiveNumber(null);
-    if (element.src === full.url && !element.paused) {
+    if (element.src === source && !element.paused) {
       element.pause();
       return;
     }
-    element.src = full.url;
+    element.src = source;
     element.currentTime = 0;
     void element.play().catch(() => setPlaybackError("This file is too large to stream. Download it instead."));
   };
@@ -135,17 +165,18 @@ export function AudiobookPlayer({
     return `${slug}-${suffix}.wav`;
   };
 
-  // Public storage URLs are cross-origin, so the `download` attribute alone is
+  // Signed storage links are cross-origin, so the `download` attribute alone is
   // ignored by some browsers. Fetch a blob when the file is a manageable size
   // and fall back to opening the file when it is too large for memory.
-  const saveAudio = async (url: string, name: string, bytes?: number) => {
+  const saveAudio = async (source: string, name: string, bytes?: number) => {
+    if (!source) return;
     if ((bytes ?? 0) > 40 * 1024 * 1024) {
-      window.open(url, "_blank", "noopener");
+      window.open(source, "_blank", "noopener");
       return;
     }
     setDownloading(name);
     try {
-      const response = await fetch(url);
+      const response = await fetch(source);
       if (!response.ok) throw new Error("Download failed");
       const blob = await response.blob();
       const href = URL.createObjectURL(blob);
@@ -157,9 +188,32 @@ export function AudiobookPlayer({
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(href), 4000);
     } catch {
-      window.open(url, "_blank", "noopener");
+      window.open(source, "_blank", "noopener");
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const downloadAll = async () => {
+    const fullSource = sourceFor(full);
+    if (fullSource) {
+      await saveAudio(fullSource, downloadName("full"), full?.bytes);
+      return;
+    }
+    if (!onAssemble || assembling || busy || downloadAllPending) return;
+    setDownloadAllPending(true);
+    try {
+      const updated = await onAssemble();
+      const combined = updated?.audiobook?.full;
+      if (!combined) return;
+      // The combined file was just written, so sign it directly instead of
+      // waiting for the parent to hand back a refreshed book.
+      const combinedSource = combined.path
+        ? (await resolveAudiobookUrls({ full: combined }))[combined.path] ?? combined.url ?? ""
+        : combined.url ?? "";
+      await saveAudio(combinedSource, downloadName("full"), combined.bytes);
+    } finally {
+      setDownloadAllPending(false);
     }
   };
 
@@ -226,7 +280,7 @@ export function AudiobookPlayer({
 
       {chapters.length > 0 ? (
         <div className="space-y-2">
-          {full?.url ? (
+          {full ? (
             <div className="flex flex-col gap-2 rounded-xl border border-primary/25 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">Complete audiobook</p>
@@ -235,13 +289,13 @@ export function AudiobookPlayer({
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={playFull} className="gap-1.5">
+                <Button size="sm" variant="outline" onClick={playFull} disabled={!sourceFor(full)} className="gap-1.5">
                   <Play className="h-3.5 w-3.5" /> Play
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => void saveAudio(full.url, downloadName("full"), full.bytes)}
-                  disabled={downloading === downloadName("full")}
+                  onClick={() => void saveAudio(sourceFor(full), downloadName("full"), full.bytes)}
+                  disabled={!sourceFor(full) || downloading === downloadName("full")}
                   className="gap-1.5"
                 >
                   {downloading === downloadName("full") ? (
@@ -258,9 +312,10 @@ export function AudiobookPlayer({
           <div className="space-y-1.5">
             {chapters.map((chapter) => {
               const isActive = Number(chapter.number) === activeNumber;
+              const source = sourceFor(chapter);
               return (
                 <div
-                  key={`${chapter.number}-${chapter.updatedAt ?? chapter.url}`}
+                  key={`${chapter.number}-${chapter.updatedAt ?? chapter.path ?? chapter.url}`}
                   className={cn(
                     "flex items-center gap-2 rounded-xl border p-2.5 transition-colors",
                     isActive ? "border-primary/40 bg-primary/5" : "border-border",
@@ -289,8 +344,8 @@ export function AudiobookPlayer({
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => void saveAudio(chapter.url, downloadName(`chapter-${chapter.number}`), chapter.bytes)}
-                      disabled={downloading === downloadName(`chapter-${chapter.number}`)}
+                      onClick={() => void saveAudio(source, downloadName(`chapter-${chapter.number}`), chapter.bytes)}
+                      disabled={!source || downloading === downloadName(`chapter-${chapter.number}`)}
                       className="h-8 w-8 shrink-0"
                       aria-label={`Download chapter ${chapter.number}`}
                     >
@@ -307,16 +362,20 @@ export function AudiobookPlayer({
           </div>
 
           <div className="flex flex-col gap-2 pt-1 sm:flex-row">
-            {!full?.url && onAssemble ? (
+            {!full && onAssemble ? (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={onAssemble}
-                disabled={assembling || busy}
+                onClick={() => void downloadAll()}
+                disabled={assembling || busy || downloadAllPending}
                 className="flex-1 gap-1.5"
               >
-                {assembling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ListMusic className="h-3.5 w-3.5" />}
-                Combine into one WAV
+                {assembling || downloadAllPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                Download all chapters
               </Button>
             ) : null}
             {status === "generating" && onResume && !busy ? (

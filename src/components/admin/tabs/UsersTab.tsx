@@ -39,6 +39,37 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
+function subscriptionExpiry(value?: string | null): { text: string; tone: "normal" | "soon" | "expired" | "none" } {
+  if (!value) return { text: "—", tone: "none" };
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return { text: "—", tone: "none" };
+  const days = Math.ceil((date.getTime() - Date.now()) / 86_400_000);
+  const formatted = date.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
+  if (days < 0) return { text: `Expired ${formatted}`, tone: "expired" };
+  if (days === 0) return { text: `Expires today · ${formatted}`, tone: "soon" };
+  if (days <= 7) return { text: `${formatted} · ${days}d left`, tone: "soon" };
+  return { text: formatted, tone: "normal" };
+}
+
+function ExpiryCell({ value }: { value?: string | null }) {
+  const { text, tone } = subscriptionExpiry(value);
+  return (
+    <span
+      className={
+        tone === "expired"
+          ? "font-medium text-destructive"
+          : tone === "soon"
+            ? "font-medium text-amber-700"
+            : tone === "none"
+              ? "text-muted-foreground"
+              : ""
+      }
+    >
+      {text}
+    </span>
+  );
+}
+
 const UsersTab = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [users, setUsers] = useState<any[]>([]);
@@ -72,6 +103,7 @@ const UsersTab = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
   const [walletLoading, setWalletLoading] = useState(false);
+  const [creditMap, setCreditMap] = useState<Record<string, number>>({});
 
   const formatNaira = (value: number) =>
     `₦${Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -178,6 +210,31 @@ const UsersTab = () => {
         map[p.id] = p.full_name || p.email || p.id;
       });
       setReferrerMap(map);
+
+      // AI credits are split between subscription allowances and top-up packs.
+      const [{ data: packs }, { data: grants }] = await Promise.all([
+        supabase
+          .from("user_credit_packs")
+          .select("user_id, credits_remaining, status, expires_at"),
+        supabase
+          .from("bookmaker_subscription_credits")
+          .select("user_id, credits_granted, credits_used, period_end"),
+      ]);
+
+      const now = Date.now();
+      const credits: Record<string, number> = {};
+      (packs || []).forEach((pack) => {
+        if (pack.status !== "active") return;
+        if (pack.expires_at && new Date(pack.expires_at).getTime() <= now) return;
+        credits[pack.user_id] = (credits[pack.user_id] || 0) + (pack.credits_remaining || 0);
+      });
+      (grants || []).forEach((grant) => {
+        if (!grant.period_end || new Date(grant.period_end).getTime() <= now) return;
+        credits[grant.user_id] =
+          (credits[grant.user_id] || 0) +
+          Math.max((grant.credits_granted || 0) - (grant.credits_used || 0), 0);
+      });
+      setCreditMap(credits);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error("Error fetching users:", error);
@@ -275,6 +332,8 @@ const UsersTab = () => {
                   <TableHead>Type</TableHead>
                   <TableHead>Tier</TableHead>
                   <TableHead>Access</TableHead>
+                  <TableHead>Credits</TableHead>
+                  <TableHead>Subscription ends</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -283,7 +342,7 @@ const UsersTab = () => {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center h-24">
+                    <TableCell colSpan={12} className="text-center h-24">
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -312,6 +371,10 @@ const UsersTab = () => {
                         <Badge variant="outline" className="capitalize">
                           {user.user_tier === "free" ? "Free" : (user.subscription_type || "monthly")}
                         </Badge>
+                      </TableCell>
+                      <TableCell>{creditMap[user.id] ?? user.audit_credits ?? 0}</TableCell>
+                      <TableCell>
+                        <ExpiryCell value={user.subscription_expires_at} />
                       </TableCell>
                       <TableCell>
                         <Badge

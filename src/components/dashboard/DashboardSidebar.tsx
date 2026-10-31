@@ -39,6 +39,24 @@ export function DashboardSidebar() {
   const { profile, signOut, isAdmin } = useAuth();
   const [payg, setPayg] = useState<{ label: string; credits: number } | null>(null);
 
+  const expiryDate = profile?.subscription_expires_at ? new Date(profile.subscription_expires_at) : null;
+  const daysLeft = expiryDate ? Math.ceil((expiryDate.getTime() - Date.now()) / 86_400_000) : null;
+  const showSubscription = Boolean(
+    profile && (profile.has_active_subscription || profile.user_tier !== "free" || profile.subscription_expires_at),
+  );
+  const planLabel = profile?.subscription_type
+    ? profile.subscription_type.replace(/_/g, " ")
+    : profile?.user_tier === "free"
+      ? "Free"
+      : "Premium";
+  const expiryLabel = expiryDate
+    ? daysLeft !== null && daysLeft < 0
+      ? `Expired ${expiryDate.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}`
+      : `Ends ${expiryDate.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}${
+          daysLeft === 0 ? " (today)" : daysLeft !== null ? ` · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : ""
+        }`
+    : "Active subscription";
+
   // Pay-as-you-go status: which credit pack tier the member holds and how
   // many credits remain, surfaced next to their current plan.
   useEffect(() => {
@@ -97,6 +115,14 @@ export function DashboardSidebar() {
             )}>
               {profile?.user_tier?.toUpperCase() || "FREE"}
             </span>
+            {showSubscription ? (
+              <div className="mt-2 rounded-md border border-border bg-muted/40 px-2 py-1.5 text-[11px] leading-snug">
+                <p className="font-medium capitalize text-foreground">{planLabel} plan</p>
+                <p className={daysLeft !== null && daysLeft <= 7 ? "text-amber-700" : "text-muted-foreground"}>
+                  {expiryLabel}
+                </p>
+              </div>
+            ) : null}
             {payg && (
               <div className="mt-2 text-xs text-muted-foreground">
                 <p>

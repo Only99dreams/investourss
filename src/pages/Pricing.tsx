@@ -270,7 +270,7 @@ const Pricing = () => {
                   <ul className="space-y-2 pt-2">
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                      <span className="text-sm">Spend credits on AI Financial Audits, Scam Detector scans &amp; Bookmaker ebooks</span>
+                      <span className="text-sm">Spend credits on AI Financial Audits, Scam Detector scans, Bookmaker ebooks &amp; audiobook narration</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
@@ -324,6 +324,7 @@ const Pricing = () => {
                           <span className="text-2xl font-bold text-foreground">₦7,650</span>
                           <span className="text-sm text-muted-foreground"> / month</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
+                          <div className="text-xs text-primary font-medium">2 ebooks / month</div>
                         </div>
                       </div>
                       <Link to={subscribeHref("premium-monthly")}>
@@ -343,6 +344,7 @@ const Pricing = () => {
                           <span className="text-2xl font-bold text-foreground">₦20,400</span>
                           <span className="text-sm text-muted-foreground"> / 3 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
+                          <div className="text-xs text-primary font-medium">6 ebooks / quarter</div>
                         </div>
                       </div>
                       <Link to={subscribeHref("premium-quarterly")}>
@@ -362,6 +364,7 @@ const Pricing = () => {
                           <span className="text-2xl font-bold text-foreground">₦38,250</span>
                           <span className="text-sm text-muted-foreground"> / 6 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
+                          <div className="text-xs text-primary font-medium">12 ebooks / 6 months</div>
                         </div>
                       </div>
                       <Link to={subscribeHref("premium-biennial")}>
@@ -381,6 +384,7 @@ const Pricing = () => {
                           <span className="text-2xl font-bold text-foreground">₦76,500</span>
                           <span className="text-sm text-muted-foreground"> / year</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
+                          <div className="text-xs text-primary font-medium">24 ebooks / year</div>
                         </div>
                       </div>
                       <Link to={subscribeHref("premium-annual")}>
@@ -400,6 +404,7 @@ const Pricing = () => {
                           <span className="text-2xl font-bold text-foreground">₦360,000</span>
                           <span className="text-sm text-muted-foreground"> / 3 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
+                          <div className="text-xs text-primary font-medium">6 ebooks / quarter for your team</div>
                         </div>
                       </div>
                       <Button
@@ -468,6 +473,9 @@ const Pricing = () => {
             </motion.div>
           </motion.div>
         </div>
+        <p className="mt-8 text-center text-xs text-muted-foreground">
+          Plan allowances cover ebook creation only. Audiobook narration is paid with platform credits from a credit pack.
+        </p>
       </section>
 
       {/* Institutional Access */}

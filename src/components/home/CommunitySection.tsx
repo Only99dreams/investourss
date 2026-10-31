@@ -12,9 +12,15 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn, generateVideoThumbnail, updateShareOGTags } from "@/lib/utils";
-import { postShareText } from "@/lib/share";
-import { parseVideoLink } from "@/lib/video";
+import { postShareText, isAiwcCategory } from "@/lib/share";
+import { parseVideoLink, isHttpUrl, isPdfUrl, attachmentThumbnail } from "@/lib/video";
 import { attachThumbnailToUpload, backfillVideoThumbnail, storedThumbnailFor } from "@/lib/videoThumbnail";
+import {
+  attachPdfThumbnailToUpload,
+  backfillPdfThumbnail,
+  generatePdfThumbnail,
+  storedPdfThumbnailFor,
+} from "@/lib/pdfThumbnail";
 import {
   buildShareUrl,
   castVote,
@@ -48,6 +54,7 @@ interface Post {
   shares_count: number;
   votes_count: number;
   author_id: string;
+  category: string | null;
   attachment_url: string | null;
   attachment_type: string | null;
   profiles?: {
@@ -67,6 +74,11 @@ interface Comment {
   };
 }
 
+const MAX_PDF_SIZE = 20 * 1024 * 1024;
+
+const isPdfFile = (file: File) =>
+  file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
 const CommunitySection = () => {
   const { user, profile, isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
@@ -85,15 +97,23 @@ const CommunitySection = () => {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [videoLink, setVideoLink] = useState("");
   const [linkPreview, setLinkPreview] = useState<string | null>(null);
+  // Ebook Track entries use the post's single attachment slot. These mirror the
+  // community page so a competition entry looks the same wherever it is filed.
+  const [ebookFile, setEbookFile] = useState<File | null>(null);
+  const [ebookLink, setEbookLink] = useState("");
+  const [ebookPreview, setEbookPreview] = useState<string | null>(null);
+  const [ebookPreviewLoading, setEbookPreviewLoading] = useState(false);
   // This composer used to hardcode 'finance', so every post made from the home
   // page landed in Finance no matter what it was about.
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [categoryStillEnum, setCategoryStillEnum] = useState(false);
   const [newPostCategory, setNewPostCategory] = useState<string>("general");
   const [videoThumbnails, setVideoThumbnails] = useState<Record<string, string>>({});
+  const [pdfThumbnails, setPdfThumbnails] = useState<Record<string, string>>({});
   // One poster lookup per post, ever, so changing thumbnails does not re-HEAD
   // every video on the page.
   const posterChecks = useRef<Set<string>>(new Set());
+  const pdfChecks = useRef<Set<string>>(new Set());
   const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set());
   const [votingPower, setVotingPower] = useState<VotingPower | null>(null);
   const [myVotes, setMyVotes] = useState<Record<string, number>>({});
@@ -107,6 +127,13 @@ const CommunitySection = () => {
    * whatever the user picks is always storable. Mirrors the community page.
    */
   const activeCategories = categoryStillEnum ? LEGACY_ENUM_CATEGORIES : categories;
+
+  // The Ebook Track only applies to the Creativity & Enterprise Challenge
+  // categories, so its PDF field stays out of ordinary posts. Match the label as
+  // well as the slug: an admin may file the challenge under a custom name.
+  const selectedCategoryLabel = activeCategories.find((c) => c.name === newPostCategory)?.label;
+  const showEbookEntry =
+    isAiwcCategory(newPostCategory) || isAiwcCategory(selectedCategoryLabel);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,10 +168,17 @@ const CommunitySection = () => {
       const post = posts.find((p) => p.id === postId);
       if (post) {
         const shareUrl = buildShareUrl(postId);
+        const sharePreview =
+          post.attachment_type === "image"
+            ? post.attachment_url
+            : videoThumbnails[post.id] ??
+              pdfThumbnails[post.id] ??
+              attachmentThumbnail(post.attachment_url, post.attachment_type) ??
+              undefined;
         updateShareOGTags({
           title: `${post.profiles?.full_name || "Investours Member"} shared a post`,
           description: post.content.substring(0, 200),
-          image: post.attachment_type === "image" ? post.attachment_url : undefined,
+          image: sharePreview,
           url: shareUrl,
         });
 
@@ -160,6 +194,7 @@ const CommunitySection = () => {
         }, 500);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, posts]);
 
   useEffect(() => {
@@ -197,11 +232,73 @@ const CommunitySection = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, user]);
 
+  // PDF entries get the same treatment as uploaded videos: prefer the preview
+  // stored beside the PDF, let the author backfill older entries, then fall back
+  // to rendering page one in the browser.
+  useEffect(() => {
+    posts.forEach((post) => {
+      const url = post.attachment_url;
+      const isPdfPost =
+        post.attachment_type === "pdf" ||
+        (post.attachment_type === "document" && isPdfUrl(url));
+      if (!isPdfPost || !url) return;
+      if (pdfThumbnails[post.id] || pdfChecks.current.has(post.id)) return;
+      pdfChecks.current.add(post.id);
+
+      void (async () => {
+        const stored = await storedPdfThumbnailFor(url);
+        if (stored) {
+          setPdfThumbnails((prev) => ({ ...prev, [post.id]: stored }));
+          return;
+        }
+
+        if (user && post.author_id === user.id) {
+          const backfilled = await backfillPdfThumbnail(url);
+          if (backfilled) {
+            setPdfThumbnails((prev) => ({ ...prev, [post.id]: backfilled }));
+            fetchPosts();
+            return;
+          }
+        }
+
+        const generated = await generatePdfThumbnail(url);
+        if (generated) setPdfThumbnails((prev) => ({ ...prev, [post.id]: generated }));
+      })();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts, user]);
+
+  // Debounced first-page render for a linked PDF, so typing a URL does not
+  // download the file once per keystroke.
+  useEffect(() => {
+    const link = ebookLink.trim();
+    if (!link || !isHttpUrl(link)) {
+      setEbookPreview(null);
+      setEbookPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setEbookPreviewLoading(true);
+    const timer = setTimeout(async () => {
+      const thumb = await generatePdfThumbnail(link);
+      if (!cancelled) {
+        setEbookPreview(thumb);
+        setEbookPreviewLoading(false);
+      }
+    }, 700);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [ebookLink]);
+
   const fetchPosts = async () => {
     try {
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
-        .select('id, content, created_at, likes_count, comments_count, shares_count, votes_count, author_id, attachment_url, attachment_type')
+        .select('id, content, created_at, likes_count, comments_count, shares_count, votes_count, author_id, category, attachment_url, attachment_type')
         .eq('is_approved', true)
         .eq('is_hidden', false)
         .order('created_at', { ascending: false })
@@ -352,25 +449,72 @@ const CommunitySection = () => {
     if (!file) return;
     const isImage = file.type.startsWith("image/");
     const isVideo = file.type.startsWith("video/");
-    const maxSize = isVideo ? 5 * 1024 * 1024 : isImage ? 3 * 1024 * 1024 : 10 * 1024 * 1024;
-    const label = isVideo ? "Videos" : isImage ? "Images" : "Files";
+    const pdf = isPdfFile(file);
+    const maxSize = isVideo
+      ? 5 * 1024 * 1024
+      : isImage
+        ? 3 * 1024 * 1024
+        : pdf
+          ? MAX_PDF_SIZE
+          : 10 * 1024 * 1024;
+    const label = isVideo ? "Videos" : isImage ? "Images" : pdf ? "PDFs" : "Files";
     if (file.size > maxSize) {
       toast({ title: "File too large", description: `${label} must be under ${(maxSize / 1024 / 1024).toFixed(0)}MB`, variant: "destructive" });
       return;
     }
+    // An ordinary attachment and an Ebook Track PDF share one media slot.
+    setEbookFile(null);
+    setEbookLink("");
+    setEbookPreview(null);
     setSelectedFile(file);
-    if (file.type.startsWith("image/")) {
+    if (isImage) {
       const reader = new FileReader();
       reader.onload = (ev) => setFilePreview(ev.target?.result as string);
       reader.readAsDataURL(file);
-    } else if (file.type.startsWith("video/")) {
+    } else if (isVideo) {
       const objectUrl = URL.createObjectURL(file);
       const thumb = await generateVideoThumbnail(objectUrl);
       setFilePreview(thumb);
       URL.revokeObjectURL(objectUrl);
+    } else if (pdf) {
+      setFilePreview(await generatePdfThumbnail(file));
     } else {
       setFilePreview(null);
     }
+  };
+
+  const handleEbookFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!isPdfFile(file)) {
+      toast({
+        title: "PDF required",
+        description: "Ebook Track entries must be uploaded as a PDF.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > MAX_PDF_SIZE) {
+      toast({
+        title: "File too large",
+        description: `PDFs must be under ${(MAX_PDF_SIZE / 1024 / 1024).toFixed(0)}MB`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setEbookFile(file);
+    setEbookLink("");
+    setSelectedFile(null);
+    setFilePreview(null);
+    setVideoLink("");
+    setLinkPreview(null);
+    setEbookPreview(null);
+    setEbookPreviewLoading(true);
+    setEbookPreview(await generatePdfThumbnail(file));
+    setEbookPreviewLoading(false);
   };
 
   const handlePost = async () => {
@@ -394,15 +538,58 @@ const CommunitySection = () => {
       let attachmentUrl = null;
       let attachmentType = null;
 
+      const ebookEnabled =
+        isAiwcCategory(newPostCategory) ||
+        isAiwcCategory(activeCategories.find((c) => c.name === newPostCategory)?.label);
+      const ebookLinkValue = ebookEnabled ? ebookLink.trim() : "";
+      const ebookFileValue = ebookEnabled ? ebookFile : null;
+
+      if (ebookLinkValue && !isHttpUrl(ebookLinkValue)) {
+        toast({
+          title: "Unrecognised PDF link",
+          description: "Paste a direct link to your ebook PDF (https://...).",
+          variant: "destructive",
+        });
+        setIsPosting(false);
+        return;
+      }
+
       if (linkedVideo) {
         attachmentUrl = linkedVideo.url;
         attachmentType = "video";
+      } else if (ebookFileValue) {
+        try {
+          const filePath = `${user.id}/ebook-entries/${Date.now()}.pdf`;
+          const { data, error: uploadError } = await supabase.storage
+            .from("attachments")
+            .upload(filePath, ebookFileValue, { cacheControl: "3600", upsert: false });
+          if (uploadError) throw uploadError;
+          if (data) {
+            const { data: { publicUrl } } = supabase.storage.from("attachments").getPublicUrl(filePath);
+            attachmentUrl = publicUrl;
+            attachmentType = "pdf";
+            await attachPdfThumbnailToUpload(ebookFileValue, filePath);
+          }
+        } catch (uploadError) {
+          console.error("Ebook upload error:", uploadError);
+          toast({
+            title: "Ebook upload failed",
+            description: "Your PDF could not be uploaded. Please try again.",
+            variant: "destructive",
+          });
+          setIsPosting(false);
+          return;
+        }
+      } else if (ebookLinkValue) {
+        attachmentUrl = ebookLinkValue;
+        attachmentType = "pdf";
       } else if (selectedFile) {
         try {
           const fileExt = selectedFile.name.split(".").pop();
           const filePath = `${user.id}/post-attachments/${Date.now()}.${fileExt}`;
           if (selectedFile.type.startsWith("image/")) attachmentType = "image";
           else if (selectedFile.type.startsWith("video/")) attachmentType = "video";
+          else if (isPdfFile(selectedFile)) attachmentType = "pdf";
           else attachmentType = "document";
 
           const { data, error: uploadError } = await supabase.storage
@@ -414,10 +601,12 @@ const CommunitySection = () => {
             attachmentUrl = publicUrl;
 
             // An uploaded file has no poster frame the way a YouTube link does.
-            // Capture one now and store it beside the video, otherwise this post
-            // shares with a generic image forever.
+            // Capture one now and store it beside the video or PDF, otherwise
+            // this post shares with a generic image forever.
             if (attachmentType === "video") {
               await attachThumbnailToUpload(selectedFile, filePath);
+            } else if (attachmentType === "pdf") {
+              await attachPdfThumbnailToUpload(selectedFile, filePath);
             }
           }
         } catch (uploadError) {
@@ -486,6 +675,10 @@ const CommunitySection = () => {
       setFilePreview(null);
       setVideoLink("");
       setLinkPreview(null);
+      setEbookFile(null);
+      setEbookLink("");
+      setEbookPreview(null);
+      setEbookPreviewLoading(false);
       fetchPosts();
     } catch (error) {
       console.error("Error posting:", error);
@@ -833,6 +1026,8 @@ const CommunitySection = () => {
                         <div className="relative rounded-lg overflow-hidden border">
                           {selectedFile?.type.startsWith("image/") ? (
                             <img src={filePreview} alt="Preview" className="w-full max-h-40 object-cover" />
+                          ) : selectedFile && isPdfFile(selectedFile) ? (
+                            <img src={filePreview} alt="PDF preview" className="w-full max-h-40 bg-white object-contain" />
                           ) : (
                             <div className="relative">
                               <img src={filePreview} alt="Video preview" className="w-full max-h-40 object-cover" />
@@ -866,9 +1061,12 @@ const CommunitySection = () => {
                             if (value.trim()) {
                               setSelectedFile(null);
                               setFilePreview(null);
+                              setEbookFile(null);
+                              setEbookLink("");
+                              setEbookPreview(null);
                             }
                           }}
-                          disabled={isPosting}
+                          disabled={isPosting || Boolean(ebookFile) || Boolean(ebookLink.trim())}
                           className="text-sm"
                         />
                         {videoLink.trim() && !parseVideoLink(videoLink.trim()) && (
@@ -900,19 +1098,116 @@ const CommunitySection = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                      {showEbookEntry && (
+                        <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-2.5">
+                          <div>
+                            <p className="text-xs font-medium text-foreground">
+                              Ebook Track entry (PDF){" "}
+                              <span className="font-normal text-muted-foreground">(optional)</span>
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              For the Creativity &amp; Enterprise Challenge. Upload your ebook as a PDF or
+                              paste a direct link — the first page becomes the post thumbnail.
+                            </p>
+                          </div>
+                          <Input
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            onChange={handleEbookFileSelect}
+                            disabled={isPosting || Boolean(videoLink.trim())}
+                            className="h-8 cursor-pointer text-xs"
+                          />
+                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <span className="h-px flex-1 bg-border" />
+                            or paste a PDF link
+                            <span className="h-px flex-1 bg-border" />
+                          </div>
+                          <Input
+                            type="url"
+                            inputMode="url"
+                            placeholder="https://.../my-ebook.pdf"
+                            value={ebookLink}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setEbookLink(value);
+                              setEbookPreview(null);
+                              if (value.trim()) {
+                                setEbookFile(null);
+                                setSelectedFile(null);
+                                setFilePreview(null);
+                                setVideoLink("");
+                                setLinkPreview(null);
+                              }
+                            }}
+                            disabled={isPosting || Boolean(videoLink.trim())}
+                            className="text-sm"
+                          />
+                          {ebookLink.trim() && !isHttpUrl(ebookLink.trim()) && (
+                            <p className="text-xs text-destructive">
+                              That does not look like a PDF link yet.
+                            </p>
+                          )}
+                          {(ebookFile || ebookLink.trim()) && (
+                            <div className="flex gap-2 rounded border border-border bg-card p-2">
+                              <div className="h-16 w-12 shrink-0 overflow-hidden rounded border border-border bg-white">
+                                {ebookPreviewLoading ? (
+                                  <div className="flex h-full items-center justify-center text-[9px] text-muted-foreground">
+                                    …
+                                  </div>
+                                ) : ebookPreview ? (
+                                  <img
+                                    src={ebookPreview}
+                                    alt="Ebook PDF preview"
+                                    className="h-full w-full object-cover object-top"
+                                  />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-muted-foreground">
+                                    <FileText className="h-4 w-4" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-medium">
+                                  {ebookFile ? ebookFile.name : "Linked PDF"}
+                                </p>
+                                <p className="truncate text-[11px] text-muted-foreground">
+                                  {ebookFile
+                                    ? `${(ebookFile.size / 1024 / 1024).toFixed(2)} MB`
+                                    : ebookLink.trim()}
+                                </p>
+                                <button
+                                  type="button"
+                                  className="mt-0.5 text-[11px] font-medium text-destructive hover:underline"
+                                  onClick={() => {
+                                    setEbookFile(null);
+                                    setEbookLink("");
+                                    setEbookPreview(null);
+                                    setEbookPreviewLoading(false);
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          <p className="text-[11px] text-muted-foreground">
+                            PDF only, up to 20MB. Replaces any other attachment.
+                          </p>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center">
                         <label className="cursor-pointer">
                           <input
                             type="file"
-                            accept="image/*,video/*"
+                            accept="image/*,video/*,.pdf"
                             className="hidden"
                             onChange={handleFileSelect}
-                            disabled={isPosting || Boolean(videoLink.trim())}
+                            disabled={isPosting || Boolean(videoLink.trim()) || Boolean(ebookFile) || Boolean(ebookLink.trim())}
                           />
                           <Button variant="ghost" size="sm" asChild>
                             <span>
                               <Image className="w-4 h-4 mr-2" />
-                              Photo/Video
+                              Photo/Video/PDF
                             </span>
                           </Button>
                         </label>
@@ -1066,7 +1361,43 @@ const CommunitySection = () => {
                               </div>
                             );
                           })()}
-                          {post.attachment_url && post.attachment_type === "document" && (
+                          {post.attachment_url && (post.attachment_type === "pdf" || (post.attachment_type === "document" && isPdfUrl(post.attachment_url))) && (
+                            <a
+                              href={post.attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group mb-3 flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/40 p-2 transition-colors hover:border-primary/40"
+                            >
+                              <div className="relative h-24 w-20 shrink-0 overflow-hidden rounded border border-border bg-white">
+                                {pdfThumbnails[post.id] ? (
+                                  <img
+                                    src={pdfThumbnails[post.id]}
+                                    alt="Ebook PDF preview"
+                                    className="h-full w-full object-cover object-top"
+                                  />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-muted-foreground">
+                                    <FileText className="h-6 w-6" />
+                                  </div>
+                                )}
+                                <span className="absolute left-1 top-1 rounded bg-primary px-1 py-0.5 text-[9px] font-bold uppercase text-primary-foreground">
+                                  PDF
+                                </span>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-foreground">
+                                  {post.category && isAiwcCategory(post.category) ? "Ebook entry (PDF)" : "PDF document"}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Open the PDF to read the full {post.category && isAiwcCategory(post.category) ? "entry" : "document"}.
+                                </p>
+                                <span className="mt-1 inline-block text-xs font-medium text-primary group-hover:underline">
+                                  Open PDF
+                                </span>
+                              </div>
+                            </a>
+                          )}
+                          {post.attachment_url && post.attachment_type === "document" && !isPdfUrl(post.attachment_url) && (
                             <div className="mb-3 p-2 bg-muted rounded-lg flex items-center gap-2">
                               <FileText className="w-5 h-5 text-primary" />
                               <a href={post.attachment_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
