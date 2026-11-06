@@ -244,12 +244,12 @@ const AuditorLanding = () => {
                 </p>
                 <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
                   Partner with Investours to bring AI financial health tools to your clients,
-                  members or community. Earn 40% first-time commission and 20% recurring
+                  members or community. Earn 30% first-time commission and 20% recurring
                   commission from active subscriptions, plus quarterly rewards as your
                   portfolio grows.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-primary" /> 40% first-time commission</span>
+                  <span className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-primary" /> 30% first-time commission</span>
                   <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5 text-primary" /> 20% recurring commission</span>
                   <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-primary" /> Quarterly rewards</span>
                 </div>

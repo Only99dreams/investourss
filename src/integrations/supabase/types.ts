@@ -1766,6 +1766,12 @@ export type Database = {
         Args: Record<string, never>
         Returns: string
       }
+      expire_lapsed_subscription: {
+        Args: {
+          p_user_id?: string
+        }
+        Returns: boolean
+      }
       process_deposit_request: {
         Args: {
           request_id: string

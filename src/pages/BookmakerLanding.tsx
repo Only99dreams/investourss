@@ -138,7 +138,7 @@ const BookmakerLanding = () => {
               <BookOpen className="h-3 w-3 text-primary" /> BookMaker AI by Investours
             </Badge>
             <h1 className="mb-3 text-balance text-[1.75rem] font-bold leading-[1.12] text-foreground sm:mb-4 sm:text-4xl sm:leading-tight md:text-6xl">
-              Turn Your Knowledge Into <span className="text-primary">Digital Income</span>
+              Investours: Turn Your Knowledge, Ideas &amp; Skills Into <span className="text-primary">Digital Income</span>
             </h1>
             <p className="mb-2 text-base font-medium text-primary sm:mb-3 sm:text-xl">
               Create your first ebook in minutes!
@@ -160,7 +160,13 @@ const BookmakerLanding = () => {
                 variant="outline"
                 className="h-auto min-h-14 w-full whitespace-normal px-4 py-3 text-center text-base leading-snug sm:w-auto sm:px-6 sm:text-lg"
               >
-                <Link to="/ambassador">Enterprise Partners Program</Link>
+                {isHomeRoute ? (
+                  <a href="https://competition.investours.app/" target="_blank" rel="noopener noreferrer">
+                    Creativity &amp; Enterprise Challenge
+                  </a>
+                ) : (
+                  <Link to="/ambassador">Enterprise Partners Program</Link>
+                )}
               </Button>
               <Button
                 size="xl"

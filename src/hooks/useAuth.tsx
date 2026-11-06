@@ -55,15 +55,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
+    const loadProfile = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (!error && data) {
-      setProfile(data as Profile);
+      return !error && data ? (data as Profile) : null;
+    };
+
+    let data = await loadProfile();
+    if (!data) return;
+
+    // A plan that has passed its expiry must fall back to FREE. The database
+    // RPC is idempotent, so checking here keeps the account label and plan
+    // metadata from lingering after the subscription ends.
+    const expiresAt = data.subscription_expires_at
+      ? new Date(data.subscription_expires_at).getTime()
+      : null;
+    const lapsed = expiresAt !== null && expiresAt <= Date.now();
+    const stillShowingPaid =
+      data.user_tier !== 'free' || data.has_active_subscription || data.subscription_type !== null;
+
+    if (lapsed && stillShowingPaid) {
+      const { data: expired, error } = await supabase.rpc('expire_lapsed_subscription');
+      if (!error && expired) {
+        data = (await loadProfile()) ?? data;
+      }
     }
+
+    setProfile(data);
   };
 
   const fetchRoles = async (userId: string) => {
