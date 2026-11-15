@@ -491,7 +491,7 @@ function renderTable(block: Extract<Block, { type: "table" }>, theme: BookTheme)
           .join("")}</tr>`,
     )
     .join("");
-  return `<div style="margin:22px 0;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="width:100%;max-width:100%;border-collapse:collapse;table-layout:auto;page-break-inside:auto;"><thead>${headers ? `<tr>${headers}</tr>` : ""}</thead><tbody>${rows}</tbody></table></div>`;
+  return `<div style="margin:22px 0;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="width:100%;max-width:100%;border-collapse:collapse;table-layout:fixed;page-break-inside:auto;"><thead>${headers ? `<tr>${headers}</tr>` : ""}</thead><tbody>${rows}</tbody></table></div>`;
 }
 
 export function renderBlocksToHtml(blocks: Block[], theme: BookTheme): string {

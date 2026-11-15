@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
+  ArrowRight,
   BookOpen,
   Check,
   CheckCircle2,
@@ -11,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { type BookmakerBook, bookWordCount, resolveTheme, wordCount } from "@/lib/bookmaker";
 import { findVisualBlocks, renderChapterHtml } from "@/lib/bookmakerMarkup";
@@ -101,8 +104,53 @@ export function BookPreview({
       </div>
 
       <div className="grid lg:grid-cols-[230px_minmax(0,1fr)]">
-        <aside className="border-b border-border bg-muted/20 lg:max-h-[78vh] lg:overflow-y-auto lg:border-b-0 lg:border-r">
-          <div className="flex gap-1 overflow-x-auto p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:block">
+        <aside className="border-b border-border bg-muted/20 p-2 lg:max-h-[78vh] lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-0">
+          {/* Phones get a picker and previous/next instead of a sideways strip,
+              so every chapter is reachable without a hidden horizontal scroll. */}
+          <div className="lg:hidden">
+            <Select value={String(resolvedActive)} onValueChange={(value) => selectChapter(Number(value))}>
+              <SelectTrigger className="h-9 w-full text-sm" aria-label="Choose a chapter">
+                <SelectValue placeholder="Choose a chapter" />
+              </SelectTrigger>
+              <SelectContent className="w-[var(--radix-select-trigger-width)] max-w-[calc(100vw_-_1.5rem)]">
+                {chapters.map((item, index) => (
+                  <SelectItem
+                    key={`${item.number}-${index}`}
+                    value={String(index)}
+                    className="[&>span:last-child]:min-w-0 [&>span:last-child]:truncate"
+                  >
+                    {index + 1}. {item.title || `Chapter ${index + 1}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0 gap-1"
+                disabled={resolvedActive <= 0}
+                onClick={() => selectChapter(resolvedActive - 1)}
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Prev
+              </Button>
+              <span className="min-w-0 flex-1 truncate text-center text-[11px] text-muted-foreground">
+                Chapter {resolvedActive + 1} of {chapters.length}
+                {isApproved ? " · approved" : ""}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 shrink-0 gap-1"
+                disabled={resolvedActive >= chapters.length - 1}
+                onClick={() => selectChapter(resolvedActive + 1)}
+              >
+                Next <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="hidden lg:block">
             {chapters.map((item, index) => {
               const approved = approvedChapters.includes(index);
               const active = index === resolvedActive;
@@ -111,7 +159,7 @@ export function BookPreview({
                   key={`${item.number}-${index}`}
                   onClick={() => selectChapter(index)}
                   className={cn(
-                    "flex w-[168px] shrink-0 items-start gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors lg:mb-1 lg:w-full",
+                    "flex w-full items-start gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors lg:mb-1",
                     active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:bg-card/70 hover:text-foreground",
                   )}
                 >
@@ -191,7 +239,7 @@ export function BookPreview({
               ) : null}
 
               <div className="min-w-0 overflow-x-hidden px-4 py-5 sm:px-5 sm:py-7 md:px-9 md:py-10">
-                <div className="break-words" dangerouslySetInnerHTML={{ __html: renderChapterHtml(chapter, theme, { showNumber: false }) }} />
+                <div className="book-manuscript break-words" dangerouslySetInnerHTML={{ __html: renderChapterHtml(chapter, theme, { showNumber: false }) }} />
               </div>
             </>
           ) : null}

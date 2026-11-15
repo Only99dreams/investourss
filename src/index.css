@@ -169,6 +169,31 @@
     @apply bg-card/80 backdrop-blur-md;
   }
 
+  /* The manuscript renderer emits inline styles shared with the print export,
+     so mobile fitting is enforced here instead of forking the markup. */
+  .book-manuscript {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
+  }
+
+  .book-manuscript img,
+  .book-manuscript svg {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  .book-manuscript table {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+  }
+
+  .book-manuscript pre {
+    white-space: pre-wrap !important;
+    overflow-x: hidden !important;
+  }
+
   .animate-fade-up {
     animation: fadeUp 0.6s ease-out forwards;
   }
