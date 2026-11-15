@@ -68,7 +68,7 @@ const Welcome = () => {
             transition={{ duration: 0.6, delay: 0.5 }}
             className="text-lg sm:text-xl md:text-2xl font-medium text-foreground mb-3 sm:mb-4 text-balance"
           >
-            Investours: Turn Your Knowledge, Ideas &amp; Skills Into Digital Income.
+            Turn Your Knowledge, Ideas &amp; Skills Into Digital Income.
           </motion.p>
 
           <motion.p

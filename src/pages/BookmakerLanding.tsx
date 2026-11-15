@@ -138,7 +138,7 @@ const BookmakerLanding = () => {
               <BookOpen className="h-3 w-3 text-primary" /> BookMaker AI by Investours
             </Badge>
             <h1 className="mb-3 text-balance text-[1.75rem] font-bold leading-[1.12] text-foreground sm:mb-4 sm:text-4xl sm:leading-tight md:text-6xl">
-              Investours: Turn Your Knowledge, Ideas &amp; Skills Into <span className="text-primary">Digital Income</span>
+              Turn Your Knowledge, Ideas &amp; Skills Into <span className="text-primary">Digital Income</span>
             </h1>
             <p className="mb-2 text-base font-medium text-primary sm:mb-3 sm:text-xl">
               Create your first ebook in minutes!
