@@ -16,8 +16,8 @@ interface CoverPreviewProps {
 
 /**
  * Cover preview used in the wizard and dashboard history.
- * Uploaded covers are rendered with `object-contain` so they are never cropped
- * or stretched, whatever aspect ratio the member uploaded.
+ * Uploads are stored already cropped to A5, so every cover is drawn at the A5
+ * ratio (148 × 210 mm) and fills the page edge to edge.
  */
 export function CoverPreview({ book, authorName, className, compact = false, side = "front" }: CoverPreviewProps) {
   const theme = resolveTheme(book);
@@ -63,14 +63,14 @@ export function CoverPreview({ book, authorName, className, compact = false, sid
     const label = side === "back" ? "Back cover" : "Cover";
     return (
       <div
-        className={cn("relative aspect-[2/3] overflow-hidden rounded-xl border border-border/60 bg-muted", className)}
+        className={cn("relative aspect-[148/210] overflow-hidden rounded-xl border border-border/60 bg-muted", className)}
         aria-label={`${label} of ${book.title || "your book"}`}
       >
         {coverUrl ? (
           <img
             src={coverUrl}
             alt={`${label} of ${book.title || "your book"}`}
-            className="absolute inset-0 h-full w-full object-contain"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <div className="absolute inset-0 animate-pulse bg-muted" aria-hidden="true" />
@@ -104,7 +104,7 @@ export function CoverPreview({ book, authorName, className, compact = false, sid
 
   return (
     <div
-      className={cn("relative aspect-[2/3] overflow-hidden rounded-xl border border-black/5 shadow-md", className)}
+      className={cn("relative aspect-[148/210] overflow-hidden rounded-xl border border-black/5 shadow-md", className)}
       style={containerStyle}
       aria-label={`Cover of ${book.title || "your book"}`}
     >
@@ -253,7 +253,7 @@ function GeneratedBackCover({
 
   return (
     <div
-      className={cn("relative aspect-[2/3] overflow-hidden rounded-xl border border-black/5 shadow-md", className)}
+      className={cn("relative aspect-[148/210] overflow-hidden rounded-xl border border-black/5 shadow-md", className)}
       style={{ containerType: "inline-size", background: palette.background, color: palette.text }}
       aria-label={`Back cover of ${book.title || "your book"}`}
     >

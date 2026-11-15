@@ -13,6 +13,56 @@ const AUDIO_BUCKET = "bookmaker-audio";
 // Media buckets are private; links are re-signed well inside a normal session.
 const MEDIA_URL_TTL = 60 * 60 * 6;
 
+/** A5 at 300 DPI — the exact trim size of every exported book page. */
+const A5_COVER_WIDTH = 1748;
+const A5_COVER_HEIGHT = 2480;
+
+/**
+ * Re-frames any upload into the A5 trim: the image fills the page edge to edge
+ * and whatever falls outside the 148 × 210 mm ratio is trimmed evenly from the
+ * centre. Covers are stored already fitted, so the preview and the printed PDF
+ * show the same crop.
+ */
+async function fitCoverToA5(file: File): Promise<File> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("This image could not be read. Please try a JPG, PNG or WebP file.");
+  }
+
+  try {
+    const scale = Math.max(A5_COVER_WIDTH / bitmap.width, A5_COVER_HEIGHT / bitmap.height);
+    const drawWidth = bitmap.width * scale;
+    const drawHeight = bitmap.height * scale;
+    const canvas = document.createElement("canvas");
+    canvas.width = A5_COVER_WIDTH;
+    canvas.height = A5_COVER_HEIGHT;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This browser could not prepare the cover image.");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, A5_COVER_WIDTH, A5_COVER_HEIGHT);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(
+      bitmap,
+      (A5_COVER_WIDTH - drawWidth) / 2,
+      (A5_COVER_HEIGHT - drawHeight) / 2,
+      drawWidth,
+      drawHeight,
+    );
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.92),
+    );
+    if (!blob) throw new Error("This browser could not prepare the cover image.");
+    const base = file.name.replace(/\.[^.]+$/, "") || "cover";
+    return new File([blob], `${base}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+  } finally {
+    bitmap.close();
+  }
+}
+
 /** Fired after credits are bought so balance displays can refetch. */
 export const BOOKMAKER_CREDITS_CHANGED = "bookmaker:credits-changed";
 
@@ -354,12 +404,12 @@ export async function uploadBookCover(
     throw new Error("Cover images must be smaller than 8 MB.");
   }
 
-  const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `${userId}/${bookId}-${side}-${Date.now()}.${extension}`;
-  const { error } = await supabase.storage.from(COVER_BUCKET).upload(path, file, {
+  const fitted = await fitCoverToA5(file);
+  const path = `${userId}/${bookId}-${side}-${Date.now()}.jpg`;
+  const { error } = await supabase.storage.from(COVER_BUCKET).upload(path, fitted, {
     cacheControl: "3600",
     upsert: false,
-    contentType: file.type,
+    contentType: fitted.type,
   });
   if (error) throw error;
 

@@ -226,7 +226,7 @@ export function coverPageHtml(
   return `<section class="page cover-page" aria-label="Book cover">
     ${
       uploaded
-        ? `<div style="width:100%;height:100%;background:${theme.palette.surface};display:flex;align-items:center;justify-content:center;"><img src="${escapeHtml(coverUrl || cover.url)}" alt="${escapeHtml(book.title || "Book cover")}" style="width:100%;height:100%;object-fit:contain;display:block;" /></div>`
+        ? `<div style="width:100%;height:100%;background:${theme.palette.surface};"><img src="${escapeHtml(coverUrl || cover.url)}" alt="${escapeHtml(book.title || "Book cover")}" style="display:block;width:100%;height:100%;object-fit:cover;" /></div>`
         : generatedCoverArt(book, theme, authorName)
     }
   </section>`;
@@ -266,7 +266,7 @@ export function backCoverPageHtml(
   return `<section class="page cover-page back-cover-page" aria-label="Back cover">
     ${
       uploaded
-        ? `<div style="width:100%;height:100%;background:${theme.palette.surface};display:flex;align-items:center;justify-content:center;"><img src="${escapeHtml(backCoverUrl)}" alt="${escapeHtml(book.title || "Book")} back cover" style="width:100%;height:100%;object-fit:contain;display:block;" /></div>`
+        ? `<div style="width:100%;height:100%;background:${theme.palette.surface};"><img src="${escapeHtml(backCoverUrl)}" alt="${escapeHtml(book.title || "Book")} back cover" style="display:block;width:100%;height:100%;object-fit:cover;" /></div>`
         : generatedBackCoverArt(book, theme, authorName)
     }
   </section>`;

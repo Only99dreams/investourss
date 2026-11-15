@@ -88,7 +88,7 @@ function bodyParagraphs(body: string): string {
     .split(/\n{2,}/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => `<p style="margin:0 0 10px;">${renderInline(part).replace(/\n/g, "<br/>")}</p>`)
+    .map((part) => `<p style="margin:0 0 10px;${wrapText}">${renderInline(part).replace(/\n/g, "<br/>")}</p>`)
     .join("");
 }
 
@@ -352,6 +352,12 @@ function rgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+/**
+ * Long AI/URL/pasted strings must never push the manuscript wider than the
+ * phone screen, so every text node is allowed to break mid-word.
+ */
+const wrapText = "overflow-wrap:anywhere;word-break:break-word;";
+
 function svgWrap(width: number, height: number, body: string): string {
   return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" xmlns="http://www.w3.org/2000/svg" style="display:block;max-width:100%;height:auto;">${body}</svg>`;
 }
@@ -460,8 +466,8 @@ function renderCallout(block: Extract<Block, { type: "callout" }>, theme: BookTh
   const palette = theme.palette;
   const color = block.variant === "warning" ? "#b45309" : block.variant === "quote" ? palette.primary : palette.accent;
   const background = block.variant === "warning" ? "rgba(245,158,11,0.12)" : rgba(palette.surface, 0.75);
-  return `<aside style="margin:22px 0;padding:16px 18px;border-left:4px solid ${color};background:${background};border-radius:0 12px 12px 0;page-break-inside:avoid;">
-    <p style="margin:0 0 8px;font-family:${theme.headingFont};font-size:14px;font-weight:700;color:${color};letter-spacing:0.02em;">${escapeHtml(block.title)}</p>
+  return `<aside style="margin:22px 0;padding:16px 18px;border-left:4px solid ${color};background:${background};border-radius:0 12px 12px 0;page-break-inside:avoid;${wrapText}">
+    <p style="margin:0 0 8px;font-family:${theme.headingFont};font-size:14px;font-weight:700;color:${color};letter-spacing:0.02em;${wrapText}">${escapeHtml(block.title)}</p>
     <div style="margin:0;color:${palette.text};font-size:13.5px;line-height:1.65;">${bodyParagraphs(block.body)}</div>
   </aside>`;
 }
@@ -471,7 +477,7 @@ function renderTable(block: Extract<Block, { type: "table" }>, theme: BookTheme)
   const headers = block.headers
     .map(
       (cell) =>
-        `<th style="background:${palette.surface};border:1px solid ${rgba(palette.muted, 0.25)};padding:9px 11px;text-align:left;font-size:12px;color:${palette.text};font-weight:700;">${renderInline(cell)}</th>`,
+        `<th style="background:${palette.surface};border:1px solid ${rgba(palette.muted, 0.25)};padding:9px 11px;text-align:left;font-size:12px;color:${palette.text};font-weight:700;${wrapText}">${renderInline(cell)}</th>`,
     )
     .join("");
   const rows = block.rows
@@ -480,77 +486,79 @@ function renderTable(block: Extract<Block, { type: "table" }>, theme: BookTheme)
         `<tr>${row
           .map(
             (cell) =>
-              `<td style="border:1px solid ${rgba(palette.muted, 0.22)};padding:8px 11px;font-size:12px;line-height:1.5;color:${palette.text};vertical-align:top;">${renderInline(cell)}</td>`,
+              `<td style="border:1px solid ${rgba(palette.muted, 0.22)};padding:8px 11px;font-size:12px;line-height:1.5;color:${palette.text};vertical-align:top;${wrapText}">${renderInline(cell)}</td>`,
           )
           .join("")}</tr>`,
     )
     .join("");
-  return `<div style="margin:22px 0;overflow-x:auto;"><table style="width:100%;border-collapse:collapse;page-break-inside:auto;"><thead>${headers ? `<tr>${headers}</tr>` : ""}</thead><tbody>${rows}</tbody></table></div>`;
+  return `<div style="margin:22px 0;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;"><table style="width:100%;max-width:100%;border-collapse:collapse;table-layout:auto;page-break-inside:auto;"><thead>${headers ? `<tr>${headers}</tr>` : ""}</thead><tbody>${rows}</tbody></table></div>`;
 }
 
 export function renderBlocksToHtml(blocks: Block[], theme: BookTheme): string {
+  // Visuals scale down to the available width so a phone never has to scroll
+  // sideways inside the manuscript.
   const scrollableVisual = (html: string) =>
-    `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><div style="min-width:520px;">${html}</div></div>`;
+    `<div style="width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;">${html}</div>`;
 
   return blocks
     .map((block) => {
       const p = theme.palette;
       switch (block.type) {
         case "heading":
-          return `<h${block.level + 1} style="font-family:${theme.headingFont};font-size:${block.level === 2 ? "20px" : block.level === 3 ? "17px" : "15px"};line-height:1.3;color:${p.primary};margin:28px 0 10px;page-break-after:avoid;">${renderInline(block.text)}</h${block.level + 1}>`;
+          return `<h${block.level + 1} style="font-family:${theme.headingFont};font-size:${block.level === 2 ? "clamp(17px,4.8vw,20px)" : block.level === 3 ? "clamp(15px,4.2vw,17px)" : "clamp(14px,3.9vw,15px)"};line-height:1.3;color:${p.primary};margin:28px 0 10px;page-break-after:avoid;${wrapText}">${renderInline(block.text)}</h${block.level + 1}>`;
         case "paragraph":
-          return `<p style="margin:0 0 14px;color:${p.text};font-size:14px;line-height:1.75;">${renderInline(block.text)}</p>`;
+          return `<p style="margin:0 0 14px;color:${p.text};font-size:14px;line-height:1.75;${wrapText}">${renderInline(block.text)}</p>`;
         case "list":
-          return `<${block.ordered ? "ol" : "ul"} style="margin:0 0 16px;padding-left:24px;color:${p.text};font-size:14px;line-height:1.7;">${block.items
+          return `<${block.ordered ? "ol" : "ul"} style="margin:0 0 16px;padding-left:24px;color:${p.text};font-size:14px;line-height:1.7;${wrapText}">${block.items
             .map((item) => `<li style="margin:4px 0;">${renderInline(item)}</li>`)
             .join("")}</${block.ordered ? "ol" : "ul"}>`;
         case "table":
           return renderTable(block, theme);
         case "quote":
-          return `<blockquote style="margin:20px 0;padding:4px 0 4px 18px;border-left:3px solid ${p.accent};color:${p.muted};font-family:${theme.headingFont};font-size:15px;font-style:italic;line-height:1.7;">${bodyParagraphs(block.text)}</blockquote>`;
+          return `<blockquote style="margin:20px 0;padding:4px 0 4px 18px;border-left:3px solid ${p.accent};color:${p.muted};font-family:${theme.headingFont};font-size:15px;font-style:italic;line-height:1.7;${wrapText}">${bodyParagraphs(block.text)}</blockquote>`;
         case "divider":
           return `<hr style="border:0;border-top:1px solid ${rgba(p.muted, 0.25)};margin:26px 0;" />`;
         case "code":
-          return `<pre style="margin:20px 0;padding:14px;border-radius:10px;background:${p.surface};color:${p.text};font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-x:auto;">${escapeHtml(block.text)}</pre>`;
+          return `<pre style="margin:20px 0;padding:14px;border-radius:10px;background:${p.surface};color:${p.text};font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(block.text)}</pre>`;
         case "callout":
           return renderCallout(block, theme);
         case "keypoints":
-          return `<section style="margin:22px 0;padding:16px 18px;border-radius:14px;background:${rgba(p.primary, 0.07)};border:1px solid ${rgba(p.primary, 0.16)};page-break-inside:avoid;">
+          return `<section style="margin:22px 0;padding:16px 18px;border-radius:14px;background:${rgba(p.primary, 0.07)};border:1px solid ${rgba(p.primary, 0.16)};page-break-inside:avoid;${wrapText}">
             <p style="margin:0 0 10px;font-family:${theme.headingFont};font-size:14px;font-weight:700;color:${p.primary};">${escapeHtml(block.title)}</p>
             <ul style="margin:0;padding-left:20px;color:${p.text};font-size:13.5px;line-height:1.65;">${block.items
               .map((item) => `<li style="margin:5px 0;">${renderInline(item)}</li>`)
               .join("")}</ul>
           </section>`;
         case "checklist":
-          return `<section style="margin:22px 0;padding:16px 18px;border-radius:14px;background:${rgba(p.accent, 0.08)};border:1px solid ${rgba(p.accent, 0.22)};page-break-inside:avoid;">
+          return `<section style="margin:22px 0;padding:16px 18px;border-radius:14px;background:${rgba(p.accent, 0.08)};border:1px solid ${rgba(p.accent, 0.22)};page-break-inside:avoid;${wrapText}">
             <p style="margin:0 0 10px;font-family:${theme.headingFont};font-size:14px;font-weight:700;color:${p.text};">${escapeHtml(block.title)}</p>
             <ul style="margin:0;padding:0;list-style:none;color:${p.text};font-size:13.5px;line-height:1.6;">${block.items
               .map(
                 (item) =>
-                  `<li style="margin:6px 0;display:flex;gap:9px;align-items:flex-start;"><span style="width:17px;height:17px;border-radius:4px;border:1.5px solid ${p.accent};display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:${p.accent};flex:0 0 auto;margin-top:2px;">${item.checked ? "✓" : ""}</span><span>${renderInline(item.text)}</span></li>`,
+                  `<li style="margin:6px 0;display:flex;gap:9px;align-items:flex-start;"><span style="width:17px;height:17px;border-radius:4px;border:1.5px solid ${p.accent};display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:${p.accent};flex:0 0 auto;margin-top:2px;">${item.checked ? "✓" : ""}</span><span style="min-width:0;">${renderInline(item.text)}</span></li>`,
               )
               .join("")}</ul>
           </section>`;
         case "diagram":
-          return `<figure style="margin:24px 0;page-break-inside:avoid;">
-            ${block.title ? `<figcaption style="margin-bottom:9px;font-family:${theme.headingFont};font-size:13px;font-weight:700;color:${p.text};">${escapeHtml(block.title)}</figcaption>` : ""}
+          return `<figure style="margin:24px 0;page-break-inside:avoid;max-width:100%;">
+            ${block.title ? `<figcaption style="margin-bottom:9px;font-family:${theme.headingFont};font-size:13px;font-weight:700;color:${p.text};${wrapText}">${escapeHtml(block.title)}</figcaption>` : ""}
             ${scrollableVisual(renderDiagramSvg(block, theme))}
           </figure>`;
         case "chart":
-          return `<figure style="margin:24px 0;page-break-inside:avoid;">
-            ${block.title ? `<figcaption style="margin-bottom:9px;font-family:${theme.headingFont};font-size:13px;font-weight:700;color:${p.text};">${escapeHtml(block.title)}</figcaption>` : ""}
+          return `<figure style="margin:24px 0;page-break-inside:avoid;max-width:100%;">
+            ${block.title ? `<figcaption style="margin-bottom:9px;font-family:${theme.headingFont};font-size:13px;font-weight:700;color:${p.text};${wrapText}">${escapeHtml(block.title)}</figcaption>` : ""}
             ${scrollableVisual(renderChartSvg(block, theme))}
           </figure>`;
         case "figure":
           if (block.src) {
-            return `<figure style="margin:24px 0;page-break-inside:avoid;">
+            return `<figure style="margin:24px 0;page-break-inside:avoid;max-width:100%;">
               <img src="${escapeHtml(block.src)}" alt="${escapeHtml(block.alt || block.title)}" style="display:block;max-width:100%;height:auto;border-radius:12px;" />
-              ${block.caption ? `<figcaption style="margin-top:8px;font-size:11.5px;line-height:1.5;color:${p.muted};">${renderInline(block.caption)}</figcaption>` : ""}
+              ${block.caption ? `<figcaption style="margin-top:8px;font-size:11.5px;line-height:1.5;color:${p.muted};${wrapText}">${renderInline(block.caption)}</figcaption>` : ""}
             </figure>`;
           }
-          return `<figure style="margin:24px 0;page-break-inside:avoid;">
+          return `<figure style="margin:24px 0;page-break-inside:avoid;max-width:100%;">
             ${scrollableVisual(renderFigureSvg(block, theme))}
-            ${block.caption ? `<figcaption style="margin-top:9px;font-size:11.5px;line-height:1.55;color:${p.muted};">${renderInline(block.caption)}</figcaption>` : ""}
+            ${block.caption ? `<figcaption style="margin-top:9px;font-size:11.5px;line-height:1.55;color:${p.muted};${wrapText}">${renderInline(block.caption)}</figcaption>` : ""}
           </figure>`;
         default:
           return "";
@@ -565,10 +573,10 @@ export function renderChapterHtml(
   options: { showNumber?: boolean } = {},
 ): string {
   const blocks = parseBookMarkup(chapter.content);
-  return `<section class="book-chapter" style="font-family:${theme.bodyFont};">
+  return `<section class="book-chapter" style="font-family:${theme.bodyFont};max-width:100%;${wrapText}">
     <div style="margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid ${theme.palette.accent};">
       <p style="margin:0 0 4px;font-family:${theme.bodyFont};font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:${theme.palette.muted};">${options.showNumber === false ? "" : `Chapter ${chapter.number}`}</p>
-      <h2 style="margin:0;font-family:${theme.headingFont};font-size:26px;line-height:1.22;color:${theme.palette.primary};">${escapeHtml(chapter.title)}</h2>
+      <h2 style="margin:0;font-family:${theme.headingFont};font-size:clamp(20px,6vw,26px);line-height:1.22;color:${theme.palette.primary};${wrapText}">${escapeHtml(chapter.title)}</h2>
     </div>
     ${renderBlocksToHtml(blocks, theme)}
   </section>`;

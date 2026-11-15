@@ -1475,7 +1475,7 @@ const Bookmaker = () => {
       setBook(saved);
       toast({
         title: side === "back" ? "Back cover uploaded" : "Cover uploaded",
-        description: "Any image size or shape works. It is fitted to the page without cropping or stretching.",
+        description: "We trimmed it to A5, so it fills the page edge to edge.",
       });
     } catch (err) {
       toast({
@@ -2959,8 +2959,8 @@ const Bookmaker = () => {
                     onChange={(event) => void handleCoverUpload(event.target.files?.[0] ?? null, "front")}
                   />
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    JPG, PNG or WebP up to 8 MB. Any image size or shape works. A5 (1748 × 2480 px) is recommended
-                    for a print-perfect cover.
+                    JPG, PNG or WebP up to 8 MB. Every upload is fitted to A5 (148 × 210 mm): the image fills the
+                    page and the centre of the photo is kept.
                   </p>
                   {book?.cover?.kind !== "none" ? (
                     <Button
@@ -3001,8 +3001,8 @@ const Bookmaker = () => {
                     onChange={(event) => void handleCoverUpload(event.target.files?.[0] ?? null, "back")}
                   />
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Optional. Any image shape works. Leave it blank and Bookmaker uses your title, abstract and author
-                    on the final page.
+                    Optional. We fit it to A5 automatically. Leave it blank and Bookmaker uses your title, abstract
+                    and author on the final page.
                   </p>
                   {book?.cover?.back ? (
                     <Button

@@ -132,7 +132,7 @@ export function BookPreview({
         </aside>
 
         <article
-          className="lg:max-h-[78vh] lg:overflow-y-auto"
+          className="min-w-0 lg:max-h-[78vh] lg:overflow-y-auto"
           style={{ background: theme.palette.background, color: theme.palette.text }}
         >
           {chapter ? (
@@ -190,8 +190,8 @@ export function BookPreview({
                 </div>
               ) : null}
 
-              <div className="overflow-x-hidden px-4 py-5 sm:px-5 sm:py-7 md:px-9 md:py-10">
-                <div dangerouslySetInnerHTML={{ __html: renderChapterHtml(chapter, theme, { showNumber: false }) }} />
+              <div className="min-w-0 overflow-x-hidden px-4 py-5 sm:px-5 sm:py-7 md:px-9 md:py-10">
+                <div className="break-words" dangerouslySetInnerHTML={{ __html: renderChapterHtml(chapter, theme, { showNumber: false }) }} />
               </div>
             </>
           ) : null}
