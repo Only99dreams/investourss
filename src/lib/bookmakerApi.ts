@@ -37,6 +37,20 @@ export async function resolveBookCoverUrl(cover: BookCover | null | undefined): 
   return cover.url ?? null;
 }
 
+/** Signs the uploaded back cover of a book for the current owner. */
+export async function resolveBookBackCoverUrl(
+  cover: BookCover | null | undefined,
+): Promise<string | null> {
+  const back = cover?.back;
+  if (!back || (!back.path && !back.url)) return null;
+  const path = back.path || storagePathFromUrl(back.url, COVER_BUCKET);
+  if (path) {
+    const { data } = await supabase.storage.from(COVER_BUCKET).createSignedUrl(path, MEDIA_URL_TTL);
+    if (data?.signedUrl) return data.signedUrl;
+  }
+  return back.url ?? null;
+}
+
 /** Signs every narration file of a book, keyed by its storage path. */
 export async function resolveAudiobookUrls(
   audiobook: AudiobookState | null | undefined,
@@ -69,6 +83,7 @@ export type BookmakerAction =
   | "regenerate_chapter"
   | "regenerate_visual"
   | "generate_cover"
+  | "regenerate_title"
   | "start_audiobook"
   | "audiobook_chapter"
   | "complete_audiobook"
@@ -330,6 +345,7 @@ export async function uploadBookCover(
   userId: string,
   bookId: string,
   file: File,
+  side: "front" | "back" = "front",
 ): Promise<{ path: string; url: string }> {
   if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) {
     throw new Error("Please upload a JPG, PNG or WebP image.");
@@ -339,7 +355,7 @@ export async function uploadBookCover(
   }
 
   const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `${userId}/${bookId}-${Date.now()}.${extension}`;
+  const path = `${userId}/${bookId}-${side}-${Date.now()}.${extension}`;
   const { error } = await supabase.storage.from(COVER_BUCKET).upload(path, file, {
     cacheControl: "3600",
     upsert: false,

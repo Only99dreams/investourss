@@ -369,7 +369,7 @@ export function BookmakerHistorySection() {
           <p>Audiobook narration: Short 4 · Medium 8 · Long 12 credits (platform credits only)</p>
           <p>Failed AI operations are refunded automatically.</p>
           <p>Free PDF downloads per ebook: Starter 3 · Standard 6 · Annual pack 12</p>
-          <p>Free PDF downloads per ebook: Monthly 3 · Quarterly 6 · Bi-annual 12 · Annual 24</p>
+          <p>Free PDF downloads per ebook: 1-Month 3 · 3-Month 6 · 6-Month 12 · 12-Month 24</p>
           <p className="sm:col-span-2">
             After the free limit, each ebook download uses 1 credit. Playing the audiobook is always free.
           </p>

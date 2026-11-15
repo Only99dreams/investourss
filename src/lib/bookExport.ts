@@ -16,6 +16,7 @@ export type ChapterSelection = number[] | "all";
 
 export interface BookExportSections {
   cover?: boolean;
+  backCover?: boolean;
   titlePage?: boolean;
   abstract?: boolean;
   outline?: boolean;
@@ -28,12 +29,15 @@ export interface BookExportOptions {
   sections?: BookExportSections;
   /** Signed link for a cover stored in the private bucket. */
   coverUrl?: string;
+  /** Signed link for an uploaded back cover stored in the private bucket. */
+  backCoverUrl?: string;
   /** Pre-opened window, so a credit check can finish without tripping popup blockers. */
   targetWindow?: Window | null;
 }
 
 const DEFAULT_SECTIONS: Required<BookExportSections> = {
   cover: true,
+  backCover: true,
   titlePage: true,
   abstract: true,
   outline: false,
@@ -228,6 +232,46 @@ export function coverPageHtml(
   </section>`;
 }
 
+function generatedBackCoverArt(book: BookmakerBook, theme: BookTheme, authorName?: string): string {
+  const palette = coverPalette(book);
+  const abstract = String(book.outline?.abstract ?? "")
+    .replace(/^:::.*$/gm, " ")
+    .replace(/[*_#>`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const blurb = abstract || book.subtitle || purposeLabel(book);
+
+  return `<div style="position:relative;width:100%;height:100%;overflow:hidden;background:${palette.background};color:${palette.text};padding:18mm 16mm;display:flex;flex-direction:column;justify-content:space-between;">
+    ${coverBackdropSvg(palette)}
+    <div style="position:relative;z-index:2;">
+      <p style="margin:0;font-family:${theme.bodyFont};font-size:7pt;letter-spacing:0.2em;text-transform:uppercase;opacity:0.72;">About the book</p>
+      <h2 style="margin:6mm 0 0;font-family:${theme.headingFont};font-size:21pt;line-height:1.12;overflow-wrap:anywhere;">${escapeHtml(book.title || "Your book title")}</h2>
+      <p style="margin:7mm 0 0;font-family:${theme.bodyFont};font-size:9.5pt;line-height:1.6;opacity:0.9;overflow-wrap:anywhere;">${escapeHtml(blurb)}</p>
+    </div>
+    <div style="position:relative;z-index:2;">
+      <div style="width:22mm;height:2px;background:${palette.accent};"></div>
+      ${authorName ? `<p style="margin:5mm 0 0;font-family:${theme.headingFont};font-size:11pt;font-weight:600;">${escapeHtml(authorName)}</p>` : ""}
+      <p style="margin:4mm 0 0;font-family:${theme.bodyFont};font-size:6.5pt;letter-spacing:0.1em;text-transform:uppercase;opacity:0.55;">Bookmaker by Investours</p>
+    </div>
+  </div>`;
+}
+
+export function backCoverPageHtml(
+  book: BookmakerBook,
+  theme: BookTheme,
+  authorName?: string,
+  backCoverUrl?: string,
+): string {
+  const uploaded = Boolean(backCoverUrl);
+  return `<section class="page cover-page back-cover-page" aria-label="Back cover">
+    ${
+      uploaded
+        ? `<div style="width:100%;height:100%;background:${theme.palette.surface};display:flex;align-items:center;justify-content:center;"><img src="${escapeHtml(backCoverUrl)}" alt="${escapeHtml(book.title || "Book")} back cover" style="width:100%;height:100%;object-fit:contain;display:block;" /></div>`
+        : generatedBackCoverArt(book, theme, authorName)
+    }
+  </section>`;
+}
+
 function titlePageHtml(book: BookmakerBook, theme: BookTheme, authorName?: string): string {
   return `<section class="page front-page">
     <div class="page-content" style="display:flex;flex-direction:column;justify-content:center;text-align:center;font-family:${theme.bodyFont};">
@@ -381,6 +425,13 @@ const PAGINATION_SCRIPT = `
     flow.parentNode.removeChild(flow);
     if (template.parentNode) template.parentNode.removeChild(template);
 
+    // The back cover is a static page that always sits after the manuscript.
+    var backTemplate = document.getElementById('book-back-template');
+    if (backTemplate) {
+      host.appendChild(backTemplate.content.firstElementChild.cloneNode(true));
+      if (backTemplate.parentNode) backTemplate.parentNode.removeChild(backTemplate);
+    }
+
     // Fill table-of-contents page numbers.
     var allPages = Array.prototype.slice.call(document.querySelectorAll('#book-pages .page'));
     var contentPages = allPages.filter(function (p) { return !p.classList.contains('cover-page'); });
@@ -412,6 +463,7 @@ export function buildBookDocument(book: BookmakerBook, options: BookExportOption
   const authorName = options.authorName?.trim() || "";
   const sections: Required<BookExportSections> = {
     cover: options.sections?.cover ?? DEFAULT_SECTIONS.cover,
+    backCover: options.sections?.backCover ?? DEFAULT_SECTIONS.backCover,
     titlePage: options.sections?.titlePage ?? DEFAULT_SECTIONS.titlePage,
     abstract: options.sections?.abstract ?? DEFAULT_SECTIONS.abstract,
     outline: options.sections?.outline ?? DEFAULT_SECTIONS.outline,
@@ -438,6 +490,11 @@ export function buildBookDocument(book: BookmakerBook, options: BookExportOption
     frontPages.push(tocPageHtml(theme, selected.map(({ chapter, number }) => ({ number, title: chapter.title }))));
   }
 
+  const backPage =
+    sections.backCover
+      ? backCoverPageHtml(book, theme, authorName, options.backCoverUrl)
+      : "";
+
   const outlineHtml = sections.outline ? outlineBlocksHtml(book, theme) : "";
   const chapterHtml = selected.map(({ chapter, number }) => chapterFlowHtml(chapter, number, theme)).join("");
   let flow = outlineHtml + chapterHtml;
@@ -448,6 +505,7 @@ export function buildBookDocument(book: BookmakerBook, options: BookExportOption
   const words = bookWordCount(book).toLocaleString("en-NG");
   const bundle = [
     sections.cover ? "cover" : "",
+    sections.backCover ? "back cover" : "",
     sections.abstract && (book.outline?.abstract ?? "").trim() ? "abstract" : "",
     sections.outline ? "outline" : "",
     selected.length ? `${selected.length} chapter${selected.length === 1 ? "" : "s"}` : "",
@@ -481,6 +539,7 @@ export function buildBookDocument(book: BookmakerBook, options: BookExportOption
 
   <div id="book-flow">${flow}</div>
   ${pageTemplateHtml()}
+  ${backPage ? `<template id="book-back-template">${backPage}</template>` : ""}
   <script>${PAGINATION_SCRIPT}</script>
   ${options.autoPrint === false ? "" : `<script>window.addEventListener('load', function(){ setTimeout(function(){ window.print(); }, 700); });</script>`}
 </body>

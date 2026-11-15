@@ -775,6 +775,7 @@ export type Database = {
           order_index: number | null
           is_published: boolean | null
           thumbnail_url: string | null
+          certification_course_id: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -790,6 +791,7 @@ export type Database = {
           order_index?: number | null
           is_published?: boolean | null
           thumbnail_url?: string | null
+          certification_course_id?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -805,6 +807,7 @@ export type Database = {
           order_index?: number | null
           is_published?: boolean | null
           thumbnail_url?: string | null
+          certification_course_id?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -1748,6 +1751,88 @@ export type Database = {
           credits_used?: number
           created_at?: string
           updated_at?: string
+        }
+      }
+      education_certification_courses: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          category: string | null
+          tier_required: string | null
+          is_published: boolean | null
+          order_index: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          category?: string | null
+          tier_required?: string | null
+          is_published?: boolean | null
+          order_index?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          category?: string | null
+          tier_required?: string | null
+          is_published?: boolean | null
+          order_index?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      education_certification_requests: {
+        Row: {
+          id: string
+          user_id: string
+          course_id: string
+          status: string
+          note: string | null
+          admin_notes: string | null
+          certificate_number: string | null
+          requested_at: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          notified_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          course_id: string
+          status?: string
+          note?: string | null
+          admin_notes?: string | null
+          certificate_number?: string | null
+          requested_at?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          notified_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          course_id?: string
+          status?: string
+          note?: string | null
+          admin_notes?: string | null
+          certificate_number?: string | null
+          requested_at?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          notified_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
       }
     }

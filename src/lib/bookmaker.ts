@@ -99,12 +99,21 @@ export function coverLayoutForStyle(style: string | undefined): CoverLayout {
   }
 }
 
+/** An uploaded cover image stored in the private bookmaker-covers bucket. */
+export interface BookCoverArt {
+  url?: string;
+  path?: string;
+  updatedAt?: string;
+}
+
 export interface BookCover {
   kind: "none" | "generated" | "uploaded";
   url?: string;
   path?: string;
   design?: CoverDesign;
   updatedAt?: string;
+  /** Optional uploaded back cover, printed as the final page. */
+  back?: BookCoverArt | null;
 }
 
 export type AudiobookLanguage = "en" | "ar";
@@ -285,6 +294,7 @@ export const DEFAULT_ENTITLEMENT: BookmakerEntitlement = {
     chapter_regeneration: 1,
     visual_regeneration: 1,
     cover_generation: 1,
+    title_regeneration: 0,
     audiobook_short: 4,
     audiobook_medium: 8,
     audiobook_long: 12,
@@ -424,6 +434,7 @@ export const CREDIT_COSTS = {
   audiobook: (length: BookLength) => LENGTHS[length].audiobookCredits,
   bookDownload: 1,
   outline: 0,
+  titleRegeneration: 0,
   manualEdit: 0,
   pdfExport: 0,
 } as const;

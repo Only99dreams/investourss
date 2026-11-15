@@ -296,9 +296,9 @@ export default function PromoCodesTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="monthly">Monthly Plan</SelectItem>
-                    <SelectItem value="quarterly">Quarterly Plan</SelectItem>
-                    <SelectItem value="annual">Annual Plan</SelectItem>
+                    <SelectItem value="monthly">1-Month Plan</SelectItem>
+                    <SelectItem value="quarterly">3-Month Plan</SelectItem>
+                    <SelectItem value="annual">12-Month Plan</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

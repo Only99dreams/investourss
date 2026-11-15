@@ -319,12 +319,12 @@ const Pricing = () => {
                   <div className="space-y-3">
                     <div className="bg-primary/10 rounded-lg p-4 border border-primary/20">
                       <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm font-medium">Monthly Payment</span>
+                        <span className="text-sm font-medium">1-Month Plan</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold text-foreground">₦7,650</span>
+                          <span className="text-2xl font-bold text-foreground">₦38,250</span>
                           <span className="text-sm text-muted-foreground"> / month</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
-                          <div className="text-xs text-primary font-medium">2 ebooks / month</div>
+                          <div className="text-xs text-primary font-medium">4 ebooks / month</div>
                         </div>
                       </div>
                       <Link to={subscribeHref("premium-monthly")}>
@@ -336,15 +336,15 @@ const Pricing = () => {
 
                     <div className="bg-accent/10 rounded-lg p-4 border-2 border-accent/30 relative">
                       <Badge className="absolute -top-2 -right-2 bg-accent text-accent-foreground">
-                        Save ₦2,550
+                        Save ₦12,750
                       </Badge>
                       <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm font-medium">Quarterly Payment</span>
+                        <span className="text-sm font-medium">3-Month Plan</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold text-foreground">₦20,400</span>
+                          <span className="text-2xl font-bold text-foreground">₦102,000</span>
                           <span className="text-sm text-muted-foreground"> / 3 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
-                          <div className="text-xs text-primary font-medium">6 ebooks / quarter</div>
+                          <div className="text-xs text-primary font-medium">8 ebooks / quarter</div>
                         </div>
                       </div>
                       <Link to={subscribeHref("premium-quarterly")}>
@@ -356,15 +356,15 @@ const Pricing = () => {
 
                     <div className="bg-accent/10 rounded-lg p-4 border-2 border-accent/30 relative">
                       <Badge className="absolute -top-2 -right-2 bg-accent text-accent-foreground">
-                        Save ₦7,650
+                        Save ₦38,250
                       </Badge>
                       <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm font-medium">Bi-annual Payment</span>
+                        <span className="text-sm font-medium">6-Month Plan</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold text-foreground">₦38,250</span>
+                          <span className="text-2xl font-bold text-foreground">₦191,250</span>
                           <span className="text-sm text-muted-foreground"> / 6 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
-                          <div className="text-xs text-primary font-medium">12 ebooks / 6 months</div>
+                          <div className="text-xs text-primary font-medium">16 ebooks / 6 months</div>
                         </div>
                       </div>
                       <Link to={subscribeHref("premium-biennial")}>
@@ -376,15 +376,15 @@ const Pricing = () => {
 
                     <div className="bg-investours-gold/10 rounded-lg p-4 border-2 border-investours-gold/30 relative">
                       <Badge className="absolute -top-2 -right-2 bg-investours-gold text-foreground">
-                        Save ₦15,300
+                        Save ₦76,500
                       </Badge>
                       <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm font-medium">Annual Payment</span>
+                        <span className="text-sm font-medium">12-Month Plan</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold text-foreground">₦76,500</span>
-                          <span className="text-sm text-muted-foreground"> / year</span>
+                          <span className="text-2xl font-bold text-foreground">₦382,500</span>
+                          <span className="text-sm text-muted-foreground"> / 12 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
-                          <div className="text-xs text-primary font-medium">24 ebooks / year</div>
+                          <div className="text-xs text-primary font-medium">32 ebooks / year</div>
                         </div>
                       </div>
                       <Link to={subscribeHref("premium-annual")}>

@@ -31,11 +31,11 @@ interface PaystackTransaction {
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY as string;
 
 export const SUBSCRIPTION_PLANS = {
-  monthly:    { name: 'Premium Monthly',    price: 7650,   period: 'month',    savings: null },
-  quarterly:  { name: 'Premium Quarterly',  price: 20400,  period: '3 months', savings: 'Save ₦2,550' },
-  biennial:   { name: 'Premium Bi-annual',  price: 38250,  period: '6 months', savings: 'Save ₦7,650' },
-  annual:     { name: 'Premium Annual',     price: 76500,  period: 'year',     savings: 'Save ₦15,300' },
-  b2b_quarterly: { name: 'B2B Plan',         price: 360000, period: '3 months', savings: null },
+  monthly:    { name: '1-Month Plan',  price: 38250,  period: 'month',    savings: null },
+  quarterly:  { name: '3-Month Plan',  price: 102000, period: '3 months', savings: 'Save ₦12,750' },
+  biennial:   { name: '6-Month Plan',  price: 191250, period: '6 months', savings: 'Save ₦38,250' },
+  annual:     { name: '12-Month Plan', price: 382500, period: '12 months', savings: 'Save ₦76,500' },
+  b2b_quarterly: { name: 'B2B Plan',   price: 360000, period: '3 months', savings: null },
 };
 
 // Generates a unique Paystack reference

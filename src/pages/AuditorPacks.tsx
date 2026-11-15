@@ -438,7 +438,7 @@ const AuditorPacks = () => {
           <p className="text-sm text-muted-foreground mb-2">Prefer unlimited access?</p>
           <Button asChild size="lg">
             <Link to="/subscribe">
-              Platform Subscription — from ₦7,650/month <ArrowRight className="w-4 h-4 ml-2" />
+              Platform Subscription — from ₦38,250/month <ArrowRight className="w-4 h-4 ml-2" />
             </Link>
           </Button>
           <p className="text-xs text-muted-foreground mt-3">

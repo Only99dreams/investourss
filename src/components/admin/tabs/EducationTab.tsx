@@ -1,4 +1,21 @@
 import { useState, useEffect } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,8 +46,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Video, Eye, EyeOff, GraduationCap } from "lucide-react";
+import { Plus, Pencil, Trash2, Video, Eye, EyeOff, GraduationCap, GripVertical, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
+import { PLAN_TIER_OPTIONS, planLabel } from "@/lib/subscription";
 
 interface Module {
   id: string;
@@ -43,7 +61,148 @@ interface Module {
   tier_required: "free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b";
   is_published: boolean;
   order_index: number;
+  certification_course_id: string | null;
   created_at: string;
+}
+
+interface CertificationCourseOption {
+  id: string;
+  title: string;
+  is_published: boolean | null;
+}
+
+/** One draggable module row. Only the handle starts a drag so row actions stay usable. */
+function SortableModuleRow({
+  module,
+  position,
+  total,
+  certificationLabel,
+  onMoveUp,
+  onMoveDown,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  module: Module;
+  position: number;
+  total: number;
+  certificationLabel: string | null;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: module.id });
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={isDragging ? "relative z-10 bg-muted shadow-lg" : undefined}
+    >
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <span className="w-5 text-center text-sm text-muted-foreground">{position}</span>
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            aria-label={`Reorder ${module.title}`}
+            title="Drag to reorder"
+            className="cursor-grab touch-none rounded p-0.5 text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            disabled={position === 1}
+            title="Move up"
+            onClick={onMoveUp}
+          >
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            disabled={position === total}
+            title="Move down"
+            onClick={onMoveDown}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+      <TableCell className="font-medium">{module.title}</TableCell>
+      <TableCell>{module.category || "-"}</TableCell>
+      <TableCell>
+        {module.certification_course_id ? (
+          <Badge variant="secondary" className="max-w-[180px] truncate text-[10px]">
+            {certificationLabel ?? "Certification"}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      <TableCell>
+        <Badge variant={
+          module.tier_required === "free" ? "outline" :
+          module.tier_required === "monthly" ? "secondary" :
+          "default"
+        }>
+          {planLabel(module.tier_required)}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        {module.video_url ? (
+          <Video className="w-4 h-4 text-blue-500" />
+        ) : (
+          "-"
+        )}
+      </TableCell>
+      <TableCell>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onToggle}
+        >
+          {module.is_published ? (
+            <Eye className="w-4 h-4 text-emerald-500" />
+          ) : (
+            <EyeOff className="w-4 h-4 text-muted-foreground" />
+          )}
+        </Button>
+      </TableCell>
+      <TableCell className="text-right">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onEdit}
+        >
+          <Pencil className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDelete}
+        >
+          <Trash2 className="w-4 h-4 text-destructive" />
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
 }
 
 const EducationTab = () => {
@@ -61,6 +220,11 @@ const EducationTab = () => {
   const [subcategory, setSubcategory] = useState("");
   const [tierRequired, setTierRequired] = useState<"free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b">("free");
   const [isPublished, setIsPublished] = useState(true);
+  const [isCertification, setIsCertification] = useState(false);
+  const [certificationCourseId, setCertificationCourseId] = useState("");
+  const [certCourses, setCertCourses] = useState<CertificationCourseOption[]>([]);
+  const [newCourseTitle, setNewCourseTitle] = useState("");
+  const [courseBusy, setCourseBusy] = useState(false);
 
   // Categories are managed in the CMS rather than hard-coded: admins can
   // add new ones from this dialog and delete ones they no longer use.
@@ -68,10 +232,73 @@ const EducationTab = () => {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryBusy, setCategoryBusy] = useState(false);
 
+  // A small activation distance keeps a click on the handle from starting a
+  // drag, and the keyboard sensor keeps reordering possible without a mouse.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
   useEffect(() => {
     fetchModules();
     fetchCategories();
+    fetchCertificationCourses();
   }, []);
+
+  const fetchCertificationCourses = async () => {
+    const { data, error } = await supabase
+      .from("education_certification_courses")
+      .select("id, title, is_published")
+      .order("order_index");
+
+    if (error) {
+      console.error("Could not load certification courses:", error);
+      return;
+    }
+    setCertCourses((data ?? []) as CertificationCourseOption[]);
+  };
+
+  const certificationCourseTitle = (courseId: string | null) =>
+    courseId ? certCourses.find((course) => course.id === courseId)?.title ?? "Certification" : null;
+
+  /**
+   * Courses can be created from the upload form so a certification video is
+   * never blocked by an empty catalogue. The new course inherits the tier
+   * picked below and can be edited in the Certification tab afterwards.
+   */
+  const handleAddCertificationCourse = async () => {
+    const name = newCourseTitle.trim();
+    if (!name) return;
+    if (certCourses.some((course) => course.title.toLowerCase() === name.toLowerCase())) {
+      toast.error("That course already exists");
+      return;
+    }
+
+    setCourseBusy(true);
+    const { data, error } = await supabase
+      .from("education_certification_courses")
+      .insert({
+        title: name,
+        category: "Certification",
+        tier_required: tierRequired,
+        is_published: true,
+        order_index: certCourses.length + 1,
+      })
+      .select("id, title, is_published")
+      .single();
+    setCourseBusy(false);
+
+    if (error || !data) {
+      console.error("Could not add certification course:", error);
+      toast.error("Failed to add the course");
+      return;
+    }
+
+    setCertCourses((current) => [...current, data as CertificationCourseOption]);
+    setCertificationCourseId(data.id);
+    setNewCourseTitle("");
+    toast.success("Course added");
+  };
 
   const fetchCategories = async () => {
     const { data, error } = await supabase
@@ -83,7 +310,7 @@ const EducationTab = () => {
       // The table is unreachable on this environment; fall back to the
       // historical defaults so module uploads still work.
       setCategoryOptions(
-        ["Investment Basics", "Financial Literacy", "Climate Finance", "Risk Management", "Scam Prevention", "SDG Investing", "Platform Guide"]
+        ["Investment Basics", "Financial Literacy", "Climate Finance", "Risk Management", "Scam Prevention", "SDG Investing", "Platform Guide", "Certification"]
           .map((name, i) => ({ id: `fallback-${i}`, name })),
       );
       return;
@@ -143,6 +370,65 @@ const EducationTab = () => {
     setIsLoading(false);
   };
 
+  /** The order the table renders in, and drag-and-drop mutates. */
+  const orderedModules = [...modules].sort(
+    (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0),
+  );
+
+  /**
+   * Persist a new sequence by renumbering 1..N rather than swapping two
+   * values, so duplicate or zeroed order_index rows can't wedge the list.
+   */
+  const persistOrder = async (next: Module[], successMessage: string) => {
+    const renumbered = next.map((module, index) => ({ ...module, order_index: index + 1 }));
+    setModules(renumbered);
+    try {
+      for (let i = 0; i < renumbered.length; i += 1) {
+        const { error } = await supabase
+          .from("education_modules")
+          .update({ order_index: i + 1 })
+          .eq("id", renumbered[i].id);
+        if (error) throw error;
+      }
+      toast.success(successMessage);
+    } catch (error) {
+      console.error("Error reordering modules:", error);
+      toast.error("Failed to save the new order");
+      fetchModules();
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const from = orderedModules.findIndex((m) => m.id === active.id);
+    const to = orderedModules.findIndex((m) => m.id === over.id);
+    if (from < 0 || to < 0) return;
+
+    const moved = orderedModules[from];
+    void persistOrder(
+      arrayMove(orderedModules, from, to),
+      `"${moved.title}" moved to position ${to + 1}.`,
+    );
+  };
+
+  /**
+   * Move a module one slot up (-1) or down (+1) and persist the new order.
+   * Kept as a keyboard/accessible alternative to dragging.
+   */
+  const moveModule = (id: string, dir: -1 | 1) => {
+    const idx = orderedModules.findIndex((m) => m.id === id);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= orderedModules.length) return;
+
+    const moved = orderedModules[idx];
+    void persistOrder(
+      arrayMove(orderedModules, idx, target),
+      `"${moved.title}" moved ${dir === -1 ? "up" : "down"}.`,
+    );
+  };
+
   const resetForm = () => {
     setTitle("");
     setDescription("");
@@ -152,6 +438,8 @@ const EducationTab = () => {
     setSubcategory("");
     setTierRequired("free");
     setIsPublished(true);
+    setIsCertification(false);
+    setCertificationCourseId("");
     setEditingModule(null);
   };
 
@@ -165,6 +453,8 @@ const EducationTab = () => {
     setSubcategory(module.subcategory || "");
     setTierRequired(module.tier_required || "free");
     setIsPublished(module.is_published);
+    setIsCertification(Boolean(module.certification_course_id));
+    setCertificationCourseId(module.certification_course_id || "");
     setIsDialogOpen(true);
   };
 
@@ -173,6 +463,10 @@ const EducationTab = () => {
     
     if (!title.trim()) {
       toast.error("Title is required");
+      return;
+    }
+    if (isCertification && !certificationCourseId) {
+      toast.error("Select the certification course this video is for");
       return;
     }
 
@@ -185,7 +479,10 @@ const EducationTab = () => {
       subcategory: subcategory.trim() || null,
       tier_required: tierRequired,
       is_published: isPublished,
-      order_index: editingModule ? editingModule.order_index : modules.length,
+      certification_course_id: isCertification ? certificationCourseId : null,
+      order_index: editingModule
+        ? editingModule.order_index
+        : modules.reduce((max, m) => Math.max(max, m.order_index ?? 0), 0) + 1,
     };
 
     if (editingModule) {
@@ -377,6 +674,74 @@ const EducationTab = () => {
                 </div>
               </div>
 
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label>Certification video</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Turn this on when the video prepares members for a certification course. It
+                      then appears in the Request Certificate tab for that course.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={isCertification}
+                    onCheckedChange={(checked) => {
+                      setIsCertification(checked);
+                      if (!checked) setCertificationCourseId("");
+                    }}
+                  />
+                </div>
+                {isCertification ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="certification_course">Certification course *</Label>
+                    <Select value={certificationCourseId} onValueChange={setCertificationCourseId}>
+                      <SelectTrigger id="certification_course">
+                        <SelectValue placeholder="Select the course this video is for" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {certCourses.map((course) => (
+                          <SelectItem key={course.id} value={course.id}>
+                            {course.title}
+                            {course.is_published ? "" : " (draft)"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {certCourses.length === 0 ? (
+                      <p className="text-xs text-amber-700">
+                        No certification courses yet. Add one below.
+                      </p>
+                    ) : null}
+                    <div className="flex gap-2">
+                      <Input
+                        value={newCourseTitle}
+                        onChange={(event) => setNewCourseTitle(event.target.value)}
+                        placeholder="Or add a new course"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void handleAddCertificationCourse();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={courseBusy || !newCourseTitle.trim()}
+                        onClick={() => void handleAddCertificationCourse()}
+                      >
+                        Add course
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      New courses take the tier selected below. Add a description or unpublish it
+                      in the Certification tab.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tier Required</Label>
@@ -385,12 +750,11 @@ const EducationTab = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="free">Free</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="quarterly">Quarterly</SelectItem>
-                      <SelectItem value="biennial">Bi-annual</SelectItem>
-                      <SelectItem value="annual">Annual</SelectItem>
-                      <SelectItem value="b2b">B2B</SelectItem>
+                      {PLAN_TIER_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -473,7 +837,12 @@ const EducationTab = () => {
       {/* Modules Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Modules</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>All Modules</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Drag the handle (or use the arrows) to change the order users see.
+            </p>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -487,8 +856,10 @@ const EducationTab = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="min-w-[140px]">Order</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>Certification</TableHead>
                   <TableHead>Tier</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
@@ -496,57 +867,27 @@ const EducationTab = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {modules.map((module) => (
-                  <TableRow key={module.id}>
-                    <TableCell className="font-medium">{module.title}</TableCell>
-                    <TableCell>{module.category || "-"}</TableCell>
-                    <TableCell>
-                      <Badge variant={
-                        module.tier_required === "free" ? "outline" :
-                        module.tier_required === "monthly" ? "secondary" :
-                        "default"
-                      }>
-                        {module.tier_required}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {module.video_url ? (
-                        <Video className="w-4 h-4 text-blue-500" />
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => togglePublished(module)}
-                      >
-                        {module.is_published ? (
-                          <Eye className="w-4 h-4 text-emerald-500" />
-                        ) : (
-                          <EyeOff className="w-4 h-4 text-muted-foreground" />
-                        )}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDialog(module)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(module.id)}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext
+                    items={orderedModules.map((module) => module.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {orderedModules.map((module, index) => (
+                      <SortableModuleRow
+                        key={module.id}
+                        module={module}
+                        position={index + 1}
+                        total={orderedModules.length}
+                        certificationLabel={certificationCourseTitle(module.certification_course_id)}
+                        onMoveUp={() => moveModule(module.id, -1)}
+                        onMoveDown={() => moveModule(module.id, 1)}
+                        onToggle={() => togglePublished(module)}
+                        onEdit={() => openEditDialog(module)}
+                        onDelete={() => handleDelete(module.id)}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
               </TableBody>
             </Table>
             </div>

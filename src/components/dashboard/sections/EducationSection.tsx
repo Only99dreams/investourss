@@ -23,6 +23,8 @@ import { GraduationCap, Play, CheckCircle, Lock, Clock, Trophy, Share2, Copy, Tw
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useSearchParams, Link } from "react-router-dom";
+import { meetsPlanTier, planLabel } from "@/lib/subscription";
+import { getVideoEmbedUrl } from "@/lib/videoEmbed";
 
 interface ContentCategory {
   id: string;
@@ -43,6 +45,7 @@ interface Module {
   thumbnail_url: string | null;
   category: string | null;
   tier_required: string;
+  certification_course_id?: string | null;
   education_module_categories?: EducationModuleCategory[];
 }
 
@@ -168,11 +171,9 @@ export function EducationSection() {
   const progressPercent = totalModules > 0 ? (completedCount / totalModules) * 100 : 0;
 
   const isModuleLocked = (module: Module) => {
-    // Check tier requirements - subscription categories
-    const tierOrder = ["free", "monthly", "quarterly", "biennial", "annual", "b2b"];
-    const userTierIndex = tierOrder.indexOf(profile?.subscription_type || "free");
-    const requiredIndex = tierOrder.indexOf(module.tier_required);
-    if (requiredIndex > userTierIndex) return true;
+    // A lapsed plan keeps `subscription_type` in the profile, so access is
+    // checked against the live plan rather than the stored label.
+    if (!meetsPlanTier(profile, module.tier_required)) return true;
 
     // Check BDE requirements
     const hasBdeCategories = module.education_module_categories?.some(
@@ -192,22 +193,6 @@ export function EducationSection() {
 
   const getModuleProgress = (moduleId: string) => {
     return progress.find(p => p.module_id === moduleId);
-  };
-
-  const getEmbedUrl = (url: string) => {
-    if (url.includes("youtube.com/watch")) {
-      const videoId = url.split("v=")[1]?.split("&")[0];
-      return `https://www.youtube.com/embed/${videoId}?rel=0&controls=1`;
-    }
-    if (url.includes("youtu.be/")) {
-      const videoId = url.split("youtu.be/")[1]?.split("?")[0];
-      return `https://www.youtube.com/embed/${videoId}?rel=0&controls=1`;
-    }
-    if (url.includes("vimeo.com/")) {
-      const videoId = url.split("vimeo.com/")[1]?.split("?")[0];
-      return `https://player.vimeo.com/video/${videoId}?dnt=1`;
-    }
-    return url;
   };
 
   const getVideoThumbnail = (module: Module): string | null => {
@@ -369,7 +354,7 @@ export function EducationSection() {
 
   const handleStartModule = async (module: Module) => {
     if (isModuleLocked(module)) {
-      toast.error("Upgrade your tier to access this module");
+      toast.error("An active plan is required to access this module");
       return;
     }
 
@@ -507,7 +492,7 @@ export function EducationSection() {
                 module.tier_required === "monthly" ? "secondary" :
                 "default"
               }>
-                {module.tier_required.toUpperCase()}
+                {planLabel(module.tier_required)}
               </Badge>
               <div className="flex items-center gap-1">
                 {!locked && <ShareButton module={module} />}
@@ -553,7 +538,104 @@ export function EducationSection() {
 
   return (
     <div className="p-4 md:p-6 space-y-6">
-      {/* Progress Overview */}
+      {/* Training videos come first so learners see content before stats */}
+      <div>
+        <h2 className="text-2xl font-bold">Education &amp; Mentorship</h2>
+        <p className="text-muted-foreground">
+          Watch the training videos, then track your progress and tools below.
+        </p>
+      </div>
+
+      {/* Admin Controls - Only show if no modules exist */}
+      {modules.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold mb-2">No Education Modules Found</h3>
+                <p className="text-muted-foreground mb-4">
+                  It looks like there are no education modules in the database yet.
+                </p>
+                {isAdmin && (
+                  <Button onClick={addSampleData} className="bg-primary hover:bg-primary/90">
+                    Add Sample Education Modules
+                  </Button>
+                )}
+                {!isAdmin && (
+                  <p className="text-sm text-muted-foreground">
+                    Contact an administrator to add education modules.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Module Tabs */}
+      <div className="flex items-center gap-2 pt-2">
+        <GraduationCap className="h-5 w-5 text-primary" />
+        <h3 className="text-xl font-semibold">All Video Modules</h3>
+      </div>
+      <Tabs defaultValue="all">
+        <TabsList className="w-full grid grid-cols-3 h-auto">
+          <TabsTrigger className="whitespace-normal px-1 sm:px-3" value="all">All Video Modules ({modules.length})</TabsTrigger>
+          <TabsTrigger className="whitespace-normal px-1 sm:px-3" value="in-progress">In Progress ({inProgressModules.length})</TabsTrigger>
+          <TabsTrigger className="whitespace-normal px-1 sm:px-3" value="completed">Completed ({completedModules.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="all" className="mt-6">
+          {modules.length > 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {modules.map((module, index) => renderModuleCard(module, index))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <GraduationCap className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">No Modules Available Yet</h3>
+                <p className="text-muted-foreground">
+                  Check back soon for new learning content!
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="in-progress" className="mt-6">
+          {inProgressModules.length > 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {inProgressModules.map((module, index) => renderModuleCard(module, index))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                No modules in progress
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="completed" className="mt-6">
+          {completedModules.length > 0 ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {completedModules.map((module, index) => renderModuleCard(module, index))}
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-12 text-center text-muted-foreground">
+                <Trophy className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                Complete modules to see them here
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Progress & tools sit below the video modules */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -610,98 +692,13 @@ export function EducationSection() {
         </Card>
       </motion.div>
 
-      {/* Admin Controls - Only show if no modules exist */}
-      {modules.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold mb-2">No Education Modules Found</h3>
-                <p className="text-muted-foreground mb-4">
-                  It looks like there are no education modules in the database yet.
-                </p>
-                {isAdmin && (
-                  <Button onClick={addSampleData} className="bg-primary hover:bg-primary/90">
-                    Add Sample Education Modules
-                  </Button>
-                )}
-                {!isAdmin && (
-                  <p className="text-sm text-muted-foreground">
-                    Contact an administrator to add education modules.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-
-      {/* Module Tabs */}
-      <Tabs defaultValue="all">
-        <TabsList className="w-full grid grid-cols-3 h-auto">
-          <TabsTrigger className="whitespace-normal px-1 sm:px-3" value="all">All Modules ({modules.length})</TabsTrigger>
-          <TabsTrigger className="whitespace-normal px-1 sm:px-3" value="in-progress">In Progress ({inProgressModules.length})</TabsTrigger>
-          <TabsTrigger className="whitespace-normal px-1 sm:px-3" value="completed">Completed ({completedModules.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="all" className="mt-6">
-          {modules.length > 0 ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {modules.map((module, index) => renderModuleCard(module, index))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <GraduationCap className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">No Modules Available Yet</h3>
-                <p className="text-muted-foreground">
-                  Check back soon for new learning content!
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="in-progress" className="mt-6">
-          {inProgressModules.length > 0 ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {inProgressModules.map((module, index) => renderModuleCard(module, index))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-12 text-center text-muted-foreground">
-                No modules in progress
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="completed" className="mt-6">
-          {completedModules.length > 0 ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {completedModules.map((module, index) => renderModuleCard(module, index))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-12 text-center text-muted-foreground">
-                <Trophy className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                Complete modules to see them here
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
-
       {/* Video Dialog */}
       <Dialog open={isVideoOpen} onOpenChange={setIsVideoOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           {selectedModule?.video_url && (
             <div className="aspect-video w-full rounded-lg overflow-hidden bg-black mb-12">
               <iframe
-                src={getEmbedUrl(selectedModule.video_url)}
+                src={getVideoEmbedUrl(selectedModule.video_url)}
                 className="w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen

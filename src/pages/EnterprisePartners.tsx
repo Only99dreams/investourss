@@ -41,7 +41,7 @@ const HowItWorksSteps = [
   {
     title: "Join the Enterprise Partners Program",
     description:
-      "Activate your membership once with the Quarterly Subscription of ₦20,400 or a higher plan depending on choice duration, and gain access to the Enterprise Partner mentorship programme.",
+      "Activate your membership once with the 3-Month Plan of ₦102,000 or a higher plan depending on choice duration, and gain access to the Enterprise Partner mentorship programme.",
   },
   {
     title: "Learn, Create and Promote",
@@ -126,7 +126,7 @@ const PARTNER_TIERS: PartnerTier[] = [
 ];
 
 const membershipRequirements = [
-  "Purchase the qualifying Quarterly Subscription or higher plan at least once to activate your enrollment for mentorship depending on selected duration.",
+  "Purchase the qualifying 3-Month Plan or higher plan at least once to activate your enrollment for mentorship depending on selected duration.",
   "Complete the mentorship programme and get certified.",
   "Maintain active participation and any paid Investours plan to remain eligible for partner benefits and commissions.",
 ];

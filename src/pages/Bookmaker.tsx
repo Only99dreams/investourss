@@ -85,6 +85,7 @@ import {
   invokeBookmaker,
   previewNarratorVoice,
   rememberBook,
+  resolveBookBackCoverUrl,
   resolveBookCoverUrl,
   saveBookmakerBook,
   uploadBookCover,
@@ -93,18 +94,6 @@ import { downloadBookPDF, openBookPrintPreview } from "@/lib/bookExport";
 import { cn } from "@/lib/utils";
 
 const DRAFT_KEY = "bookmaker:draft";
-
-/** Uploaded covers must match the A5 page: 148 × 210 mm at 300 dpi. */
-const COVER_ASPECT = 148 / 210;
-const COVER_MIN_WIDTH = 1200;
-const COVER_MIN_HEIGHT = 1700;
-
-async function readImageSize(file: File): Promise<{ width: number; height: number }> {
-  const bitmap = await createImageBitmap(file);
-  const size = { width: bitmap.width, height: bitmap.height };
-  bitmap.close();
-  return size;
-}
 
 interface IdeaDraft {
   idea: string;
@@ -293,10 +282,13 @@ const Bookmaker = () => {
   const [gate, setGate] = useState<GateState | null>(null);
   const [gateBusy, setGateBusy] = useState(false);
   const [coverBusy, setCoverBusy] = useState(false);
+  const [backCoverBusy, setBackCoverBusy] = useState(false);
   const [coverStyle, setCoverStyle] = useState("auto");
+  const [titleBusy, setTitleBusy] = useState(false);
 
   const [exportPreset, setExportPreset] = useState<"stage1" | "stage2" | "full" | "custom">("full");
   const [exportCover, setExportCover] = useState(true);
+  const [exportBackCover, setExportBackCover] = useState(true);
   const [exportAbstract, setExportAbstract] = useState(true);
   const [exportOutline, setExportOutline] = useState(false);
   const [exportChapters, setExportChapters] = useState<number[] | "all">("all");
@@ -322,6 +314,7 @@ const Bookmaker = () => {
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+  const backCoverInputRef = useRef<HTMLInputElement | null>(null);
   const loadedBookIdRef = useRef<string | null>(null);
 
   const selectedLength = LENGTHS[length];
@@ -382,6 +375,7 @@ const Bookmaker = () => {
     setExportPreset(preset);
     if (preset === "stage1") {
       setExportCover(true);
+      setExportBackCover(true);
       setExportAbstract(true);
       setExportOutline(true);
       setExportChapters([]);
@@ -389,12 +383,14 @@ const Bookmaker = () => {
     }
     if (preset === "stage2") {
       setExportCover(true);
+      setExportBackCover(true);
       setExportAbstract(true);
       setExportOutline(true);
       setExportChapters(exportableChapters.some((chapter) => chapter.number === 1) ? [1] : []);
       return;
     }
     setExportCover(true);
+    setExportBackCover(true);
     setExportAbstract(true);
     setExportOutline(false);
     setExportChapters("all");
@@ -1463,66 +1459,99 @@ const Bookmaker = () => {
     }
   };
 
-  const handleCoverUpload = async (file: File | null) => {
-    if (!file || !book || !user) return;
-    setCoverBusy(true);
+  const handleCoverUpload = async (file: File | null, side: "front" | "back" = "front") => {
+    if (!file || !book || !user || coverBusy || backCoverBusy) return;
+    const setBusy = side === "back" ? setBackCoverBusy : setCoverBusy;
+    setBusy(true);
     try {
-      const { width, height } = await readImageSize(file);
-      if (height <= width) {
-        throw new Error("Covers must be portrait. Upload an A5-shaped page, 1748 × 2480 px.");
-      }
-      if (width < COVER_MIN_WIDTH || height < COVER_MIN_HEIGHT) {
-        throw new Error(
-          `This cover is ${width} × ${height} px. Upload at least ${COVER_MIN_WIDTH} × ${COVER_MIN_HEIGHT} px, ideally 1748 × 2480 px (A5).`,
-        );
-      }
-      const ratio = width / height;
-      if (Math.abs(ratio - COVER_ASPECT) > COVER_ASPECT * 0.03) {
-        throw new Error(
-          `This cover is ${width} × ${height} px. A5 pages need the 1748 × 2480 px shape, so resize it to that ratio to avoid trimming.`,
-        );
-      }
-      const uploaded = await uploadBookCover(user.id, book.id, file);
-      const saved = await saveBookmakerBook(book.id, {
-        cover: {
-          ...(book.cover ?? { kind: "none" }),
-          kind: "uploaded",
-          url: uploaded.url,
-          path: uploaded.path,
-          updatedAt: new Date().toISOString(),
-        },
-      });
+      const uploaded = await uploadBookCover(user.id, book.id, file, side);
+      const base = book.cover ?? { kind: "none" as const };
+      const stamp = new Date().toISOString();
+      const cover =
+        side === "back"
+          ? { ...base, back: { url: uploaded.url, path: uploaded.path, updatedAt: stamp } }
+          : { ...base, kind: "uploaded" as const, url: uploaded.url, path: uploaded.path, updatedAt: stamp };
+      const saved = await saveBookmakerBook(book.id, { cover });
       setBook(saved);
       toast({
-        title: "Cover uploaded",
-        description: "It is fitted to the page without cropping or stretching.",
+        title: side === "back" ? "Back cover uploaded" : "Cover uploaded",
+        description: "Any image size or shape works. It is fitted to the page without cropping or stretching.",
       });
     } catch (err) {
       toast({
-        title: "Cover not uploaded",
+        title: side === "back" ? "Back cover not uploaded" : "Cover not uploaded",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
-      setCoverBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setBusy(false);
+      const input = side === "back" ? backCoverInputRef.current : fileInputRef.current;
+      if (input) input.value = "";
     }
   };
 
-  const handleRemoveCover = async () => {
-    if (!book || coverBusy) return;
-    setCoverBusy(true);
+  const handleRemoveCover = async (side: "front" | "back" = "front") => {
+    if (!book || coverBusy || backCoverBusy) return;
+    const setBusy = side === "back" ? setBackCoverBusy : setCoverBusy;
+    setBusy(true);
     try {
-      const saved = await saveBookmakerBook(book.id, { cover: { kind: "none" } });
+      const base = book.cover ?? { kind: "none" as const };
+      // Removing one side never removes the other: the front cover design and
+      // the uploaded back cover are independent pages of the finished book.
+      const cover =
+        side === "back"
+          ? { ...base, back: null }
+          : { kind: "none" as const, back: base.back ?? null };
+      const saved = await saveBookmakerBook(book.id, { cover });
       setBook(saved);
     } catch (err) {
       toast({
-        title: "Could not remove the cover",
+        title: side === "back" ? "Could not remove the back cover" : "Could not remove the cover",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
-      setCoverBusy(false);
+      setBusy(false);
+    }
+  };
+
+  const handleRegenerateTitle = async () => {
+    if (!book || titleBusy) return;
+    setTitleBusy(true);
+    try {
+      const response = await invokeBookmaker({
+        action: "regenerate_title",
+        bookId: book.id,
+        idempotencyKey: makeIdempotencyKey("title", book.id),
+      });
+      if (!response.success) {
+        if (response.reason === "insufficient_credits") await refreshEntitlement();
+        toast({
+          title: "Title not regenerated",
+          description: String(response.message || "Please try again."),
+          variant: "destructive",
+        });
+        return;
+      }
+      const next = response.book as BookmakerBook | undefined;
+      if (next) {
+        setBook(next);
+        setTitle(next.title || "");
+        setSubtitle(next.subtitle || "");
+      }
+      if (response.entitlement) setEntitlement(response.entitlement as BookmakerEntitlement);
+      toast({
+        title: "New title ready",
+        description: "Edit it if you like, or generate another direction. Your chapters are unchanged.",
+      });
+    } catch (err) {
+      toast({
+        title: "Title not regenerated",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setTitleBusy(false);
     }
   };
 
@@ -1563,6 +1592,7 @@ const Bookmaker = () => {
     }
     const sections = {
       cover: exportCover,
+      backCover: exportBackCover,
       // The full book keeps its title page; challenge bundles start the
       // submission with the cover so nothing extra pads the page count.
       titlePage: exportPreset === "full",
@@ -1593,9 +1623,23 @@ const Bookmaker = () => {
       }
 
       const coverUrl = exportCover ? await resolveBookCoverUrl(book.cover) : null;
+      const backCoverUrl =
+        exportBackCover ? await resolveBookBackCoverUrl(book.cover) : null;
       const success = autoPrint
-        ? downloadBookPDF(book, { authorName, sections, targetWindow, coverUrl: coverUrl ?? undefined })
-        : openBookPrintPreview(book, { authorName, sections, targetWindow, coverUrl: coverUrl ?? undefined });
+        ? downloadBookPDF(book, {
+            authorName,
+            sections,
+            targetWindow,
+            coverUrl: coverUrl ?? undefined,
+            backCoverUrl: backCoverUrl ?? undefined,
+          })
+        : openBookPrintPreview(book, {
+            authorName,
+            sections,
+            targetWindow,
+            coverUrl: coverUrl ?? undefined,
+            backCoverUrl: backCoverUrl ?? undefined,
+          });
       if (!success) {
         targetWindow.close();
         toast({
@@ -2357,9 +2401,24 @@ const Bookmaker = () => {
               ) : (
                 <>
                   <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Title &amp; promise</CardTitle>
-                      <CardDescription>You can edit your outline as many times as you like.</CardDescription>
+                    <CardHeader className="flex-col gap-2 space-y-0 pb-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <CardTitle className="text-lg">Title &amp; promise</CardTitle>
+                        <CardDescription>
+                          Edit it any time, or ask Bookmaker for a fresh angle. Your outline and chapters stay unchanged.
+                        </CardDescription>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleRegenerateTitle}
+                        disabled={titleBusy || writing || gateBusy}
+                        className="w-full gap-1.5 sm:w-auto"
+                      >
+                        {titleBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        Regenerate title
+                      </Button>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-1.5">
@@ -2867,11 +2926,11 @@ const Bookmaker = () => {
             <div className="space-y-4">
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">Cover</CardTitle>
+                  <CardTitle className="text-lg">Front cover</CardTitle>
                   <CardDescription>Upload your own or let Bookmaker design one.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <CoverPreview book={book} authorName={authorName} className="mx-auto max-w-[240px]" />
+                  <CoverPreview book={book} authorName={authorName} className="mx-auto max-w-[220px]" />
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       size="sm"
@@ -2897,15 +2956,63 @@ const Bookmaker = () => {
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     className="hidden"
-                    onChange={(event) => void handleCoverUpload(event.target.files?.[0] ?? null)}
+                    onChange={(event) => void handleCoverUpload(event.target.files?.[0] ?? null, "front")}
                   />
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    JPG, PNG or WebP up to 8 MB. Use the A5 page size, 1748 × 2480 px (minimum 1200 × 1700 px), so the
-                    cover fills the page without trimming.
+                    JPG, PNG or WebP up to 8 MB. Any image size or shape works. A5 (1748 × 2480 px) is recommended
+                    for a print-perfect cover.
                   </p>
                   {book?.cover?.kind !== "none" ? (
-                    <Button variant="ghost" size="sm" onClick={handleRemoveCover} disabled={coverBusy} className="w-full text-muted-foreground">
-                      Remove cover
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleRemoveCover("front")}
+                      disabled={coverBusy}
+                      className="w-full text-muted-foreground"
+                    >
+                      Remove front cover
+                    </Button>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Back cover</CardTitle>
+                  <CardDescription>Add your own, or let Bookmaker print a clean generated one.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <CoverPreview book={book} authorName={authorName} side="back" className="mx-auto max-w-[220px]" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => backCoverInputRef.current?.click()}
+                    disabled={backCoverBusy}
+                    className="w-full gap-1.5"
+                  >
+                    {backCoverBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                    {book?.cover?.back ? "Replace back cover" : "Upload back cover"}
+                  </Button>
+                  <input
+                    ref={backCoverInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(event) => void handleCoverUpload(event.target.files?.[0] ?? null, "back")}
+                  />
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Optional. Any image shape works. Leave it blank and Bookmaker uses your title, abstract and author
+                    on the final page.
+                  </p>
+                  {book?.cover?.back ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleRemoveCover("back")}
+                      disabled={backCoverBusy}
+                      className="w-full text-muted-foreground"
+                    >
+                      Remove back cover
                     </Button>
                   ) : null}
                 </CardContent>
@@ -3018,14 +3125,22 @@ const Bookmaker = () => {
                     </div>
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {[
                       {
-                        label: "Cover",
+                        label: "Front cover",
                         active: exportCover,
                         toggle: () => {
                           setExportPreset("custom");
                           setExportCover((value) => !value);
+                        },
+                      },
+                      {
+                        label: "Back cover",
+                        active: exportBackCover,
+                        toggle: () => {
+                          setExportPreset("custom");
+                          setExportBackCover((value) => !value);
                         },
                       },
                       {

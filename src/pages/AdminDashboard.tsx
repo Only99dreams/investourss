@@ -11,6 +11,7 @@ import FirmsTab from "@/components/admin/tabs/FirmsTab";
 import InvestmentsTab from "@/components/admin/tabs/InvestmentsTab";
 import AIToolsTab from "@/components/admin/tabs/AIToolsTab";
 import EducationTab from "@/components/admin/tabs/EducationTab";
+import CertificationTab from "@/components/admin/tabs/CertificationTab";
 import CommunityTab from "@/components/admin/tabs/CommunityTab";
 import WalletsTab from "@/components/admin/tabs/WalletsTab";
 import PayoutsTab from "@/components/admin/tabs/PayoutsTab";
@@ -80,6 +81,7 @@ const AdminDashboard = () => {
             <Route path="investments" element={<InvestmentsTab />} />
             <Route path="ai-tools" element={<AIToolsTab />} />
             <Route path="education" element={<EducationTab />} />
+            <Route path="certification" element={<CertificationTab />} />
             <Route path="community" element={<CommunityTab />} />
             <Route path="wallets" element={<WalletsTab />} />
             <Route path="deposit-requests" element={<DepositRequestsManager />} />

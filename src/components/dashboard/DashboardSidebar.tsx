@@ -6,12 +6,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { 
   User, Wallet, GraduationCap, TrendingUp, FileText, Users, 
   Settings, Bell, MessageSquare, AlertCircle, Share2, Trophy,
-  Target, LogOut, Shield, Umbrella, Award, ScanSearch, PieChart, History, ShieldCheck, BookOpen
+  Target, LogOut, Shield, Umbrella, Award, ScanSearch, PieChart, History, ShieldCheck, BookOpen, BadgeCheck
 } from "lucide-react";
 import investoursLogo from "@/assets/investours-logo.png";
 
 const sidebarItems = [
   { icon: GraduationCap, label: "Education", path: "/dashboard/education" },
+  { icon: BadgeCheck, label: "Request Certificate", path: "/dashboard/request-certificate" },
   { icon: User, label: "Profile", path: "/dashboard/profile" },
   { icon: Bell, label: "Notifications", path: "/dashboard/notifications" },
   { icon: BookOpen, label: "Bookmaker", path: "/dashboard/bookmaker", subtitle: "My Ebooks" },

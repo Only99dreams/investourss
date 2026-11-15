@@ -18,6 +18,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
  *   abandon             0 cr  — settle early and refund ungenerated chapters
  *   regenerate_chapter  paid  — rewrite one chapter (1 credit)
  *   regenerate_visual   paid  — rewrite one visual block (1 credit)
+ *   regenerate_title    0 cr  — rewrite the title + subtitle only
  *   generate_cover      paid  — typographic/vector cover art direction (1 credit)
  */
 
@@ -153,6 +154,23 @@ Requirements:
 - Chapters must build in a logical order and avoid repetition.
 - Match the tone and structure to the purpose and audience. A workbook needs exercises, a children's book needs simple scenes and repetition, a business book needs frameworks and examples, a memoir needs narrative.
 - Be concrete and practical. Do not invent statistics, studies or sources.
+- Do not include markdown fences or commentary outside the JSON.`;
+
+const TITLE_SYSTEM = `You are Bookmaker by Investours, a senior nonfiction book editor and title strategist.
+You rewrite the title and subtitle of an existing ebook so it is sharper, more specific and more commercial — while staying true to the book's idea, audience and content.
+
+Return ONLY valid JSON with this exact shape:
+{
+  "title": "compelling, specific book title",
+  "subtitle": "one-line promise or positioning statement"
+}
+
+Requirements:
+- Write the title and subtitle in the book's language.
+- Keep the title short enough to fit on a cover: 3–9 words, no quotation marks, no colon-only tricks, no author name.
+- The subtitle is a single sentence of at most 16 words that names the concrete outcome for the reader.
+- Offer a genuinely different angle from the current title unless the outline clearly demands similar wording.
+- Do not invent statistics, credentials, studies or sources. Do not mention "Bookmaker".
 - Do not include markdown fences or commentary outside the JSON.`;
 
 function extractJson(raw: string): any {
@@ -2351,6 +2369,109 @@ Return only the replacement visual block.`,
       }
 
       // ---------------------------------------------------------------------
+      // Regenerate title + subtitle only (0 credits, but logged/idempotent)
+      // ---------------------------------------------------------------------
+      case "regenerate_title": {
+        const bookId = String(body?.bookId ?? "").trim();
+        if (!bookId) return json({ success: false, message: "Book is required." }, 400);
+        if (idempotencyKey.length < 8) {
+          return json({ success: false, message: "A valid request key is required." }, 400);
+        }
+
+        const book = await getOwnedBook(admin, bookId, userId);
+        if (!book) return json({ success: false, message: "Book not found." }, 404);
+
+        const reserved = await caller.rpc("bookmaker_reserve_operation", {
+          p_book_id: bookId,
+          p_operation: "title_regeneration",
+          p_idempotency_key: idempotencyKey,
+          p_length: book.length,
+          p_metadata: { stage: "title" },
+        });
+        if (reserved.error) throw reserved.error;
+        if (!reserved.data?.success) return reserveErrorResponse(reserved.data);
+        operationId = reserved.data.operation_id;
+
+        if (reserved.data.duplicate) {
+          const duplicateOperation = await loadOperation(admin, operationId!);
+          if (duplicateOperation?.operation !== "title_regeneration") {
+            return duplicateInProgress(
+              "Another AI action is already running for this book. Please wait for it to finish, then try again.",
+              book,
+              reserved.data.entitlement,
+            );
+          }
+          if (duplicateOperation.status === "pending") {
+            return json({
+              success: false,
+              reason: "in_progress",
+              message: "A new title is already being written. Please wait a moment for it to finish.",
+              book,
+            }, 409);
+          }
+          const current = await getOwnedBook(admin, bookId, userId);
+          return json({
+            success: true,
+            duplicate: true,
+            book: current,
+            entitlement: reserved.data.entitlement,
+          });
+        }
+
+        try {
+          const usage = createAiUsage();
+          const parsed = await callGroqJson(
+            [
+              { role: "system", content: TITLE_SYSTEM },
+              {
+                role: "user",
+                content: `Rewrite the title and subtitle for this ebook.
+
+Current title: ${book.title || "(none yet)"}
+Current subtitle: ${book.subtitle || "(none yet)"}
+Idea: ${truncateText(book.idea, 1200)}
+Audience: ${book.custom_audience || book.audience}
+Purpose: ${book.custom_purpose || book.purpose}
+Language: ${book.language}
+Length: ${book.length}
+Chapter themes: ${(book.outline?.chapters ?? []).slice(0, 10).map((chapter: any) => clampText(chapter?.title, 80)).filter(Boolean).join(" | ") || "not outlined yet"}
+Author direction: ${clampText(body?.instruction, 300) || "Give me a fresh, stronger direction."}`,
+              },
+            ],
+            { maxTokens: 600, temperature: 0.85, usage },
+          );
+
+          const title = clampText(parsed?.title, 120);
+          const subtitle = clampText(parsed?.subtitle, 200);
+          if (!title) throw new Error("The AI returned an empty title. Please try again.");
+
+          const { data: saved, error: saveError } = await admin
+            .from("bookmaker_books")
+            .update({ title, subtitle: subtitle || book.subtitle || "" })
+            .eq("id", bookId)
+            .eq("user_id", userId)
+            .select("*")
+            .single();
+          if (saveError) throw saveError;
+
+          const completed = await caller.rpc("bookmaker_complete_operation", { p_operation_id: operationId });
+          if (completed.error) throw completed.error;
+          await recordAiUsage(admin, operationId, usage);
+
+          return json({
+            success: true,
+            title,
+            subtitle: saved?.subtitle ?? subtitle,
+            book: saved,
+            entitlement: completed.data?.entitlement ?? reserved.data.entitlement,
+          });
+        } catch (err) {
+          await settleFailure(admin, operationId, err instanceof Error ? err.message : "Title regeneration failed");
+          throw err;
+        }
+      }
+
+      // ---------------------------------------------------------------------
       // Generate cover art direction (1 credit)
       // ---------------------------------------------------------------------
       case "generate_cover": {
@@ -2480,6 +2601,8 @@ Requested style: ${clampText(body?.style, 80) || "art director's choice"}`,
             kind: "generated",
             design,
             updatedAt: new Date().toISOString(),
+            // A generated front cover never discards an uploaded back cover.
+            back: book.cover?.back ?? null,
           };
 
           const { data: saved, error: saveError } = await admin

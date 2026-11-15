@@ -11,6 +11,7 @@ import { ReferralsSection } from "@/components/dashboard/sections/ReferralsSecti
 import { MessagesSection } from "@/components/dashboard/sections/MessagesSection";
 import { AIReportsSection } from "@/components/dashboard/sections/AIReportsSection";
 import { CertificatesSection } from "@/components/dashboard/sections/CertificatesSection";
+import { RequestCertificateSection } from "@/components/dashboard/sections/RequestCertificateSection";
 import { SettingsSection } from "@/components/dashboard/sections/SettingsSection";
 import { NotificationsSection } from "@/components/dashboard/sections/NotificationsSection";
 import { LeaderboardSection } from "@/components/dashboard/sections/LeaderboardSection";
@@ -82,6 +83,12 @@ const Dashboard = () => {
             <>
               <DashboardHeader title="Education & Mentorship" onMenuClick={() => setSidebarOpen(true)} />
               <EducationSection />
+            </>
+          } />
+          <Route path="/request-certificate" element={
+            <>
+              <DashboardHeader title="Request Certificate" onMenuClick={() => setSidebarOpen(true)} />
+              <RequestCertificateSection />
             </>
           } />
           <Route path="/investments" element={
