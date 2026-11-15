@@ -94,8 +94,8 @@ const benefits = [
   },
   {
     icon: ShieldCheck,
-    title: "Credits you control",
-    description: "See the exact cost before anything runs. Edits never use credits, and failed AI operations are refunded.",
+    title: "Included with a plan",
+    description: "Subscribers write, rewrite and narrate without spending credits. Pay-as-you-go members see the exact cost before anything runs, and failed AI operations are refunded.",
   },
 ];
 
@@ -266,7 +266,7 @@ const BookmakerLanding = () => {
           <div className="mx-auto mb-6 max-w-2xl text-center sm:mb-8">
             <h2 className="mb-2 text-xl font-bold text-foreground sm:text-2xl">Choose your book size</h2>
             <p className="text-sm text-muted-foreground sm:text-base">
-              Start with an outline on every size. Credits are only used when the AI writes.
+              Start with an outline on every size. Subscribers use no credits; pay-as-you-go members are only charged when the AI writes.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3 md:gap-5">
@@ -315,8 +315,9 @@ const BookmakerLanding = () => {
             ))}
           </div>
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            Chapter rewrite 1 credit · Visual rewrite 1 credit · Cover 1 credit · Audiobook narration uses platform credits: 4 credits short,
-            8 medium, 12 long · Manual edits are free · Free PDF downloads are included with every plan, then 1 credit per download.
+            Subscribers: every AI action and audiobook narration is included. Without a plan: chapter rewrite 1 credit · visual
+            rewrite 1 credit · cover 1 credit · audiobook narration 4 credits short, 8 medium, 12 long · Manual edits are free ·
+            Free PDF downloads are included with every plan, then 1 credit per download.
           </p>
         </motion.section>
 

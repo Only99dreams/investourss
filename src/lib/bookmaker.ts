@@ -253,12 +253,14 @@ export interface BookmakerBook {
 export interface BookmakerEntitlement {
   authenticated: boolean;
   subscription_active: boolean;
+  /** Active subscription: every generation operation is included, no credits. */
+  operations_included?: boolean;
   subscription_type?: string | null;
   subscription_credits_remaining: number;
   subscription_credits_granted: number;
   subscription_credits_used: number;
   subscription_period_end?: string | null;
-  /** Ebooks + audiobooks allowed by the plan in the current period. */
+  /** New ebooks (and full reworks) allowed by the plan this period. */
   plan_items_limit?: number | null;
   plan_items_used?: number;
   plan_items_remaining?: number | null;
@@ -268,7 +270,7 @@ export interface BookmakerEntitlement {
   download_limit?: number;
   /** Credits charged per download once the free allowance is used. */
   download_cost?: number;
-  /** Narration is paid from credit packs only, never plan credits. */
+  /** Members without a subscription pay for narration from credit packs only. */
   audiobook_pack_only?: boolean;
   costs: Record<string, number>;
 }
@@ -276,6 +278,7 @@ export interface BookmakerEntitlement {
 export const DEFAULT_ENTITLEMENT: BookmakerEntitlement = {
   authenticated: false,
   subscription_active: false,
+  operations_included: false,
   subscription_credits_remaining: 0,
   subscription_credits_granted: 0,
   subscription_credits_used: 0,

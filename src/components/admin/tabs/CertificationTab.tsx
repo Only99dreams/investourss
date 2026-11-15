@@ -41,10 +41,12 @@ import {
   EyeOff,
   Loader2,
   Mail,
+  Palette,
   Pencil,
   Plus,
   Search,
   Send,
+  Star,
   Trash2,
   UserCheck,
   Users,
@@ -53,9 +55,17 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { PLAN_TIER_OPTIONS, planLabel } from "@/lib/subscription";
+import { CertificatePreview } from "@/components/certificates/CertificatePreview";
+import { CertificatePreviewDialog } from "@/components/certificates/CertificatePreviewDialog";
+import {
+  CERTIFICATE_PURPOSES,
+  CertificateDetails,
+  CertificateTemplate,
+  DEFAULT_CERTIFICATE_TEMPLATES,
+  purposeLabel,
+  resolveTemplate,
+} from "@/lib/certificateTemplates";
 
-type Tier = "free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b";
 type RequestStatus = "pending" | "approved" | "rejected";
 
 interface CertificationCourse {
@@ -63,7 +73,7 @@ interface CertificationCourse {
   title: string;
   description: string | null;
   category: string | null;
-  tier_required: Tier | null;
+  template_id: string | null;
   is_published: boolean | null;
   order_index: number | null;
 }
@@ -72,6 +82,7 @@ interface CertificationRequest {
   id: string;
   user_id: string;
   course_id: string;
+  template_id: string | null;
   status: RequestStatus;
   note: string | null;
   admin_notes: string | null;
@@ -89,6 +100,9 @@ interface Member {
 }
 
 const BATCH_SIZE = 20;
+// certificate_templates is newer than the generated Database types.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
 const memberName = (member: Member) =>
   member.full_name?.trim() || member.email?.trim() || "Unnamed member";
 const memberEmail = (member: Member) => member.email?.trim().toLowerCase() ?? "";
@@ -101,6 +115,7 @@ const CertificationTab = () => {
   const { user } = useAuth();
   const [courses, setCourses] = useState<CertificationCourse[]>([]);
   const [requests, setRequests] = useState<CertificationRequest[]>([]);
+  const [templates, setTemplates] = useState<CertificateTemplate[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Member>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -110,8 +125,31 @@ const CertificationTab = () => {
   const [editingCourse, setEditingCourse] = useState<CertificationCourse | null>(null);
   const [courseTitle, setCourseTitle] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
-  const [courseTier, setCourseTier] = useState<Tier>("free");
+  const [courseTemplateId, setCourseTemplateId] = useState("");
   const [coursePublished, setCoursePublished] = useState(true);
+
+  // Template form state
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<CertificateTemplate | null>(null);
+  const [templateName, setTemplateName] = useState("");
+  const [templatePurpose, setTemplatePurpose] = useState("completion");
+  const [templateHeading, setTemplateHeading] = useState("Certificate of Completion");
+  const [templateIntro, setTemplateIntro] = useState("This certifies that");
+  const [templateBody, setTemplateBody] = useState("has successfully completed the");
+  const [templateFooter, setTemplateFooter] = useState("Investours Education & Mentorship");
+  const [templateIssuerName, setTemplateIssuerName] = useState("Olusegun Emmanuel");
+  const [templateIssuerTitle, setTemplateIssuerTitle] = useState("Founder & CEO, Investours");
+  const [templateAccentColor, setTemplateAccentColor] = useState("#7c3aed");
+  const [templateDefault, setTemplateDefault] = useState(false);
+  const [templatePublished, setTemplatePublished] = useState(true);
+
+  // Preview state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<CertificateTemplate | null>(null);
+  const [previewDetails, setPreviewDetails] = useState<CertificateDetails>({
+    recipientName: "Member name",
+    courseTitle: "Course title",
+  });
 
   // Requests state
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "all">("pending");
@@ -137,6 +175,20 @@ const CertificationTab = () => {
       return;
     }
     setCourses((data ?? []) as CertificationCourse[]);
+  }, []);
+
+  const fetchTemplates = useCallback(async () => {
+    const { data, error } = await db
+      .from("certificate_templates")
+      .select("*")
+      .order("order_index");
+    if (error) {
+      console.error("Could not load certificate templates:", error);
+      setTemplates(DEFAULT_CERTIFICATE_TEMPLATES);
+      return;
+    }
+    const rows = (data ?? []) as CertificateTemplate[];
+    setTemplates(rows.length > 0 ? rows : DEFAULT_CERTIFICATE_TEMPLATES);
   }, []);
 
   const fetchRequests = useCallback(async () => {
@@ -171,9 +223,9 @@ const CertificationTab = () => {
 
   const loadAll = useCallback(async () => {
     setIsLoading(true);
-    await Promise.all([fetchCourses(), fetchRequests()]);
+    await Promise.all([fetchCourses(), fetchRequests(), fetchTemplates()]);
     setIsLoading(false);
-  }, [fetchCourses, fetchRequests]);
+  }, [fetchCourses, fetchRequests, fetchTemplates]);
 
   useEffect(() => {
     void loadAll();
@@ -242,11 +294,31 @@ const CertificationTab = () => {
       .slice(0, 200);
   }, [members, memberSearch, selectedMembers]);
 
+  const templatesById = useMemo(() => {
+    const map: Record<string, CertificateTemplate> = {};
+    for (const template of templates) map[template.id] = template;
+    return map;
+  }, [templates]);
+
+  const defaultTemplate = useMemo(
+    () => resolveTemplate(templates, null),
+    [templates],
+  );
+
+  const templateNameFor = (templateId: string | null | undefined) =>
+    resolveTemplate(templates, templateId).name;
+
+  const openPreview = (template: CertificateTemplate, details: CertificateDetails) => {
+    setPreviewTemplate(template);
+    setPreviewDetails(details);
+    setIsPreviewOpen(true);
+  };
+
   const resetCourseForm = () => {
     setEditingCourse(null);
     setCourseTitle("");
     setCourseDescription("");
-    setCourseTier("free");
+    setCourseTemplateId(defaultTemplate.id);
     setCoursePublished(true);
   };
 
@@ -255,7 +327,7 @@ const CertificationTab = () => {
       setEditingCourse(course);
       setCourseTitle(course.title);
       setCourseDescription(course.description ?? "");
-      setCourseTier((course.tier_required ?? "free") as Tier);
+      setCourseTemplateId(course.template_id ?? defaultTemplate.id);
       setCoursePublished(course.is_published ?? true);
     } else {
       resetCourseForm();
@@ -274,7 +346,7 @@ const CertificationTab = () => {
       title: courseTitle.trim(),
       description: courseDescription.trim() || null,
       category: "Certification",
-      tier_required: courseTier,
+      template_id: courseTemplateId || null,
       is_published: coursePublished,
       order_index: editingCourse
         ? editingCourse.order_index ?? 0
@@ -325,6 +397,159 @@ const CertificationTab = () => {
     }
     toast.success("Course deleted");
     void loadAll();
+  };
+
+  const resetTemplateForm = () => {
+    setEditingTemplate(null);
+    setTemplateName("");
+    setTemplatePurpose("completion");
+    setTemplateHeading("Certificate of Completion");
+    setTemplateIntro("This certifies that");
+    setTemplateBody("has successfully completed the");
+    setTemplateFooter("Investours Education & Mentorship");
+    setTemplateIssuerName("Olusegun Emmanuel");
+    setTemplateIssuerTitle("Founder & CEO, Investours");
+    setTemplateAccentColor("#7c3aed");
+    setTemplateDefault(false);
+    setTemplatePublished(true);
+  };
+
+  const openTemplateDialog = (template?: CertificateTemplate) => {
+    if (template) {
+      setEditingTemplate(template);
+      setTemplateName(template.name);
+      setTemplatePurpose(template.purpose ?? "completion");
+      setTemplateHeading(template.heading);
+      setTemplateIntro(template.intro_text ?? "");
+      setTemplateBody(template.body_text ?? "");
+      setTemplateFooter(template.footer_note ?? "");
+      setTemplateIssuerName(template.issuer_name ?? "");
+      setTemplateIssuerTitle(template.issuer_title ?? "");
+      setTemplateAccentColor(template.accent_color ?? "#7c3aed");
+      setTemplateDefault(template.is_default ?? false);
+      setTemplatePublished(template.is_published ?? true);
+    } else {
+      resetTemplateForm();
+    }
+    setIsTemplateDialogOpen(true);
+  };
+
+  const handleTemplateSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!templateName.trim()) {
+      toast.error("Template name is required");
+      return;
+    }
+    if (!templateHeading.trim()) {
+      toast.error("Certificate heading is required");
+      return;
+    }
+
+    setWorking(true);
+    // The table allows a single default, so clear the old one first.
+    if (templateDefault) {
+      const { error } = await db
+        .from("certificate_templates")
+        .update({ is_default: false })
+        .eq("is_default", true);
+      if (error) {
+        setWorking(false);
+        toast.error("Failed to update the default template");
+        return;
+      }
+    }
+
+    const payload = {
+      name: templateName.trim(),
+      purpose: templatePurpose,
+      heading: templateHeading.trim(),
+      intro_text: templateIntro.trim() || null,
+      body_text: templateBody.trim() || null,
+      footer_note: templateFooter.trim() || null,
+      issuer_name: templateIssuerName.trim() || null,
+      issuer_title: templateIssuerTitle.trim() || null,
+      accent_color: templateAccentColor,
+      is_published: templatePublished,
+      is_default: templateDefault,
+      order_index: editingTemplate
+        ? editingTemplate.order_index ?? 0
+        : templates.reduce((max, template) => Math.max(max, template.order_index ?? 0), 0) + 1,
+    };
+
+    const { error } = editingTemplate
+      ? await db.from("certificate_templates").update(payload).eq("id", editingTemplate.id)
+      : await db.from("certificate_templates").insert(payload);
+    setWorking(false);
+
+    if (error) {
+      console.error("Could not save certificate template:", error);
+      toast.error(
+        error.code === "23505"
+          ? "A template with that name already exists"
+          : "Failed to save certificate template",
+      );
+      return;
+    }
+    toast.success(editingTemplate ? "Template updated" : "Template created");
+    setIsTemplateDialogOpen(false);
+    resetTemplateForm();
+    void fetchTemplates();
+  };
+
+  const toggleTemplatePublished = async (template: CertificateTemplate) => {
+    const { error } = await db
+      .from("certificate_templates")
+      .update({ is_published: !template.is_published })
+      .eq("id", template.id);
+    if (error) {
+      toast.error("Failed to update template");
+      return;
+    }
+    void fetchTemplates();
+  };
+
+  const makeTemplateDefault = async (template: CertificateTemplate) => {
+    setWorking(true);
+    await db.from("certificate_templates").update({ is_default: false }).eq("is_default", true);
+    const { error } = await db
+      .from("certificate_templates")
+      .update({ is_default: true })
+      .eq("id", template.id);
+    setWorking(false);
+    if (error) {
+      toast.error("Failed to set the default template");
+      return;
+    }
+    toast.success(`"${template.name}" is now the default design`);
+    void fetchTemplates();
+  };
+
+  const handleDeleteTemplate = async (template: CertificateTemplate) => {
+    if (
+      !confirm(
+        `Delete "${template.name}"? Courses using it will fall back to the default design.`,
+      )
+    )
+      return;
+    const { error } = await db
+      .from("certificate_templates")
+      .delete()
+      .eq("id", template.id);
+    if (error) {
+      toast.error("Failed to delete template");
+      return;
+    }
+    if (template.is_default) {
+      const next = templates.find((item) => item.id !== template.id);
+      if (next) await db.from("certificate_templates").update({ is_default: true }).eq("id", next.id);
+    }
+    toast.success("Template deleted");
+    void loadAll();
+  };
+
+  const demoCertificateDetails: CertificateDetails = {
+    recipientName: "Member name",
+    courseTitle: "Course title",
   };
 
   const sendCertificationEmail = async (course: CertificationCourse, recipients: Member[]) => {
@@ -533,6 +758,7 @@ const CertificationTab = () => {
         status: "approved" as const,
         reviewed_at: now,
         reviewed_by: user?.id ?? null,
+        template_id: course.template_id ?? null,
         certificate_number: certificateNumber(),
         admin_notes: issueNote.trim() || null,
         notified_at: now,
@@ -569,8 +795,6 @@ const CertificationTab = () => {
     }
   };
 
-  const tierLabel = (tier: Tier | null) => planLabel(tier);
-
   const pendingCount = requests.filter((request) => request.status === "pending").length;
 
   return (
@@ -579,26 +803,197 @@ const CertificationTab = () => {
         <div>
           <h2 className="text-2xl font-bold">Certification</h2>
           <p className="text-muted-foreground">
-            Manage certification courses, review requests, and issue certificates by email.
+            Manage certificate templates, courses, requests, and issue certificates by email.
           </p>
         </div>
-        <Dialog
-          open={isCourseDialogOpen}
-          onOpenChange={(open) => {
-            setIsCourseDialogOpen(open);
-            if (!open) resetCourseForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button onClick={() => openCourseDialog()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Course
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingCourse ? "Edit Certification Course" : "New Certification Course"}</DialogTitle>
-            </DialogHeader>
+        <div className="flex flex-wrap gap-2">
+          <Dialog
+            open={isTemplateDialogOpen}
+            onOpenChange={(open) => {
+              setIsTemplateDialogOpen(open);
+              if (!open) resetTemplateForm();
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button variant="outline" onClick={() => openTemplateDialog()}>
+                <Palette className="mr-2 h-4 w-4" />
+                Add Template
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingTemplate ? "Edit Certificate Template" : "New Certificate Template"}
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleTemplateSubmit} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="template-name">Template name *</Label>
+                    <Input
+                      id="template-name"
+                      value={templateName}
+                      onChange={(event) => setTemplateName(event.target.value)}
+                      placeholder="e.g., Certificate of Completion"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Purpose</Label>
+                    <Select value={templatePurpose} onValueChange={setTemplatePurpose}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CERTIFICATE_PURPOSES.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="template-heading">Certificate heading *</Label>
+                  <Input
+                    id="template-heading"
+                    value={templateHeading}
+                    onChange={(event) => setTemplateHeading(event.target.value)}
+                    placeholder="Certificate of Completion"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="template-intro">Line above the name</Label>
+                    <Input
+                      id="template-intro"
+                      value={templateIntro}
+                      onChange={(event) => setTemplateIntro(event.target.value)}
+                      placeholder="This certifies that"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="template-body">Line below the name</Label>
+                    <Input
+                      id="template-body"
+                      value={templateBody}
+                      onChange={(event) => setTemplateBody(event.target.value)}
+                      placeholder="has successfully completed the"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="template-issuer-name">Signatory name</Label>
+                    <Input
+                      id="template-issuer-name"
+                      value={templateIssuerName}
+                      onChange={(event) => setTemplateIssuerName(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="template-issuer-title">Signatory title</Label>
+                    <Input
+                      id="template-issuer-title"
+                      value={templateIssuerTitle}
+                      onChange={(event) => setTemplateIssuerTitle(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="template-footer">Footer note</Label>
+                  <Input
+                    id="template-footer"
+                    value={templateFooter}
+                    onChange={(event) => setTemplateFooter(event.target.value)}
+                    placeholder="Investours Education & Mentorship"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="template-accent">Accent colour</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="template-accent"
+                        type="color"
+                        value={templateAccentColor}
+                        onChange={(event) => setTemplateAccentColor(event.target.value)}
+                        className="h-9 w-12 cursor-pointer rounded border border-input bg-background"
+                      />
+                      <Input
+                        value={templateAccentColor}
+                        onChange={(event) => setTemplateAccentColor(event.target.value)}
+                        className="font-mono uppercase"
+                        maxLength={9}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-3 pt-1">
+                    <label className="flex items-center gap-2 text-sm">
+                      <Switch
+                        checked={templatePublished}
+                        onCheckedChange={setTemplatePublished}
+                      />
+                      Visible to members
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Switch checked={templateDefault} onCheckedChange={setTemplateDefault} />
+                      Default design
+                    </label>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Preview</Label>
+                  <CertificatePreview
+                    template={{
+                      id: editingTemplate?.id ?? "draft",
+                      name: templateName || "Certificate",
+                      purpose: templatePurpose,
+                      heading: templateHeading || "Certificate",
+                      intro_text: templateIntro,
+                      body_text: templateBody,
+                      footer_note: templateFooter,
+                      issuer_name: templateIssuerName,
+                      issuer_title: templateIssuerTitle,
+                      accent_color: templateAccentColor,
+                      is_published: templatePublished,
+                      is_default: templateDefault,
+                      order_index: editingTemplate?.order_index ?? 0,
+                    }}
+                    details={demoCertificateDetails}
+                    className="border"
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setIsTemplateDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={working}>
+                    {working && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {editingTemplate ? "Update Template" : "Create Template"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={isCourseDialogOpen}
+            onOpenChange={(open) => {
+              setIsCourseDialogOpen(open);
+              if (!open) resetCourseForm();
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button onClick={() => openCourseDialog()}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Course
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{editingCourse ? "Edit Certification Course" : "New Certification Course"}</DialogTitle>
+              </DialogHeader>
             <form onSubmit={handleCourseSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="cert-title">Course title *</Label>
@@ -619,30 +1014,50 @@ const CertificationTab = () => {
                   rows={3}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Tier required</Label>
-                  <Select value={courseTier} onValueChange={(value: Tier) => setCourseTier(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PLAN_TIER_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Published</Label>
-                  <div className="flex items-center gap-2 pt-2">
-                    <Switch checked={coursePublished} onCheckedChange={setCoursePublished} />
-                    <span className="text-sm text-muted-foreground">
-                      {coursePublished ? "Visible to users" : "Hidden"}
-                    </span>
-                  </div>
+              <div className="space-y-2">
+                <Label>Certificate template</Label>
+                <Select value={courseTemplateId} onValueChange={setCourseTemplateId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a certificate design" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                        {template.is_default ? " · default" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {courseTemplateId && templatesById[courseTemplateId] ? (
+                  <button
+                    type="button"
+                    className="mt-1 w-full text-left"
+                    onClick={() =>
+                      openPreview(templatesById[courseTemplateId], {
+                        recipientName: "Member name",
+                        courseTitle: courseTitle.trim() || "Course title",
+                      })
+                    }
+                  >
+                    <CertificatePreview
+                      template={templatesById[courseTemplateId]}
+                      details={{
+                        recipientName: "Member name",
+                        courseTitle: courseTitle.trim() || "Course title",
+                      }}
+                      className="border"
+                    />
+                  </button>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <Label>Published</Label>
+                <div className="flex items-center gap-2 pt-2">
+                  <Switch checked={coursePublished} onCheckedChange={setCoursePublished} />
+                  <span className="text-sm text-muted-foreground">
+                    {coursePublished ? "Visible to users" : "Hidden"}
+                  </span>
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -657,15 +1072,25 @@ const CertificationTab = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
             <Award className="h-8 w-8 text-primary" />
             <div>
               <p className="text-2xl font-bold">{courses.length}</p>
               <p className="text-sm text-muted-foreground">Courses</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <Palette className="h-8 w-8 text-sky-500" />
+            <div>
+              <p className="text-2xl font-bold">{templates.length}</p>
+              <p className="text-sm text-muted-foreground">Templates</p>
             </div>
           </CardContent>
         </Card>
@@ -692,11 +1117,12 @@ const CertificationTab = () => {
       </div>
 
       <Tabs defaultValue="requests">
-        <TabsList className="grid h-auto w-full grid-cols-1 sm:grid-cols-3">
+        <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="requests">
             Requests{pendingCount > 0 ? ` (${pendingCount})` : ""}
           </TabsTrigger>
           <TabsTrigger value="courses">Courses</TabsTrigger>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="issue">Issue &amp; email</TabsTrigger>
         </TabsList>
 
@@ -920,7 +1346,7 @@ const CertificationTab = () => {
                       <TableRow>
                         <TableHead>Title</TableHead>
                         <TableHead>Description</TableHead>
-                        <TableHead>Tier</TableHead>
+                        <TableHead>Template</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -933,7 +1359,19 @@ const CertificationTab = () => {
                             {course.description || "-"}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{tierLabel(course.tier_required)}</Badge>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openPreview(resolveTemplate(templates, course.template_id), {
+                                  recipientName: "Member name",
+                                  courseTitle: course.title,
+                                })
+                              }
+                            >
+                              <Badge variant="outline">
+                                {templateNameFor(course.template_id)}
+                              </Badge>
+                            </button>
                           </TableCell>
                           <TableCell>
                             <Button
@@ -965,6 +1403,114 @@ const CertificationTab = () => {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="templates" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Certificate templates</CardTitle>
+              <CardDescription>
+                Reusable designs for different purposes. Courses use the template attached to them,
+                or the default design when none is chosen.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-end">
+                <Button size="sm" variant="outline" onClick={() => openTemplateDialog()}>
+                  <Plus className="mr-2 h-4 w-4" /> New template
+                </Button>
+              </div>
+
+              {isLoading ? (
+                <p className="py-8 text-center text-muted-foreground">Loading...</p>
+              ) : templates.length === 0 ? (
+                <p className="py-8 text-center text-muted-foreground">
+                  No certificate templates yet. Create one to control how certificates look.
+                </p>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {templates.map((template) => (
+                    <div key={template.id} className="space-y-2 rounded-lg border p-3">
+                      <button
+                        type="button"
+                        className="group w-full text-left"
+                        onClick={() => openPreview(template, demoCertificateDetails)}
+                      >
+                        <CertificatePreview
+                          template={template}
+                          details={demoCertificateDetails}
+                          className="border transition-shadow group-hover:shadow-md"
+                        />
+                      </button>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{template.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {purposeLabel(template.purpose)}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          {template.is_default ? <Badge>Default</Badge> : null}
+                          <Badge variant={template.is_published ? "secondary" : "outline"}>
+                            {template.is_published ? "Live" : "Hidden"}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Preview"
+                          onClick={() => openPreview(template, demoCertificateDetails)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Edit"
+                          onClick={() => openTemplateDialog(template)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title={template.is_published ? "Hide" : "Publish"}
+                          onClick={() => void toggleTemplatePublished(template)}
+                        >
+                          {template.is_published ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-emerald-500" />
+                          )}
+                        </Button>
+                        {!template.is_default ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Make default"
+                            disabled={working}
+                            onClick={() => void makeTemplateDefault(template)}
+                          >
+                            <Star className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Delete"
+                          onClick={() => void handleDeleteTemplate(template)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
@@ -1100,6 +1646,14 @@ const CertificationTab = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <CertificatePreviewDialog
+        open={isPreviewOpen}
+        onOpenChange={setIsPreviewOpen}
+        template={previewTemplate}
+        details={previewDetails}
+        title={previewTemplate ? `${previewTemplate.name} preview` : undefined}
+      />
     </div>
   );
 };

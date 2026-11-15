@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getBookmakerEntitlement, BOOKMAKER_CREDITS_CHANGED } from "@/lib/bookmakerApi";
+import { isActiveSubscriber, planLabel, planRank } from "@/lib/subscription";
 import { cn } from "@/lib/utils";
 import { Coins } from "lucide-react";
 
@@ -65,6 +66,14 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
     ? expiryDate.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })
     : null;
   const expired = daysLeft !== null && daysLeft < 0;
+
+  const subscriber = isActiveSubscriber(profile);
+  const currentPlan = profile?.subscription_type ?? null;
+  const planDisplay = subscriber ? planLabel(currentPlan) : "Free";
+  const canUpgrade =
+    subscriber &&
+    !String(currentPlan ?? "").startsWith("b2b") &&
+    planRank(currentPlan) < planRank("annual");
 
   useEffect(() => {
     const fetchUnreadCount = async () => {
@@ -145,7 +154,7 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
             )}
           </Button>
 
-          {profile?.user_tier === "free" && (
+          {!subscriber && (
             <Button 
               variant="default" 
               size="sm"
@@ -157,7 +166,7 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
             </Button>
           )}
 
-          {profile?.user_tier === "premium" && profile?.subscription_type !== "annual" && (
+          {canUpgrade && (
             <Button 
               variant="outline" 
               size="sm"
@@ -171,20 +180,13 @@ export function DashboardHeader({ title, onMenuClick }: DashboardHeaderProps) {
 
           <div className={cn(
             "px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1",
-            profile?.user_tier === "premium" ?
-              profile?.subscription_type === "annual" ? "bg-investours-gold/20 text-investours-gold" :
-              profile?.subscription_type === "biennial" ? "bg-accent/20 text-accent" :
-              profile?.subscription_type === "quarterly" ? "bg-primary/20 text-primary" :
-              "bg-primary/20 text-primary" :
-            profile?.user_tier === "exclusive" ? "bg-primary/20 text-primary" :
-            "bg-muted text-muted-foreground"
+            !subscriber
+              ? "bg-muted text-muted-foreground"
+              : currentPlan === "annual"
+                ? "bg-investours-gold/20 text-investours-gold"
+                : "bg-primary/20 text-primary"
           )}>
-            {profile?.user_tier?.toUpperCase() || "FREE"}
-            {profile?.user_tier === "premium" && profile?.subscription_type && (
-              <span className="hidden sm:inline text-xs opacity-75">
-                ({profile.subscription_type})
-              </span>
-            )}
+            {planDisplay}
           </div>
 
           {credits && (

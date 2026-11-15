@@ -25,10 +25,14 @@ interface PromoCode {
   expires_at: string | null;
   is_active: boolean;
   plan_type: string;
+  applies_to: string;
   created_by: string;
   created_at: string;
   creator_name?: string;
 }
+
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error && error.message ? error.message : fallback;
 
 export default function PromoCodesTab() {
   const { user, profile } = useAuth();
@@ -44,7 +48,8 @@ export default function PromoCodesTab() {
     discount_percentage: '',
     max_uses: '1',
     expiry_hours: '24',
-    plan_type: 'annual'
+    plan_type: 'annual',
+    applies_to: 'subscription',
   });
 
   useEffect(() => {
@@ -83,10 +88,10 @@ export default function PromoCodesTab() {
       );
 
       setPromoCodes(codesWithCreators);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to fetch promo codes",
+        description: errorMessage(error, "Failed to fetch promo codes"),
         variant: "destructive"
       });
     } finally {
@@ -133,7 +138,9 @@ export default function PromoCodesTab() {
           discount_percentage: discount,
           max_uses: parseInt(formData.max_uses),
           expires_at: expiryDate,
-          plan_type: formData.plan_type,
+          // Credit-only codes are plan-agnostic.
+          plan_type: formData.applies_to === 'credits' ? 'all' : formData.plan_type,
+          applies_to: formData.applies_to,
           created_by: profile?.id
         });
 
@@ -150,14 +157,15 @@ export default function PromoCodesTab() {
         discount_percentage: '',
         max_uses: '1',
         expiry_hours: '24',
-        plan_type: 'annual'
+        plan_type: 'annual',
+        applies_to: 'subscription',
       });
 
       fetchPromoCodes();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to create promo code",
+        description: errorMessage(error, "Failed to create promo code"),
         variant: "destructive"
       });
     } finally {
@@ -180,10 +188,10 @@ export default function PromoCodesTab() {
       });
 
       fetchPromoCodes();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to update promo code",
+        description: errorMessage(error, "Failed to update promo code"),
         variant: "destructive"
       });
     }
@@ -218,7 +226,9 @@ export default function PromoCodesTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Promo Codes</h2>
-          <p className="text-muted-foreground">Manage promotional codes for subscriptions</p>
+          <p className="text-muted-foreground">
+            Manage promotional codes for subscriptions and platform credits
+          </p>
         </div>
 
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -232,7 +242,7 @@ export default function PromoCodesTab() {
             <DialogHeader>
               <DialogTitle>Create New Promo Code</DialogTitle>
               <DialogDescription>
-                Generate a promotional code for subscription discounts
+                Generate a promotional code for subscription or platform credit discounts
               </DialogDescription>
             </DialogHeader>
 
@@ -290,17 +300,46 @@ export default function PromoCodesTab() {
               </div>
 
               <div>
+                <Label htmlFor="applies_to">Applies To</Label>
+                <Select
+                  value={formData.applies_to}
+                  onValueChange={(v) => setFormData({ ...formData, applies_to: v })}
+                >
+                  <SelectTrigger id="applies_to">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="subscription">Subscriptions</SelectItem>
+                    <SelectItem value="credits">Platform Credits</SelectItem>
+                    <SelectItem value="both">Subscriptions &amp; Credits</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
                 <Label htmlFor="plan_type">Plan Type</Label>
-                <Select value={formData.plan_type} onValueChange={(v) => setFormData({ ...formData, plan_type: v })}>
+                <Select
+                  value={formData.plan_type}
+                  onValueChange={(v) => setFormData({ ...formData, plan_type: v })}
+                  disabled={formData.applies_to === 'credits'}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="monthly">1-Month Plan</SelectItem>
                     <SelectItem value="quarterly">3-Month Plan</SelectItem>
+                    <SelectItem value="biennial">6-Month Plan</SelectItem>
                     <SelectItem value="annual">12-Month Plan</SelectItem>
+                    <SelectItem value="b2b_quarterly">B2B Plan</SelectItem>
+                    <SelectItem value="all">Any plan</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formData.applies_to === 'credits'
+                    ? 'Credit codes work on every credit pack.'
+                    : 'Choose “Any plan” to make the code work on every subscription.'}
+                </p>
               </div>
 
               <div className="flex gap-2 pt-4">
@@ -327,8 +366,9 @@ export default function PromoCodesTab() {
       <Alert>
         <Tag className="h-4 w-4" />
         <AlertDescription>
-          Promo codes are single-use per account and only work for annual plans.
-          They auto-expire based on the time set during creation.
+          Promo codes are single-use per account. Subscription codes apply to the
+          chosen plan (or any plan), while credit codes discount platform credit
+          packs. They auto-expire based on the time set during creation.
         </AlertDescription>
       </Alert>
 
@@ -351,6 +391,7 @@ export default function PromoCodesTab() {
                 <TableRow>
                   <TableHead>Code</TableHead>
                   <TableHead>Campaign</TableHead>
+                  <TableHead>Applies To</TableHead>
                   <TableHead>Discount</TableHead>
                   <TableHead>Uses</TableHead>
                   <TableHead>Status</TableHead>
@@ -375,6 +416,20 @@ export default function PromoCodesTab() {
                       </div>
                     </TableCell>
                     <TableCell>{code.campaign_name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {code.applies_to === 'credits'
+                          ? 'Platform Credits'
+                          : code.applies_to === 'both'
+                            ? 'Subscriptions & Credits'
+                            : 'Subscriptions'}
+                      </Badge>
+                      {code.applies_to !== 'credits' && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {code.plan_type === 'all' ? 'Any plan' : code.plan_type}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>{code.discount_percentage}%</TableCell>
                     <TableCell>{code.used_count}/{code.max_uses}</TableCell>
                     <TableCell>{getStatusBadge(code)}</TableCell>

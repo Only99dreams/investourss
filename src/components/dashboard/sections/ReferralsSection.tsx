@@ -10,7 +10,7 @@ import {
   Copy, Check, Users, MousePointer, UserCheck, Crown, Link2, UserPlus,
   MessageCircle, Twitter, Facebook, RefreshCw, AlertCircle,
 } from "lucide-react";
-import { isActiveSubscriber, isPremiumTier } from "@/lib/subscription";
+import { isActiveSubscriber, planLabel } from "@/lib/subscription";
 import { buildReferralLink, callReferralRpc, normalizeReferralCode } from "@/lib/referral";
 
 export function ReferralsSection() {
@@ -109,7 +109,7 @@ export function ReferralsSection() {
 
     const { data: followersData } = await supabase
       .from("profiles")
-      .select("id, full_name, user_tier, created_at, has_active_subscription, subscription_expires_at, audit_credits, audit_credits_expires_at")
+      .select("id, full_name, subscription_type, created_at, has_active_subscription, subscription_expires_at, audit_credits, audit_credits_expires_at")
       .eq("referred_by", userId)
       .order("created_at", { ascending: false })
       .limit(10);
@@ -194,7 +194,7 @@ export function ReferralsSection() {
 
   const now = Date.now();
   const activeSubscribers = followers.filter((f) =>
-    isActiveSubscriber(f) || isPremiumTier(f),
+    isActiveSubscriber(f),
   ).length;
 
   const activeAuditUsers = followers.filter((f) =>
@@ -412,12 +412,10 @@ export function ReferralsSection() {
                           )}
                         </div>
                       </div>
-                      <Badge variant={
-                        follower.user_tier === "exclusive" ? "default" :
-                        follower.user_tier === "premium" ? "secondary" :
-                        "outline"
-                      }>
-                        {follower.user_tier}
+                      <Badge variant={isActiveSubscriber(follower) ? "secondary" : "outline"}>
+                        {isActiveSubscriber(follower)
+                          ? planLabel(follower.subscription_type)
+                          : "Free"}
                       </Badge>
                     </div>
                   ))}

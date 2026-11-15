@@ -96,10 +96,11 @@ const SignupForm = () => {
 
     try {
       // Sign up the user
+      const resolvedUserType = type === 'individual' ? 'individual' : 'business';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const signUpMetadata: any = {
         full_name: type === 'individual' ? formData.fullName : formData.contactName,
-        user_type: type
+        user_type: resolvedUserType
       };
       if (formData.referralCode) {
         signUpMetadata.referral_code = formData.referralCode.trim();
@@ -130,7 +131,7 @@ const SignupForm = () => {
           phone: type === 'individual' ? formData.phone : formData.contactPhone,
           country: formData.country,
           gender: formData.gender || null,
-          user_type: type as 'individual' | 'group' | 'firm',
+          user_type: resolvedUserType as 'individual' | 'business',
           email_opt_in: emailOptIn
         };
 

@@ -318,13 +318,17 @@ const Bookmaker = () => {
   const loadedBookIdRef = useRef<string | null>(null);
 
   const selectedLength = LENGTHS[length];
-  const startCost = creditCostForLength(length);
+  // An active subscription includes every AI operation, so the studio prices
+  // each action at zero while the plan is live.
+  const operationsIncluded = Boolean(entitlement.operations_included);
+  const startCost = operationsIncluded ? 0 : creditCostForLength(length);
   // The outline/manuscript always belongs to the length saved on the book.
   // `length` can differ while the member is choosing a new package before
   // regenerating the outline, so paid actions must use the saved value.
   const activeLength: BookLength = book?.length ?? length;
   const activeLengthOption = LENGTHS[activeLength];
-  const activeCost = creditCostForLength(activeLength);
+  const activeCost = operationsIncluded ? 0 : creditCostForLength(activeLength);
+  const unitCost = operationsIncluded ? 0 : 1;
   const chapters = useMemo(() => book?.chapters ?? [], [book]);
   const hasChapters = chapters.length > 0;
   const approvedChapters = useMemo(
@@ -411,7 +415,7 @@ const Bookmaker = () => {
   const activeAudioVoice = audioVoices.some((voice) => voice.key === audioVoice)
     ? audioVoice
     : defaultAudiobookVoice(book?.language ?? language);
-  const audioCost = audiobookCostForLength(activeLength);
+  const audioCost = operationsIncluded ? 0 : audiobookCostForLength(activeLength);
   const audioChapters = book?.audiobook?.chapters ?? [];
   const hasAudio = audioChapters.length > 0;
 
@@ -1852,19 +1856,29 @@ const Bookmaker = () => {
   const gateDescription = !gate
     ? ""
     : gate.kind === "start"
-      ? `${lengthLabel(activeLength)} book · ${activeLengthOption.range} · ${activeLengthOption.chapterTarget} chapters. The credits are reserved once and unused chapters are refunded if you stop early.`
+      ? `${lengthLabel(activeLength)} book · ${activeLengthOption.range} · ${activeLengthOption.chapterTarget} chapters. ${
+          operationsIncluded
+            ? "Included in your subscription — no credits are used and one ebook slot from your plan allowance."
+            : "The credits are reserved once and unused chapters are refunded if you stop early."
+        }`
       : gate.kind === "full"
         ? missingChapterCount > 0
           ? `${approvedChapters.length} approved chapter${approvedChapters.length === 1 ? "" : "s"} will stay exactly as they are. Only the ${missingChapterCount} missing chapter${missingChapterCount === 1 ? "" : "s"} will be written.`
           : `${approvedChapters.length} approved chapter${approvedChapters.length === 1 ? "" : "s"} will stay exactly as they are. Only the remaining chapters are rewritten.`
         : gate.kind === "rework"
-          ? `Every chapter is rewritten from the saved outline, including approved chapters. This uses ${gate.cost} credits and one ebook slot from your plan allowance, just like starting the book again.`
+          ? `Every chapter is rewritten from the saved outline, including approved chapters. ${
+              operationsIncluded
+                ? "Included in your subscription, and it uses one ebook slot from your plan allowance, just like starting the book again."
+                : `This uses ${gate.cost} credits and one ebook slot from your plan allowance, just like starting the book again.`
+            }`
           : gate.kind === "chapter"
           ? "Only this chapter changes. Your other chapters, approved content and manual edits stay untouched."
           : gate.kind === "visual"
             ? "Only this visual block is rewritten. The surrounding chapter stays the same."
             : gate.kind === "audiobook"
-              ? "Paid once for the whole book with platform credits from a credit pack. Each finished chapter is saved as it is voiced, and unused chapters are refunded if you stop early."
+              ? operationsIncluded
+                ? "Included in your subscription for the whole book. Each finished chapter is saved as it is voiced."
+                : "Paid once for the whole book with platform credits from a credit pack. Each finished chapter is saved as it is voiced, and unused chapters are refunded if you stop early."
               : "One typographic cover design matched to the book's audience, purpose and title. You can upload your own cover instead at any time.";
 
   const activeWritingTitle =
@@ -1915,7 +1929,9 @@ const Bookmaker = () => {
               ) : (
                 <Coins className="h-3.5 w-3.5 text-primary" />
               )}
-              <span className="whitespace-nowrap">{entitlement.total_available} credits</span>
+              <span className="whitespace-nowrap">
+                {operationsIncluded ? "Plan active" : `${entitlement.total_available} credits`}
+              </span>
             </button>
             <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
               <Link to="/dashboard/bookmaker">My Books</Link>
@@ -2279,7 +2295,9 @@ const Bookmaker = () => {
                         ) : null}
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="font-semibold">{option.label}</span>
-                          <span className="text-xs font-medium text-primary">{option.credits} credits</span>
+                          <span className="text-xs font-medium text-primary">
+                            {operationsIncluded ? "Included" : `${option.credits} credits`}
+                          </span>
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">{option.range}</span>
                         <span className="mt-1 block text-xs text-muted-foreground">
@@ -2330,10 +2348,14 @@ const Bookmaker = () => {
                   </div>
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-muted-foreground">Manuscript</span>
-                    <span className="font-bold">{startCost} credits</span>
+                    <span className={cn("font-bold", operationsIncluded && "text-green-700")}>
+                      {operationsIncluded ? "Included in your plan" : `${startCost} credits`}
+                    </span>
                   </div>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Nothing is charged until you choose to write the manuscript.
+                    {operationsIncluded
+                      ? "Your subscription includes the manuscript; only the plan's ebook allowance applies."
+                      : "Nothing is charged until you choose to write the manuscript."}
                   </p>
                 </CardContent>
               </Card>
@@ -2342,9 +2364,11 @@ const Bookmaker = () => {
                 <CardContent className="space-y-3 p-4 text-sm">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
-                      <Wallet className="h-4 w-4" /> Available credits
+                      <Wallet className="h-4 w-4" /> {operationsIncluded ? "Generations" : "Available credits"}
                     </span>
-                    <span className="font-semibold">{entitlement.total_available}</span>
+                    <span className="font-semibold">
+                      {operationsIncluded ? "Included" : entitlement.total_available}
+                    </span>
                   </div>
                   {entitlement.subscription_active && entitlement.plan_items_limit != null ? (
                     <div className="flex items-center justify-between gap-2">
@@ -2373,7 +2397,9 @@ const Bookmaker = () => {
                     </>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      You have enough credits to write this {lengthLabel(length).toLowerCase()} book.
+                      {operationsIncluded
+                        ? `Your subscription includes this ${lengthLabel(length).toLowerCase()} book — no credits are used.`
+                        : `You have enough credits to write this ${lengthLabel(length).toLowerCase()} book.`}
                     </p>
                   )}
                 </CardContent>
@@ -2571,7 +2597,7 @@ const Bookmaker = () => {
                         Save outline
                       </Button>
                       <Button onClick={openStartGate} size="lg" className="w-full gap-2 sm:w-auto">
-                        <Wand2 className="h-4 w-4" /> Write manuscript · {activeCost} credits
+                        <Wand2 className="h-4 w-4" /> Write manuscript{operationsIncluded ? "" : ` · ${activeCost} credits`}
                       </Button>
                     </div>
                   </div>
@@ -2587,7 +2613,9 @@ const Bookmaker = () => {
                 <CardContent className="space-y-3 text-sm text-muted-foreground">
                   <p className="flex items-start gap-2">
                     <Coins className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    {activeCost} credits are reserved once for the whole {lengthLabel(activeLength).toLowerCase()} book.
+                    {operationsIncluded
+                      ? `Your subscription covers the whole ${lengthLabel(activeLength).toLowerCase()} book — no credits are used.`
+                      : `${activeCost} credits are reserved once for the whole ${lengthLabel(activeLength).toLowerCase()} book.`}
                   </p>
                   <p className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
@@ -2595,7 +2623,9 @@ const Bookmaker = () => {
                   </p>
                   <p className="flex items-start gap-2">
                     <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    Rewriting one chapter costs 1 credit. Approved chapters can be kept during a full rewrite.
+                    {operationsIncluded
+                      ? "Chapter and visual rewrites are included. Approved chapters can be kept during a full rewrite."
+                      : "Rewriting one chapter costs 1 credit. Approved chapters can be kept during a full rewrite."}
                   </p>
                   <p className="flex items-start gap-2">
                     <ShieldRow />
@@ -2607,9 +2637,11 @@ const Bookmaker = () => {
                 <CardContent className="space-y-3 p-4 text-sm">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
-                      <Wallet className="h-4 w-4" /> Available
+                      <Wallet className="h-4 w-4" /> {operationsIncluded ? "Generations" : "Available"}
                     </span>
-                    <span className="font-semibold">{entitlement.total_available} credits</span>
+                    <span className="font-semibold">
+                      {operationsIncluded ? "Included in your plan" : `${entitlement.total_available} credits`}
+                    </span>
                   </div>
                   {entitlement.subscription_active && entitlement.plan_items_limit != null ? (
                     <div className="flex items-center justify-between gap-2">
@@ -2621,7 +2653,9 @@ const Bookmaker = () => {
                   ) : null}
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Manuscript cost</span>
-                    <span className="font-semibold">{activeCost} credits</span>
+                    <span className={cn("font-semibold", operationsIncluded && "text-green-700")}>
+                      {operationsIncluded ? "Included in your plan" : `${activeCost} credits`}
+                    </span>
                   </div>
                   {planLimitReached ? (
                     <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
@@ -2640,7 +2674,11 @@ const Bookmaker = () => {
                       </Button>
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground">You have enough credits to write this book.</p>
+                    <p className="text-xs text-muted-foreground">
+                      {operationsIncluded
+                        ? "Included in your subscription — no credits are used."
+                        : "You have enough credits to write this book."}
+                    </p>
                   )}
                 </CardContent>
               </Card>
@@ -2748,10 +2786,12 @@ const Bookmaker = () => {
                     </p>
                   </div>
                   <Button onClick={openStartGate} size="lg" className="gap-2" disabled={planLimitReached}>
-                    <Wand2 className="h-4 w-4" /> Write manuscript · {activeCost} credits
+                    <Wand2 className="h-4 w-4" /> Write manuscript{operationsIncluded ? "" : ` · ${activeCost} credits`}
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    Available balance: {entitlement.total_available} credits
+                    {operationsIncluded
+                      ? "Included in your subscription — no credits are used"
+                      : `Available balance: ${entitlement.total_available} credits`}
                     {entitlement.plan_items_limit != null
                       ? ` · Ebook allowance: ${entitlement.plan_items_used ?? 0} of ${entitlement.plan_items_limit} used`
                       : ""}
@@ -2853,8 +2893,9 @@ const Bookmaker = () => {
                     setEditContent(chapter.content ?? "");
                     scrollToEditor();
                   }}
-                  onRegenerateChapter={writing ? undefined : (index) => setGate({ kind: "chapter", index, cost: 1, instruction: "" })}
-                  onRegenerateVisual={writing ? undefined : (index, blockIndex) => setGate({ kind: "visual", index, blockIndex, cost: 1, instruction: "" })}
+                  onRegenerateChapter={writing ? undefined : (index) => setGate({ kind: "chapter", index, cost: unitCost, instruction: "" })}
+                  onRegenerateVisual={writing ? undefined : (index, blockIndex) => setGate({ kind: "visual", index, blockIndex, cost: unitCost, instruction: "" })}
+                  regenerateCost={unitCost}
                   onToggleApproved={writing ? undefined : handleToggleApproved}
                 />
 
@@ -2887,14 +2928,18 @@ const Bookmaker = () => {
                         className="w-full gap-2 sm:w-auto"
                       >
                         <RefreshCw className="h-4 w-4" />{" "}
-                        {missingChapterCount > 0 ? "Write remaining chapters" : "Regenerate unapproved"} · {activeCost} credits
+                        {missingChapterCount > 0 ? "Write remaining chapters" : "Regenerate unapproved"}
+                        {operationsIncluded ? "" : ` · ${activeCost} credits`}
                       </Button>
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
                       <div className="text-sm text-muted-foreground">
                         <p className="font-medium text-foreground">Rework from the beginning</p>
                         <p className="text-xs">
-                          Rewrite every chapter from the current outline, including approved chapters. Costs the same as writing the book again and uses one ebook slot from your plan.
+                          Rewrite every chapter from the current outline, including approved chapters.{" "}
+                          {operationsIncluded
+                            ? "Included in your subscription and uses one ebook slot from your plan."
+                            : "Costs the same as writing the book again and uses one ebook slot from your plan."}
                         </p>
                       </div>
                       <Button
@@ -2903,7 +2948,7 @@ const Bookmaker = () => {
                         disabled={writing || chapters.length === 0}
                         className="w-full gap-2 sm:w-auto"
                       >
-                        <RotateCcw className="h-4 w-4" /> Rework from beginning · {activeCost} credits
+                        <RotateCcw className="h-4 w-4" /> Rework from beginning{operationsIncluded ? "" : ` · ${activeCost} credits`}
                       </Button>
                     </div>
                     <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-3">
@@ -2934,11 +2979,11 @@ const Bookmaker = () => {
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       size="sm"
-                      onClick={() => setGate({ kind: "cover", cost: 1, style: coverStyle })}
+                      onClick={() => setGate({ kind: "cover", cost: unitCost, style: coverStyle })}
                       disabled={coverBusy || gateBusy}
                       className="gap-1.5"
                     >
-                      <Sparkles className="h-3.5 w-3.5" /> Generate · 1
+                      <Sparkles className="h-3.5 w-3.5" /> Generate{operationsIncluded ? "" : " · 1"}
                     </Button>
                     <Button
                       size="sm"
@@ -3369,14 +3414,19 @@ const Bookmaker = () => {
                         {book.audiobook?.status === "generating"
                           ? "Narration in progress"
                           : hasAudio
-                            ? `Narrate again · ${audioCost} credit${audioCost === 1 ? "" : "s"}`
-                            : `Create audiobook · ${audioCost} credits`}
+                            ? operationsIncluded
+                              ? "Narrate again"
+                              : `Narrate again · ${audioCost} credit${audioCost === 1 ? "" : "s"}`
+                            : operationsIncluded
+                              ? "Create audiobook"
+                              : `Create audiobook · ${audioCost} credits`}
                       </Button>
                       <p className="text-xs text-muted-foreground">
-                        Platform credits only: the whole book costs short 4 credits · medium 8 credits · long 12 credits. Subscription
-                        credits and plan allowances cannot be used for narration.
+                        {operationsIncluded
+                          ? "Narration is included in your subscription — no credits are used."
+                          : "Platform credits only: the whole book costs short 4 credits · medium 8 credits · long 12 credits. Subscribe to include narration, or buy a credit pack."}
                       </p>
-                      {book.audiobook?.status !== "generating" && entitlement.pack_credits_remaining < audioCost ? (
+                      {!operationsIncluded && book.audiobook?.status !== "generating" && entitlement.pack_credits_remaining < audioCost ? (
                         <p className="text-xs text-amber-700">
                           You have {entitlement.pack_credits_remaining} platform credit
                           {entitlement.pack_credits_remaining === 1 ? "" : "s"}.{" "}
@@ -3450,13 +3500,15 @@ const Bookmaker = () => {
           setGate(null);
           openPurchase(kind);
         }}
-        packOnly={gate?.kind === "audiobook"}
+        packOnly={gate?.kind === "audiobook" && (gate?.cost ?? 0) > 0}
         confirmLabel={
-          gate?.kind === "start" || gate?.kind === "full" || gate?.kind === "rework"
-            ? `Write for ${gate.cost} credits`
-            : gate?.kind === "audiobook"
-              ? `Narrate for ${gate.cost} credits`
-              : undefined
+          (gate?.cost ?? 0) === 0
+            ? undefined
+            : gate?.kind === "start" || gate?.kind === "full" || gate?.kind === "rework"
+              ? `Write for ${gate.cost} credits`
+              : gate?.kind === "audiobook"
+                ? `Narrate for ${gate.cost} credits`
+                : undefined
         }
       >
         {gate?.kind === "audiobook" ? (

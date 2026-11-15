@@ -50,6 +50,7 @@ export function BookmakerHistorySection() {
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [purchaseView, setPurchaseView] = useState<"packs" | "subscribe" | null>(null);
+  const operationsIncluded = Boolean(entitlement.operations_included);
 
   const openPurchase = (view: "packs" | "subscribe" | null = null) => {
     setPurchaseView(view);
@@ -196,20 +197,27 @@ export function BookmakerHistorySection() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credits available</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {operationsIncluded ? "Your plan" : "Credits available"}
+            </p>
             <p className="mt-1 flex items-center gap-2 text-2xl font-bold">
-              <Coins className="h-5 w-5 text-primary" /> {entitlement.total_available}
+              <Coins className="h-5 w-5 text-primary" />
+              {operationsIncluded ? "All AI included" : entitlement.total_available}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {entitlement.subscription_credits_remaining} subscription · {entitlement.pack_credits_remaining} pack
+              {operationsIncluded
+                ? "Writing, rewrites, covers and narration use no credits."
+                : `${entitlement.subscription_credits_remaining} subscription · ${entitlement.pack_credits_remaining} pack`}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button size="sm" onClick={() => openPurchase("packs")}>
                 Buy credits
               </Button>
-              <Button size="sm" variant="outline" onClick={() => openPurchase("subscribe")}>
-                Subscribe
-              </Button>
+              {operationsIncluded ? null : (
+                <Button size="sm" variant="outline" onClick={() => openPurchase("subscribe")}>
+                  Subscribe
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -358,15 +366,27 @@ export function BookmakerHistorySection() {
 
       <Card className="border-dashed">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">How Bookmaker credits work</CardTitle>
+          <CardTitle className="text-base">
+            {operationsIncluded ? "Your subscription includes Bookmaker" : "How Bookmaker credits work"}
+          </CardTitle>
           <CardDescription>
-            Credit usage for writing, rewriting, cover design and narration. Manual edits use no credits, and each book includes free PDF downloads.
+            {operationsIncluded
+              ? "Every AI action — writing, rewrites, cover design and narration — is included while your plan is active. Manual edits are free, and each book includes free PDF downloads."
+              : "Credit usage for writing, rewriting, cover design and narration. Manual edits use no credits, and each book includes free PDF downloads."}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-          <p>Short book: 2 credits · Medium: 4 credits · Long: 6 credits</p>
-          <p>Chapter rewrite: 1 credit · Visual refresh: 1 credit · Cover: 1 credit</p>
-          <p>Audiobook narration: Short 4 · Medium 8 · Long 12 credits (platform credits only)</p>
+          {operationsIncluded ? (
+            <p className="sm:col-span-2">
+              No credits are used for any generation. Your plan's ebook allowance still applies to new books and full reworks.
+            </p>
+          ) : (
+            <>
+              <p>Short book: 2 credits · Medium: 4 credits · Long: 6 credits</p>
+              <p>Chapter rewrite: 1 credit · Visual refresh: 1 credit · Cover: 1 credit</p>
+              <p>Audiobook narration: Short 4 · Medium 8 · Long 12 credits (platform credits only)</p>
+            </>
+          )}
           <p>Failed AI operations are refunded automatically.</p>
           <p>Free PDF downloads per ebook: Starter 3 · Standard 6 · Annual pack 12</p>
           <p>Free PDF downloads per ebook: 1-Month 3 · 3-Month 6 · 6-Month 12 · 12-Month 24</p>

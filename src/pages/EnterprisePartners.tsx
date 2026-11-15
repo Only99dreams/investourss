@@ -20,7 +20,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Footer } from "@/components/ui/Footer";
 import { formatNaira } from "@/lib/ambassadorTiers";
-import { isActiveSubscriber, isPremiumTier } from "@/lib/subscription";
+import { isActiveSubscriber } from "@/lib/subscription";
 import Header from "@/components/Header";
 import FHAChatroomHub from "@/components/home/FHAChatroomHub";
 
@@ -204,7 +204,7 @@ const EnterprisePartnersPage = () => {
     }
   };
 
-  const eligible = isActiveSubscriber(profile) || isPremiumTier(profile) || (profile?.audit_credits ?? 0) > 0;
+  const eligible = isActiveSubscriber(profile) || (profile?.audit_credits ?? 0) > 0;
   const ctaLabel = !user
     ? "Sign In to Apply"
     : isApplying

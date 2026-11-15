@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/hooks/useAuth';
+import { isActiveSubscriber } from '@/lib/subscription';
 import { SubscriptionPayment } from '@/components/SubscriptionPayment';
 import Header from '@/components/Header';
 import { Footer } from '@/components/ui/Footer';
@@ -34,8 +35,8 @@ const SubscriptionPage = () => {
 
   const currentSubType = profile?.subscription_type || null;
   const currentPlanLevel = currentSubType ? planHierarchy[currentSubType] || 0 : 0;
-  const isPremium = profile?.user_tier === 'premium' || profile?.user_tier === 'exclusive';
-  const isUpgrading = isPremium && currentSubType !== 'annual';
+  const isSubscriber = isActiveSubscriber(profile);
+  const isUpgrading = isSubscriber && currentSubType !== 'annual';
 
   useEffect(() => {
     if (!user) {
@@ -44,7 +45,7 @@ const SubscriptionPage = () => {
     }
 
     // Only redirect if user is already on the highest plan (annual)
-    if (isPremium && currentSubType === 'annual') {
+    if (isSubscriber && currentSubType === 'annual') {
       navigate(bookReturnHref ?? '/dashboard');
       return;
     }
@@ -64,7 +65,7 @@ const SubscriptionPage = () => {
         setSelectedPlan('b2b_quarterly');
       }
     }
-  }, [user, profile, searchParams, navigate, isPremium, currentSubType, bookReturnHref]);
+  }, [user, profile, searchParams, navigate, isSubscriber, currentSubType, bookReturnHref]);
 
   const handlePaymentSuccess = () => {
     navigate(bookReturnHref ?? '/dashboard');
@@ -75,7 +76,7 @@ const SubscriptionPage = () => {
   };
 
   // Only block if annual subscriber (highest tier) or not logged in
-  if (!user || (isPremium && currentSubType === 'annual')) {
+  if (!user || (isSubscriber && currentSubType === 'annual')) {
     return null;
   }
 
@@ -234,7 +235,7 @@ const SubscriptionPage = () => {
           className="text-center mb-8 sm:mb-12"
         >
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
-            {isUpgrading ? 'Upgrade Your Plan' : 'Choose Your Premium Plan'}
+            {isUpgrading ? 'Upgrade Your Plan' : 'Choose Your Subscription Plan'}
           </h1>
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
             {isUpgrading
@@ -250,8 +251,8 @@ const SubscriptionPage = () => {
             const vatAmount = Math.round(plan.price * 0.075);
             const totalWithVat = plan.price + vatAmount;
             const planLevel = planHierarchy[plan.key];
-            const isCurrentPlan = isPremium && currentSubType === plan.key;
-            const isLowerPlan = isPremium && planLevel <= currentPlanLevel;
+            const isCurrentPlan = isSubscriber && currentSubType === plan.key;
+            const isLowerPlan = isSubscriber && planLevel <= currentPlanLevel;
             const isUpgradeable = !isCurrentPlan && !isLowerPlan;
 
             return (

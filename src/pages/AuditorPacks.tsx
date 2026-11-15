@@ -3,13 +3,14 @@ import { motion } from "framer-motion";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { usePaystackPayment } from "react-paystack";
 import {
-  CreditCard, Check, ArrowRight, Loader2, Coins, Clock, Info, Sparkles, Banknote, Copy, CheckCircle2, RefreshCw,
+  CreditCard, Check, ArrowRight, Loader2, Coins, Clock, Info, Sparkles, Banknote, Copy, CheckCircle2, RefreshCw, Tag, X,
 } from "lucide-react";
 // Note: Banknote, Copy, CheckCircle2, RefreshCw are still used in the pending order payment card
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
@@ -43,6 +44,21 @@ interface PaystackTransaction {
   reference?: string;
 }
 
+interface PackOrder {
+  id: string;
+  pack_id: string;
+  pack_name: string;
+  credits: number;
+  amount: number;
+  original_amount?: number;
+  discount_amount?: number;
+  discount_percentage?: number;
+  vat_amount?: number;
+  reference: string;
+  status: string;
+  created_at: string;
+}
+
 const AuditorPacks = () => {
   const { user, profile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -63,6 +79,66 @@ const AuditorPacks = () => {
   const [activationFailed, setActivationFailed] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<PackOrder | null>(null);
   const [copied, setCopied] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    promo_code_id: string;
+    discount_percentage: number;
+  } | null>(null);
+
+  const discountFor = (price: number) =>
+    appliedPromo ? Math.round((price * appliedPromo.discount_percentage) / 100) : 0;
+  const priceAfterPromo = (price: number) => Math.max(price - discountFor(price), 0);
+
+  const applyPromo = async () => {
+    const code = promoCode.trim().toUpperCase();
+    if (!code || !user) return;
+    setPromoLoading(true);
+    try {
+      const { data, error } = await supabase.rpc("validate_credit_promo_code", {
+        p_code: code,
+        p_user_id: user.id,
+      });
+      if (error) throw error;
+      const result = data as {
+        valid: boolean;
+        message?: string;
+        discount_percentage?: number;
+        promo_code_id?: string;
+      };
+      if (result.valid && result.promo_code_id) {
+        setAppliedPromo({
+          code,
+          promo_code_id: result.promo_code_id,
+          discount_percentage: Number(result.discount_percentage ?? 0),
+        });
+        toast({
+          title: "Promo code applied",
+          description: `${result.discount_percentage}% off your credit pack.`,
+        });
+      } else {
+        toast({
+          title: "Invalid promo code",
+          description: result.message ?? "This code cannot be used for credit packs.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Could not check the code",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const removePromo = () => {
+    setAppliedPromo(null);
+    setPromoCode("");
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -205,13 +281,32 @@ const AuditorPacks = () => {
   const handlePurchase = async (pack: CreditPack) => {
     setPurchasing(pack.id);
     try {
-      const { data, error } = await supabase.rpc("purchase_audit_pack", { p_pack_id: pack.id });
+      const { data, error } = await supabase.rpc("purchase_audit_pack", {
+        p_pack_id: pack.id,
+        p_promo_code_id: appliedPromo?.promo_code_id ?? null,
+      });
       if (error) throw error;
-      const result = data as { success: boolean; message?: string; order_id?: string; reference?: string; pack_name?: string; amount?: number; credits?: number };
+      const result = data as {
+        success: boolean; message?: string; order_id?: string; reference?: string;
+        pack_name?: string; amount?: number; original_amount?: number;
+        discount_amount?: number; discount_percentage?: number; credits?: number; free?: boolean;
+      };
       if (!result?.success) throw new Error(result?.message || "Purchase failed");
 
+      if (result.free) {
+        setActivationFailed(false);
+        setPendingOrder(null);
+        toast({
+          title: "Platform Credits Activated!",
+          description: "Your promo code covered the full price, so the credits are ready.",
+        });
+        await loadData();
+        returnToBook();
+        return;
+      }
+
       const reference = result.reference ?? "";
-      const amount = result.amount ?? pack.price;
+      const amount = result.amount ?? priceAfterPromo(pack.price);
       const vatAmount = Math.round(amount * VAT_RATE);
       const totalWithVat = amount + vatAmount;
       const amountKobo = Math.round(totalWithVat * 100); // Paystack uses kobo
@@ -223,6 +318,9 @@ const AuditorPacks = () => {
         pack_name: result.pack_name ?? pack.name,
         credits: result.credits ?? pack.credits,
         amount: totalWithVat,
+        original_amount: result.original_amount ?? pack.price,
+        discount_amount: result.discount_amount ?? discountFor(pack.price),
+        discount_percentage: result.discount_percentage ?? appliedPromo?.discount_percentage ?? 0,
         vat_amount: vatAmount,
         reference,
         status: "pending",
@@ -274,6 +372,47 @@ const AuditorPacks = () => {
           </p>
         </motion.div>
 
+        <div className="mx-auto mb-8 max-w-md rounded-lg border bg-card p-4">
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            <Tag className="h-4 w-4 text-primary" /> Have a promo code?
+          </p>
+          {appliedPromo ? (
+            <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-secondary/40 px-3 py-2">
+              <span className="text-sm">
+                <span className="font-mono font-semibold">{appliedPromo.code}</span>
+                <span className="ml-2 text-emerald-600">
+                  {appliedPromo.discount_percentage}% off
+                </span>
+              </span>
+              <Button variant="ghost" size="sm" className="h-7 px-2" onClick={removePromo}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-2 flex gap-2">
+              <Input
+                value={promoCode}
+                onChange={(event) => setPromoCode(event.target.value.toUpperCase())}
+                placeholder="Enter code"
+                className="font-mono"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void applyPromo();
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                disabled={promoLoading || !promoCode.trim()}
+                onClick={() => void applyPromo()}
+              >
+                {promoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+              </Button>
+            </div>
+          )}
+        </div>
+
         <div className="grid md:grid-cols-3 gap-6 mb-10">
           {loading ? (
             <div className="col-span-3 flex justify-center py-12">
@@ -297,8 +436,25 @@ const AuditorPacks = () => {
                     <CardTitle>{packDisplayName(pack.name)}</CardTitle>
                     <CardDescription>{pack.description?.replace(/Audit/gi, "Platform")}</CardDescription>
                     <div className="mt-2">
-                      <span className="text-3xl font-bold">₦{pack.price.toLocaleString()}</span>
-                      <span className="text-muted-foreground text-sm"> one-time</span>
+                      {appliedPromo ? (
+                        <>
+                          <span className="text-3xl font-bold">
+                            ₦{priceAfterPromo(pack.price).toLocaleString()}
+                          </span>
+                          <span className="ml-2 text-sm text-muted-foreground line-through">
+                            ₦{pack.price.toLocaleString()}
+                          </span>
+                          <div className="text-xs font-medium text-emerald-600">
+                            You save ₦{discountFor(pack.price).toLocaleString()} (
+                            {appliedPromo.discount_percentage}%)
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-3xl font-bold">₦{pack.price.toLocaleString()}</span>
+                          <span className="text-muted-foreground text-sm"> one-time</span>
+                        </>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
                   </CardHeader>
@@ -353,6 +509,18 @@ const AuditorPacks = () => {
                   <span className="text-muted-foreground">{pendingOrder.pack_name}:</span>
                   <span>₦{Math.round(pendingOrder.amount - (pendingOrder.vat_amount ?? 0)).toLocaleString()}</span>
                 </div>
+                {pendingOrder.discount_amount ? (
+                  <div className="flex justify-between text-emerald-600">
+                    <span>
+                      Promo discount
+                      {pendingOrder.discount_percentage
+                        ? ` (${pendingOrder.discount_percentage}%)`
+                        : ""}
+                      :
+                    </span>
+                    <span>-₦{pendingOrder.discount_amount.toLocaleString()}</span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">VAT (7.5%):</span>
                   <span>₦{(pendingOrder.vat_amount ?? 0).toLocaleString()}</span>

@@ -167,10 +167,18 @@ const typeParam = searchParams.get("type");
 
     try {
       // Sign up the user
+      // The individual card covers both personal and business accounts; the
+      // business choice is recorded as its own user type.
+      const resolvedUserType =
+        selectedType === "individual"
+          ? formData.accountType === "business"
+            ? "business"
+            : "individual"
+          : "b2b";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const signUpMetadata: any = {
         full_name: selectedType === 'individual' ? formData.fullName : formData.contactName,
-        user_type: selectedType
+        user_type: resolvedUserType
       };
       const referralCode = normalizeReferralCode(formData.referralCode);
       if (referralCode) {
@@ -205,7 +213,7 @@ const typeParam = searchParams.get("type");
           country: formData.country,
           gender: formData.gender || null,
           disability: formData.disability || null,
-          user_type: selectedType as 'individual' | 'b2b' | 'firm',
+          user_type: resolvedUserType as 'individual' | 'business' | 'b2b',
           account_type: selectedType === 'individual' ? formData.accountType : 'business',
           email_opt_in: emailOptIn
         };

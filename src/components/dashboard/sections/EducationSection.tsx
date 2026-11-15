@@ -23,7 +23,7 @@ import { GraduationCap, Play, CheckCircle, Lock, Clock, Trophy, Share2, Copy, Tw
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useSearchParams, Link } from "react-router-dom";
-import { meetsPlanTier, planLabel } from "@/lib/subscription";
+import { meetsPlan, planLabel } from "@/lib/subscription";
 import { getVideoEmbedUrl } from "@/lib/videoEmbed";
 
 interface ContentCategory {
@@ -173,7 +173,7 @@ export function EducationSection() {
   const isModuleLocked = (module: Module) => {
     // A lapsed plan keeps `subscription_type` in the profile, so access is
     // checked against the live plan rather than the stored label.
-    if (!meetsPlanTier(profile, module.tier_required)) return true;
+    if (!meetsPlan(profile, module.tier_required)) return true;
 
     // Check BDE requirements
     const hasBdeCategories = module.education_module_categories?.some(
@@ -183,7 +183,6 @@ export function EducationSection() {
       return !(
         profile?.is_bde &&
         profile?.bde_status === 'active' &&
-        profile?.user_tier === 'premium' &&
         profile?.subscription_type === 'annual'
       );
     }

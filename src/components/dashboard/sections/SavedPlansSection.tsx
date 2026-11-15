@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Eye, Download, Trash2, Loader2, AlertCircle, BookOpen, Crown, Lock } from "lucide-react";
 import { downloadPDF } from "@/lib/planExport";
+import { isActiveSubscriber } from "@/lib/subscription";
 import { cn } from "@/lib/utils";
 
 interface SavedPlan {
@@ -30,7 +31,7 @@ export function SavedPlansSection() {
   const [plans, setPlans] = useState<SavedPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const isPremium = profile?.user_tier === "premium" || profile?.user_tier === "exclusive";
+  const isSubscriber = isActiveSubscriber(profile);
 
   useEffect(() => {
     if (user) fetchPlans();
@@ -74,8 +75,8 @@ export function SavedPlansSection() {
   };
 
   const handleDownloadPDF = async (plan: SavedPlan) => {
-    // Premium users download for free; others pay 1 credit per download
-    if (!isPremium) {
+    // Subscribers download for free; non-subscribers pay 1 credit per download
+    if (!isSubscriber) {
       const { data, error } = await supabase.rpc("consume_audit_credit");
       if (error || !data?.success) {
         toast({
@@ -98,7 +99,7 @@ export function SavedPlansSection() {
         <div>
           <h2 className="text-xl font-bold">Saved Business Plans</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {isPremium
+            {isSubscriber
               ? "Unlimited saved plans"
               : `${remainingSlots} of ${FREE_SAVE_LIMIT} free slots remaining`
             }
@@ -110,7 +111,7 @@ export function SavedPlansSection() {
         </Button>
       </div>
 
-      {!isPremium && remainingSlots <= 1 && (
+      {!isSubscriber && remainingSlots <= 1 && (
         <Card className="border-amber-500/30 bg-amber-50/50">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
@@ -118,7 +119,7 @@ export function SavedPlansSection() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-amber-800">
                   {remainingSlots === 0
-                    ? "You've used all free save slots. Upgrade to Premium to save unlimited plans."
+                    ? "You've used all free save slots. Upgrade to a subscription to save unlimited plans."
                     : "You have only 1 free save slot remaining."
                   }
                 </p>
@@ -185,11 +186,11 @@ export function SavedPlansSection() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleDownloadPDF(plan)}
-                        disabled={!isPremium}
-                        title={!isPremium ? "Upgrade to Premium to download" : "Download PDF"}
+                        disabled={!isSubscriber}
+                        title={!isSubscriber ? "An active subscription is required to download" : "Download PDF"}
                       >
-                        {!isPremium ? <Lock className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5 sm:mr-1" />}
-                        <span className="hidden sm:inline">{isPremium ? "PDF" : ""}</span>
+                        {!isSubscriber ? <Lock className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5 sm:mr-1" />}
+                        <span className="hidden sm:inline">{isSubscriber ? "PDF" : ""}</span>
                       </Button>
                       <Button
                         size="sm"

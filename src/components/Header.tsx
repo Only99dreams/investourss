@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import investoursLogo from "@/assets/Investours1b.png";
 import { useAuth } from "@/hooks/useAuth";
+import { isActiveSubscriber, planLabel } from "@/lib/subscription";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -34,11 +35,16 @@ const Header = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const getTierBadge = (tier: string | null) => {
-    if (!tier || tier === 'free') return null;
+  const getPlanBadge = (
+    currentProfile: typeof profile,
+  ) => {
+    if (!currentProfile || !isActiveSubscriber(currentProfile)) return null;
     return (
-      <Badge variant={tier === 'exclusive' ? 'default' : 'secondary'} className="text-xs">
-        {tier}
+      <Badge
+        variant={currentProfile.subscription_type?.startsWith("b2b") ? "default" : "secondary"}
+        className="text-xs"
+      >
+        {planLabel(currentProfile.subscription_type)}
       </Badge>
     );
   };
@@ -118,7 +124,7 @@ const Header = () => {
                       <span className="text-sm font-medium text-foreground hidden lg:block max-w-[120px] truncate">
                         {profile?.full_name || 'User'}
                       </span>
-                      {getTierBadge(profile?.user_tier)}
+                      {getPlanBadge(profile)}
                     </div>
                     <ChevronDown className="w-4 h-4 text-muted-foreground" />
                   </Button>
@@ -212,7 +218,7 @@ const Header = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-foreground">{profile?.full_name || 'User'}</span>
-                      {getTierBadge(profile?.user_tier)}
+                      {getPlanBadge(profile)}
                     </div>
                     <span className="text-sm text-muted-foreground">{profile?.email}</span>
                   </div>

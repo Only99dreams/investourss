@@ -38,6 +38,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import {
+  isActiveSubscriber,
+  normalizeUserType,
+  planLabel,
+  PLAN_ACCESS_OPTIONS,
+  PLAN_DAYS,
+  USER_TYPE_OPTIONS,
+  userTypeLabel,
+} from "@/lib/subscription";
 
 function subscriptionExpiry(value?: string | null): { text: string; tone: "normal" | "soon" | "expired" | "none" } {
   if (!value) return { text: "—", tone: "none" };
@@ -83,9 +92,8 @@ const UsersTab = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     assigned_role: "",
-    user_tier: "",
     user_type: "",
-    access: "",
+    access: "free",
   });
 
   // FHA Portfolio & Followers state
@@ -128,7 +136,7 @@ const UsersTab = () => {
 
       const { data: followersData, error: followersError } = await supabase
         .from("profiles")
-        .select("id, full_name, email, user_tier, created_at, has_active_subscription, subscription_expires_at")
+        .select("id, full_name, email, user_type, subscription_type, created_at, has_active_subscription, subscription_expires_at")
         .eq("referred_by", user.id)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -248,9 +256,8 @@ const UsersTab = () => {
     setSelectedUser(user);
     setEditForm({
       assigned_role: user.assigned_role || "user",
-      user_tier: user.user_tier || "free",
-      user_type: user.user_type || "individual",
-      access: user.user_tier === "free" ? "Free" : (user.subscription_type || "monthly"),
+      user_type: normalizeUserType(user.user_type),
+      access: isActiveSubscriber(user) ? user.subscription_type || "monthly" : "free",
     });
     setIsEditDialogOpen(true);
   };
@@ -259,18 +266,22 @@ const UsersTab = () => {
     try {
       if (!selectedUser) return;
 
-      // Determine user_tier and subscription_type based on access
-      const isFree = editForm.access === "Free";
-      const userTier = isFree ? "free" : "premium";
-      const subscriptionType = isFree ? null : editForm.access.toLowerCase();
+      // Access is stored as a subscription: an expiry date plus the recorded
+      // plan. Free access clears all three fields.
+      const isFree = editForm.access === "free";
+      const planDays = PLAN_DAYS[editForm.access] ?? 30;
+      const expiresAt = isFree
+        ? null
+        : new Date(Date.now() + planDays * 86_400_000).toISOString();
 
       const { error } = await supabase
         .from("profiles")
         .update({
           assigned_role: editForm.assigned_role,
-          user_tier: userTier,
           user_type: editForm.user_type,
-          subscription_type: subscriptionType,
+          subscription_type: isFree ? null : editForm.access,
+          has_active_subscription: !isFree,
+          subscription_expires_at: expiresAt,
         })
         .eq("id", selectedUser.id);
 
@@ -330,7 +341,6 @@ const UsersTab = () => {
                   <TableHead>Referred By</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Tier</TableHead>
                   <TableHead>Access</TableHead>
                   <TableHead>Credits</TableHead>
                   <TableHead>Subscription ends</TableHead>
@@ -342,7 +352,7 @@ const UsersTab = () => {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center h-24">
+                    <TableCell colSpan={11} className="text-center h-24">
                       No users found.
                     </TableCell>
                   </TableRow>
@@ -361,15 +371,12 @@ const UsersTab = () => {
                           {user.assigned_role || "user"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="capitalize">
-                        {user.user_type || "individual"}
-                      </TableCell>
-                      <TableCell className="capitalize">
-                        {user.user_tier || "free"}
+                      <TableCell>
+                        {userTypeLabel(user.user_type)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {user.user_tier === "free" ? "Free" : (user.subscription_type || "monthly")}
+                        <Badge variant={isActiveSubscriber(user) ? "default" : "outline"}>
+                          {isActiveSubscriber(user) ? planLabel(user.subscription_type) : "Free"}
                         </Badge>
                       </TableCell>
                       <TableCell>{creditMap[user.id] ?? user.audit_credits ?? 0}</TableCell>
@@ -421,7 +428,7 @@ const UsersTab = () => {
             <DialogHeader>
               <DialogTitle>Edit User</DialogTitle>
               <DialogDescription>
-                Make changes to user role and tier.
+                Make changes to user role, type and subscription access.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -460,26 +467,6 @@ const UsersTab = () => {
                 </Select>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="tier" className="text-right">
-                  Tier
-                </Label>
-                <Select
-                  value={editForm.user_tier}
-                  onValueChange={(val) =>
-                    setEditForm({ ...editForm, user_tier: val })
-                  }
-                >
-                  <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select tier" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="free">Free</SelectItem>
-                    <SelectItem value="premium">Premium</SelectItem>
-                    <SelectItem value="exclusive">Exclusive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="type" className="text-right">
                   Type
                 </Label>
@@ -493,9 +480,11 @@ const UsersTab = () => {
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="individual">Individual</SelectItem>
-                    <SelectItem value="group">Group</SelectItem>
-                    <SelectItem value="firm">Firm</SelectItem>
+                    {USER_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -510,13 +499,14 @@ const UsersTab = () => {
                   }
                 >
                   <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select access level" />
+                    <SelectValue placeholder="Select access plan" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Free">Free</SelectItem>
-                    <SelectItem value="Monthly">Monthly</SelectItem>
-                    <SelectItem value="Quarterly">Quarterly</SelectItem>
-                    <SelectItem value="Annual">Annual</SelectItem>
+                    {PLAN_ACCESS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -750,8 +740,8 @@ const UsersTab = () => {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Tier</TableHead>
-                      <TableHead>Subscription</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Access</TableHead>
                       <TableHead>Joined</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -767,12 +757,16 @@ const UsersTab = () => {
                         <TableRow key={follower.id}>
                           <TableCell className="font-medium">{follower.full_name || "N/A"}</TableCell>
                           <TableCell>{follower.email}</TableCell>
-                          <TableCell className="capitalize">{follower.user_tier || "free"}</TableCell>
+                          <TableCell>{userTypeLabel(follower.user_type)}</TableCell>
                           <TableCell>
-                            <Badge variant={follower.has_active_subscription ? "default" : "outline"}>
-                              {follower.has_active_subscription
-                                ? `Active${follower.subscription_expires_at ? ` until ${new Date(follower.subscription_expires_at).toLocaleDateString()}` : ""}`
-                                : "None"}
+                            <Badge variant={isActiveSubscriber(follower) ? "default" : "outline"}>
+                              {isActiveSubscriber(follower)
+                                ? `${planLabel(follower.subscription_type)}${
+                                    follower.subscription_expires_at
+                                      ? ` · ${new Date(follower.subscription_expires_at).toLocaleDateString()}`
+                                      : ""
+                                  }`
+                                : "Free"}
                             </Badge>
                           </TableCell>
                           <TableCell>{new Date(follower.created_at).toLocaleDateString()}</TableCell>

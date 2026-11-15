@@ -16,6 +16,7 @@ import {
   Copy, Check, Edit2, Save, Globe, Shield, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isActiveSubscriber, planLabel } from "@/lib/subscription";
 
 export function ProfileSection() {
   const { profile, refreshProfile, user } = useAuth();
@@ -133,11 +134,7 @@ export function ProfileSection() {
     }
   };
 
-  const tierColors = {
-    free: "bg-muted text-muted-foreground",
-    premium: "bg-gold/20 text-gold border-gold/30",
-    exclusive: "bg-primary/20 text-primary border-primary/30"
-  };
+  const subscriber = isActiveSubscriber(profile);
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -190,8 +187,12 @@ export function ProfileSection() {
                   <>
                     <div className="flex items-center gap-3 mb-2">
                       <h2 className="text-2xl font-bold">{profile?.full_name || "User"}</h2>
-                      <Badge className={cn("capitalize", tierColors[profile?.user_tier || "free"])}>
-                        {profile?.user_tier || "Free"} Tier
+                      <Badge className={cn(
+                        subscriber
+                          ? "bg-primary/20 text-primary border-primary/30"
+                          : "bg-muted text-muted-foreground",
+                      )}>
+                        {subscriber ? planLabel(profile?.subscription_type) : "Free"}
                       </Badge>
                       {profile?.is_gfe && (
                         <Badge variant="outline" className="border-accent text-accent">

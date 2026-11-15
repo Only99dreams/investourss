@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePaystackPayment } from "react-paystack";
-import { CheckCircle2, Coins, Loader2, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Coins, Loader2, ShieldCheck, Tag, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,6 +56,66 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [activating, setActivating] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    promo_code_id: string;
+    discount_percentage: number;
+  } | null>(null);
+
+  const discountFor = (price: number) =>
+    appliedPromo ? Math.round((price * appliedPromo.discount_percentage) / 100) : 0;
+  const priceAfterPromo = (price: number) => Math.max(price - discountFor(price), 0);
+
+  const applyPromo = async () => {
+    const code = promoCode.trim().toUpperCase();
+    if (!code || !user) return;
+    setPromoLoading(true);
+    try {
+      const { data, error } = await supabase.rpc("validate_credit_promo_code", {
+        p_code: code,
+        p_user_id: user.id,
+      });
+      if (error) throw error;
+      const result = data as {
+        valid: boolean;
+        message?: string;
+        discount_percentage?: number;
+        promo_code_id?: string;
+      };
+      if (result.valid && result.promo_code_id) {
+        setAppliedPromo({
+          code,
+          promo_code_id: result.promo_code_id,
+          discount_percentage: Number(result.discount_percentage ?? 0),
+        });
+        toast({
+          title: "Promo code applied",
+          description: `${result.discount_percentage}% off your credit pack.`,
+        });
+      } else {
+        toast({
+          title: "Invalid promo code",
+          description: result.message ?? "This code cannot be used for credit packs.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({
+        title: "Could not check the code",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const removePromo = () => {
+    setAppliedPromo(null);
+    setPromoCode("");
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -161,16 +222,28 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
     }
     setPurchasing(pack.id);
     try {
-      const { data, error } = await supabase.rpc("purchase_audit_pack", { p_pack_id: pack.id });
+      const { data, error } = await supabase.rpc("purchase_audit_pack", {
+        p_pack_id: pack.id,
+        p_promo_code_id: appliedPromo?.promo_code_id ?? null,
+      });
       if (error) throw error;
       const result = data as {
         success: boolean; message?: string; reference?: string;
-        amount?: number; pack_name?: string;
+        amount?: number; pack_name?: string; free?: boolean;
       };
       if (!result?.success) throw new Error(result?.message || "Could not start the purchase.");
 
+      if (result.free) {
+        toast({
+          title: "Credit pack activated",
+          description: "Your promo code covered the full price, so the credits are ready.",
+        });
+        onPurchased();
+        return;
+      }
+
       const reference = result.reference ?? "";
-      const amount = result.amount ?? pack.price;
+      const amount = result.amount ?? priceAfterPromo(pack.price);
       const packName = result.pack_name ?? pack.name;
       // VAT is added on top, matching the pricing and packs pages.
       const amountKobo = Math.round((amount + Math.round(amount * VAT_RATE)) * 100);
@@ -220,6 +293,48 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
 
   return (
     <div className="space-y-3">
+      <div className="rounded-lg border border-border p-3">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <Tag className="h-3.5 w-3.5" /> Promo code
+        </p>
+        {appliedPromo ? (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-secondary/40 px-2 py-1.5">
+            <span className="text-sm">
+              <span className="font-mono font-semibold">{appliedPromo.code}</span>
+              <span className="ml-2 text-emerald-600">
+                {appliedPromo.discount_percentage}% off
+              </span>
+            </span>
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={removePromo}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-2 flex gap-2">
+            <Input
+              value={promoCode}
+              onChange={(event) => setPromoCode(event.target.value.toUpperCase())}
+              placeholder="Enter code"
+              className="h-9 font-mono"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void applyPromo();
+                }
+              }}
+            />
+            <Button
+              variant="outline"
+              className="h-9"
+              disabled={promoLoading || !promoCode.trim()}
+              onClick={() => void applyPromo()}
+            >
+              {promoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+            </Button>
+          </div>
+        )}
+      </div>
+
       {packs.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">
           No credit packs are available right now.
@@ -254,12 +369,32 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
                   )}
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-semibold">
-                    ₦{Number(pack.price).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    + ₦{Math.round(pack.price * VAT_RATE).toLocaleString()} VAT (7.5%)
-                  </p>
+                  {appliedPromo ? (
+                    <>
+                      <p className="text-sm font-semibold">
+                        ₦{priceAfterPromo(Number(pack.price)).toLocaleString()}{" "}
+                        <span className="text-xs font-normal text-muted-foreground line-through">
+                          ₦{Number(pack.price).toLocaleString()}
+                        </span>
+                      </p>
+                      <p className="text-xs text-emerald-600">
+                        Save ₦{discountFor(Number(pack.price)).toLocaleString()} (
+                        {appliedPromo.discount_percentage}%)
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        + ₦{Math.round(priceAfterPromo(Number(pack.price)) * VAT_RATE).toLocaleString()} VAT (7.5%)
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold">
+                        ₦{Number(pack.price).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        + ₦{Math.round(pack.price * VAT_RATE).toLocaleString()} VAT (7.5%)
+                      </p>
+                    </>
+                  )}
                   {votes > 0 && (
                     <Badge variant="secondary" className="mt-1">
                       {votes} vote{votes === 1 ? "" : "s"}/stage

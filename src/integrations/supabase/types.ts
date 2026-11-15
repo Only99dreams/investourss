@@ -1340,6 +1340,7 @@ export type Database = {
           expires_at: string | null
           is_active: boolean | null
           plan_type: string | null
+          applies_to: string
           created_by: string | null
           created_at: string | null
           updated_at: string | null
@@ -1354,6 +1355,7 @@ export type Database = {
           expires_at?: string | null
           is_active?: boolean | null
           plan_type?: string | null
+          applies_to?: string
           created_by?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -1368,6 +1370,7 @@ export type Database = {
           expires_at?: string | null
           is_active?: boolean | null
           plan_type?: string | null
+          applies_to?: string
           created_by?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -1753,6 +1756,60 @@ export type Database = {
           updated_at?: string
         }
       }
+      certificate_templates: {
+        Row: {
+          id: string
+          name: string
+          purpose: string | null
+          heading: string
+          intro_text: string | null
+          body_text: string | null
+          footer_note: string | null
+          issuer_name: string | null
+          issuer_title: string | null
+          accent_color: string | null
+          is_published: boolean | null
+          is_default: boolean | null
+          order_index: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          purpose?: string | null
+          heading?: string
+          intro_text?: string | null
+          body_text?: string | null
+          footer_note?: string | null
+          issuer_name?: string | null
+          issuer_title?: string | null
+          accent_color?: string | null
+          is_published?: boolean | null
+          is_default?: boolean | null
+          order_index?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          purpose?: string | null
+          heading?: string
+          intro_text?: string | null
+          body_text?: string | null
+          footer_note?: string | null
+          issuer_name?: string | null
+          issuer_title?: string | null
+          accent_color?: string | null
+          is_published?: boolean | null
+          is_default?: boolean | null
+          order_index?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       education_certification_courses: {
         Row: {
           id: string
@@ -1760,6 +1817,7 @@ export type Database = {
           description: string | null
           category: string | null
           tier_required: string | null
+          template_id: string | null
           is_published: boolean | null
           order_index: number | null
           created_at: string | null
@@ -1771,6 +1829,7 @@ export type Database = {
           description?: string | null
           category?: string | null
           tier_required?: string | null
+          template_id?: string | null
           is_published?: boolean | null
           order_index?: number | null
           created_at?: string | null
@@ -1782,17 +1841,28 @@ export type Database = {
           description?: string | null
           category?: string | null
           tier_required?: string | null
+          template_id?: string | null
           is_published?: boolean | null
           order_index?: number | null
           created_at?: string | null
           updated_at?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "education_certification_courses_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "certificate_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       education_certification_requests: {
         Row: {
           id: string
           user_id: string
           course_id: string
+          template_id: string | null
           status: string
           note: string | null
           admin_notes: string | null
@@ -1808,6 +1878,7 @@ export type Database = {
           id?: string
           user_id: string
           course_id: string
+          template_id?: string | null
           status?: string
           note?: string | null
           admin_notes?: string | null
@@ -1823,6 +1894,7 @@ export type Database = {
           id?: string
           user_id?: string
           course_id?: string
+          template_id?: string | null
           status?: string
           note?: string | null
           admin_notes?: string | null
@@ -1834,6 +1906,15 @@ export type Database = {
           created_at?: string | null
           updated_at?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "education_certification_requests_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "certificate_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1951,14 +2032,31 @@ export type Database = {
         Args: {
           p_code: string
           p_user_id: string
+          p_plan_type?: string
+        }
+        Returns: Json
+      }
+      validate_credit_promo_code: {
+        Args: {
+          p_code: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      purchase_audit_pack: {
+        Args: {
+          p_pack_id: string
+          p_promo_code_id?: string | null
         }
         Returns: Json
       }
       activate_free_subscription: {
         Args: {
           p_user_id: string
+          p_plan_type: string
+          p_promo_code_id: string
         }
-        Returns: Json
+        Returns: boolean
       }
       increment_promo_usage: {
         Args: {
@@ -2045,7 +2143,7 @@ export type Database = {
     }
     Enums: {
       app_role: 'admin' | 'moderator' | 'user'
-      user_type: 'individual' | 'group' | 'firm'
+      user_type: 'individual' | 'business' | 'b2b' | 'group' | 'firm'
       user_tier: 'free' | 'premium'
       post_category: 'financial_tips' | 'success_stories' | 'market_news' | 'questions' | 'general' | 'scam_alerts'
       investment_status: 'pending' | 'active' | 'closed' | 'cancelled'

@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import Header from "@/components/Header";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { isActiveSubscriber } from "@/lib/subscription";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Footer } from "@/components/ui/Footer";
@@ -73,7 +74,7 @@ const Vetting = () => {
   const [showDeepSurvey, setShowDeepSurvey] = useState(false);
   const { toast } = useToast();
   const { user, profile } = useAuth();
-  const isPremium = profile?.user_tier === 'premium' || profile?.user_tier === 'exclusive';
+  const isSubscriber = isActiveSubscriber(profile);
   const navigate = useNavigate();
   const sessionId = useMemo(() => crypto.randomUUID(), []);
 
@@ -127,13 +128,13 @@ const Vetting = () => {
       return;
     }
 
-    // Premium users get unlimited deep analysis; others pay 1 credit per analysis
-    if (!isPremium) {
+    // Subscribers get unlimited deep analysis; others pay 1 credit per analysis
+    if (!isSubscriber) {
       const { data, error } = await supabase.rpc("consume_audit_credit");
       if (error || !data?.success) {
         toast({
           title: "No Credits Available",
-          description: data?.message || "Upgrade to Premium or purchase a Platform Credit Pack to use deep analysis.",
+          description: data?.message || "Upgrade to a subscription or purchase a Platform Credit Pack to use deep analysis.",
           variant: "destructive",
         });
         return;
@@ -346,7 +347,7 @@ const Vetting = () => {
                     </CardTitle>
                     <CardDescription>
                       Get comprehensive AI analysis of any investment opportunity.
-                      {!isPremium && " Uses 1 Platform Credit per analysis, or upgrade to Premium for unlimited access."}
+                      {!isSubscriber && " Uses 1 Platform Credit per analysis, or subscribe for unlimited access."}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -530,12 +531,12 @@ const Vetting = () => {
                     <div className="w-16 h-16 rounded-full bg-investours-gold/10 flex items-center justify-center mx-auto mb-4">
                       <HelpCircle className="w-8 h-8 text-investours-gold" />
                     </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Premium Feature</h3>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">Subscription Feature</h3>
                     <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                      Upgrade to Premium for enhanced guidance on using our AI tools, deeper learning resources, and advanced risk-awareness insights.
+                      Upgrade to a subscription for enhanced guidance on using our AI tools, deeper learning resources, and advanced risk-awareness insights.
                     </p>
                     <Button onClick={handleSupport} variant="default">
-                      Upgrade to Premium
+                      Choose a Plan
                       <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
                   </CardContent>

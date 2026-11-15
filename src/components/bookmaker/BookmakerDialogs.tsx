@@ -24,7 +24,7 @@ interface CreditGateDialogProps {
   onConfirm: () => void;
   /** Opens the in-page purchase dialog when the balance is short. */
   onPurchase?: (kind: "packs" | "subscribe") => void;
-  /** Narration can only be paid from credit packs, never plan credits. */
+  /** Without a subscription, narration can only be paid from credit packs. */
   packOnly?: boolean;
   children?: ReactNode;
   note?: ReactNode;
@@ -51,13 +51,15 @@ export function CreditGateDialog({
   children,
   note,
 }: CreditGateDialogProps) {
+  const included = cost <= 0;
+  const effectivePackOnly = packOnly && !included;
   const total = entitlement?.total_available ?? 0;
   const subscription = entitlement?.subscription_credits_remaining ?? 0;
   const packs = entitlement?.pack_credits_remaining ?? 0;
-  const available = packOnly ? packs : total;
+  const available = effectivePackOnly ? packs : total;
   const shortfall = Math.max(cost - available, 0);
-  const canAfford = shortfall === 0;
-  const fromSubscription = packOnly ? 0 : Math.min(subscription, cost);
+  const canAfford = included || shortfall === 0;
+  const fromSubscription = effectivePackOnly ? 0 : Math.min(subscription, cost);
   const fromPacks = Math.max(Math.min(packs, cost - fromSubscription), 0);
 
   return (
@@ -65,13 +67,33 @@ export function CreditGateDialog({
       <DialogContent className="max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-md overflow-y-auto p-4 sm:p-6">
         <DialogHeader className="pr-6">
           <DialogTitle className="flex items-start gap-2 text-base sm:text-lg">
-            <Coins className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            {included ? (
+              <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            ) : (
+              <Coins className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            )}
             <span className="min-w-0">{title}</span>
           </DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
 
         <div className="space-y-4">
+          {included ? (
+            <div className="rounded-xl border border-green-300 bg-green-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-green-800">This action</p>
+                  <p className="mt-1 text-lg font-bold text-green-900">Included in your subscription</p>
+                </div>
+                <Badge variant="secondary" className="gap-1">
+                  <ShieldCheck className="h-3 w-3" /> No credits
+                </Badge>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-green-800">
+                Your plan covers this generation, so no subscription or pack credits will be used.
+              </p>
+            </div>
+          ) : (
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -87,7 +109,7 @@ export function CreditGateDialog({
             </div>
 
             <div className="mt-3 space-y-1.5 text-sm">
-              {packOnly ? (
+              {effectivePackOnly ? (
                 <>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Platform credits (credit packs)</span>
@@ -131,6 +153,7 @@ export function CreditGateDialog({
               </p>
             ) : null}
           </div>
+          )}
 
           {children}
 
@@ -165,8 +188,8 @@ export function CreditGateDialog({
             Cancel
           </Button>
           <Button onClick={onConfirm} disabled={!canAfford || busy} className="w-full gap-2 sm:w-auto">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Coins className="h-4 w-4" />}
-            {confirmLabel || (cost === 1 ? "Use 1 credit" : `Use ${cost} credits`)}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : included ? <Sparkles className="h-4 w-4" /> : <Coins className="h-4 w-4" />}
+            {confirmLabel || (included ? "Continue" : cost === 1 ? "Use 1 credit" : `Use ${cost} credits`)}
           </Button>
         </DialogFooter>
       </DialogContent>

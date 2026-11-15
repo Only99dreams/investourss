@@ -22,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { downloadPDF } from "@/lib/planExport";
+import { isActiveSubscriber } from "@/lib/subscription";
 
 interface BusinessPlanForm {
   founderName: string;
@@ -85,7 +86,7 @@ const BusinessPlanGenerator = () => {
   const location = useLocation();
   const { profile, user } = useAuth();
   const { toast } = useToast();
-  const isPremium = profile?.user_tier === 'premium' || profile?.user_tier === 'exclusive';
+  const isSubscriber = isActiveSubscriber(profile);
 
   const [form, setForm] = useState<BusinessPlanForm>(initialForm);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -140,7 +141,7 @@ const BusinessPlanGenerator = () => {
     });
   };
 
-  const canRevise = isPremium || revisionCount < 1;
+  const canRevise = isSubscriber || revisionCount < 1;
 
   const invokePlan = useCallback(async (payload: Record<string, unknown>) => {
     setIsGenerating(true);
@@ -180,7 +181,7 @@ const BusinessPlanGenerator = () => {
 
   const handleSwitchVersion = async (version: VersionType) => {
     if (!canRevise) {
-      toast({ title: "Revision Limit Reached", description: "Upgrade to Premium for unlimited revisions.", variant: "destructive" });
+      toast({ title: "Revision Limit Reached", description: "Upgrade to a subscription for unlimited revisions.", variant: "destructive" });
       return;
     }
     setActiveVersion(version);
@@ -192,7 +193,7 @@ const BusinessPlanGenerator = () => {
 
   const handleRegenerateSection = async (section: number) => {
     if (!canRevise) {
-      toast({ title: "Revision Limit Reached", description: "Upgrade to Premium for unlimited revisions.", variant: "destructive" });
+      toast({ title: "Revision Limit Reached", description: "Upgrade to a subscription for unlimited revisions.", variant: "destructive" });
       return;
     }
     setRegeneratingSection(section);
@@ -215,7 +216,7 @@ const BusinessPlanGenerator = () => {
   const handleImproveSection = async () => {
     if (!improveInput || !improveInput.prompt.trim()) return;
     if (!canRevise) {
-      toast({ title: "Revision Limit Reached", description: "Upgrade to Premium for unlimited revisions.", variant: "destructive" });
+      toast({ title: "Revision Limit Reached", description: "Upgrade to a subscription for unlimited revisions.", variant: "destructive" });
       return;
     }
     setRevisionCount(prev => prev + 1);
@@ -236,7 +237,7 @@ const BusinessPlanGenerator = () => {
 
   const handleAdjustLength = async (direction: 'shorter' | 'longer') => {
     if (!canRevise) {
-      toast({ title: "Revision Limit Reached", description: "Upgrade to Premium for unlimited revisions.", variant: "destructive" });
+      toast({ title: "Revision Limit Reached", description: "Upgrade to a subscription for unlimited revisions.", variant: "destructive" });
       return;
     }
     setIsAdjustingLength(true);
@@ -268,13 +269,13 @@ const BusinessPlanGenerator = () => {
   const handleDownloadPDF = async () => {
     if (!generatedPlan) return;
 
-    // Premium users download for free; others pay 1 credit per download
-    if (!isPremium) {
+    // Subscribers download for free; others pay 1 credit per download
+    if (!isSubscriber) {
       const { data, error } = await supabase.rpc("consume_audit_credit");
       if (error || !data?.success) {
         toast({
           title: "No Credits Available",
-          description: data?.message || "Upgrade to Premium or purchase a Platform Credit Pack to download.",
+          description: data?.message || "Upgrade to a subscription or purchase a Platform Credit Pack to download.",
           variant: "destructive",
         });
         return;
@@ -288,13 +289,13 @@ const BusinessPlanGenerator = () => {
 
   const handleSavePlan = async () => {
     if (!generatedPlan || !user) return;
-    if (!isPremium) {
+    if (!isSubscriber) {
       const { count } = await supabase
         .from("business_plans")
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id);
       if (count && count >= 3) {
-        toast({ title: "Save Limit Reached", description: "Free users can save up to 3 plans. Upgrade to Premium for unlimited saves.", variant: "destructive" });
+        toast({ title: "Save Limit Reached", description: "Free users can save up to 3 plans. Upgrade to a subscription for unlimited saves.", variant: "destructive" });
         return;
       }
     }
@@ -584,11 +585,11 @@ const BusinessPlanGenerator = () => {
               <p className="text-muted-foreground text-sm">Turn your idea into a structured, funding-ready business plan</p>
             </div>
           </div>
-          {!isPremium && generatedPlan && (
+          {!isSubscriber && generatedPlan && (
             <Alert className="mt-4 border-primary/30 bg-primary/5">
               <Crown className="h-4 w-4 text-primary" />
               <AlertDescription className="text-sm">
-                <strong>Free Plan:</strong> You get 1 revision cycle. <Button variant="link" className="h-auto p-0 text-xs" onClick={() => { trackEvent("attempted_upgrade"); navigate('/pricing'); }}>Upgrade to Premium</Button> for unlimited revisions and DOCX/PDF download.
+                <strong>Free Plan:</strong> You get 1 revision cycle. <Button variant="link" className="h-auto p-0 text-xs" onClick={() => { trackEvent("attempted_upgrade"); navigate('/pricing'); }}>Upgrade to a subscription</Button> for unlimited revisions and DOCX/PDF download.
               </AlertDescription>
             </Alert>
           )}
@@ -762,7 +763,7 @@ const BusinessPlanGenerator = () => {
                     <FileText className="w-5 h-5 text-primary" />
                     <h2 className="text-lg font-bold">Your Business Plan</h2>
                     <Badge variant="outline" className="text-xs">
-                      {isPremium ? 'Premium' : 'Free'} &middot; {revisionCount} revision{revisionCount !== 1 ? 's' : ''}
+                      {isSubscriber ? 'Subscriber' : 'Free'} &middot; {revisionCount} revision{revisionCount !== 1 ? 's' : ''}
                     </Badge>
                     {(() => {
                       const score = extractFundingScore(generatedPlan);
@@ -812,8 +813,8 @@ const BusinessPlanGenerator = () => {
                     {isSaving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : savePlanId ? <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
                     {savePlanId ? "Saved" : "Save Plan"}
                   </Button>
-                  <Button size="sm" variant="default" onClick={handleDownloadPDF} title={isPremium ? 'Download PDF' : 'Download PDF (1 Platform Credit)'}>
-                    <Book className="w-3.5 h-3.5 mr-1.5" /> PDF {!isPremium && <span className="text-xs ml-1">1 Credit</span>}
+                  <Button size="sm" variant="default" onClick={handleDownloadPDF} title={isSubscriber ? 'Download PDF' : 'Download PDF (1 Platform Credit)'}>
+                    <Book className="w-3.5 h-3.5 mr-1.5" /> PDF {!isSubscriber && <span className="text-xs ml-1">1 Credit</span>}
                   </Button>
                 </div>
               </CardContent>
@@ -840,9 +841,9 @@ const BusinessPlanGenerator = () => {
                   <Users className="w-4 h-4 mr-2" /> Check Opportunity Hub
                 </Button>
               </Link>
-              {!isPremium && (
+              {!isSubscriber && (
                 <Button variant="default" onClick={() => { trackEvent("attempted_upgrade"); navigate('/pricing'); }}>
-                  <Crown className="w-4 h-4 mr-2" /> Upgrade to Premium
+                  <Crown className="w-4 h-4 mr-2" /> Upgrade to a subscription
                 </Button>
               )}
             </div>

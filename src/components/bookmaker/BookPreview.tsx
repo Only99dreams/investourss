@@ -30,6 +30,8 @@ interface BookPreviewProps {
   approvedChapters?: number[];
   busy?: boolean;
   busyChapter?: number | null;
+  /** Credits charged per rewrite; 0 when a subscription includes it. */
+  regenerateCost?: number;
   className?: string;
 }
 
@@ -45,6 +47,7 @@ export function BookPreview({
   approvedChapters = [],
   busy = false,
   busyChapter = null,
+  regenerateCost = 1,
   className,
 }: BookPreviewProps) {
   const theme = resolveTheme(book);
@@ -209,7 +212,9 @@ export function BookPreview({
                       onClick={() => onRegenerateChapter(chapter.number - 1)}
                     >
                       {busyChapter === chapter.number - 1 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                      <span className="hidden sm:inline">Regenerate · 1 credit</span>
+                      <span className="hidden sm:inline">
+                        {regenerateCost === 0 ? "Regenerate · Included" : `Regenerate · ${regenerateCost} credit${regenerateCost === 1 ? "" : "s"}`}
+                      </span>
                       <span className="sm:hidden">Regenerate</span>
                     </Button>
                   ) : null}
@@ -229,7 +234,11 @@ export function BookPreview({
                       className="h-7 max-w-full gap-1 rounded-full border border-black/10 px-2 text-[10px]"
                       disabled={busy}
                       onClick={() => onRegenerateVisual(chapter.number - 1, index)}
-                      title={`Refresh the ${visual.kind} visual (1 credit)`}
+                      title={
+                        regenerateCost === 0
+                          ? `Refresh the ${visual.kind} visual (included in your subscription)`
+                          : `Refresh the ${visual.kind} visual (${regenerateCost} credit${regenerateCost === 1 ? "" : "s"})`
+                      }
                     >
                       <Wand2 className="h-3 w-3 shrink-0" />
                       <span className="truncate">{visual.title || visual.kind}</span>

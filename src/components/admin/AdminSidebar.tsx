@@ -30,7 +30,8 @@ import {
   BarChart3,
   Clock,
   Trophy,
-  BookOpen
+  BookOpen,
+  History
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ const menuItems = [
   { icon: Trophy, label: "AI Challenge", path: "/admin/leaderboard" },
   { icon: MessageSquare, label: "Opportunity Hub", path: "/admin/community" },
   { icon: Wallet, label: "Wallets", path: "/admin/wallets" },
+  { icon: History, label: "Transaction History", path: "/admin/transactions" },
   { icon: Banknote, label: "Deposit Requests", path: "/admin/deposit-requests" },
   { icon: CreditCard, label: "Payouts", path: "/admin/payouts" },
   { icon: Share2, label: "Referrals", path: "/admin/referrals" },

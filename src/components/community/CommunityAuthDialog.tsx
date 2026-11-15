@@ -180,9 +180,10 @@ export function CommunityAuthDialog({
     setIsLoading(true);
 
     try {
+      const resolvedUserType = formData.accountType === "business" ? "business" : "individual";
       const signUpMetadata: Record<string, unknown> = {
         full_name: formData.fullName,
-        user_type: "individual",
+        user_type: resolvedUserType,
       };
       const referralCode = normalizeReferralCode(formData.referralCode);
       // Carried in signup metadata so handle_new_user() can attribute the
@@ -210,7 +211,7 @@ export function CommunityAuthDialog({
             country: formData.country,
             gender: formData.gender || null,
             disability: formData.disability || null,
-            user_type: "individual",
+            user_type: resolvedUserType,
             account_type: formData.accountType,
             email_opt_in: emailOptIn,
           })

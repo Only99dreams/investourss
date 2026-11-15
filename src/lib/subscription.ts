@@ -3,10 +3,10 @@ export interface SubscriberLike {
   subscription_expires_at?: string | null;
 }
 
-export const isPremiumTier = (
-  profile: { user_tier?: string | null } | null | undefined,
-): boolean => profile?.user_tier === "premium" || profile?.user_tier === "exclusive";
-
+/**
+ * True when the profile holds a subscription that has not lapsed. This is the
+ * single source of truth for access; there is no separate tier flag anymore.
+ */
 export const isActiveSubscriber = (profile: SubscriberLike | null | undefined): boolean => {
   if (!profile) return false;
 
@@ -20,7 +20,7 @@ export const isActiveSubscriber = (profile: SubscriberLike | null | undefined): 
   return (flag && notExpired) || futureExpiry;
 };
 
-/** Rank a plan so "at least this plan" can be checked. B2B is its own top tier. */
+/** Rank a plan so "at least this plan" can be checked. B2B is its own top plan. */
 export const planRank = (plan: string | null | undefined): number => {
   const key = String(plan ?? "").toLowerCase();
   if (key.startsWith("b2b")) return 5;
@@ -32,7 +32,7 @@ export const planRank = (plan: string | null | undefined): number => {
 };
 
 /**
- * The plan tier a member actually holds right now. A lapsed membership keeps
+ * The plan a member actually holds right now. A lapsed membership keeps
  * `subscription_type` in the profile, so expiry has to be checked before the
  * plan counts as access.
  */
@@ -45,8 +45,8 @@ export const activePlanRank = (
   return planRank(profile?.subscription_type ?? "monthly");
 };
 
-/** True when the member's active plan is at or above the required tier. */
-export const meetsPlanTier = (
+/** True when the member's active plan is at or above the required plan. */
+export const meetsPlan = (
   profile: (SubscriberLike & { subscription_type?: string | null }) | null | undefined,
   required: string | null | undefined,
 ): boolean => activePlanRank(profile) >= planRank(required);
@@ -61,12 +61,44 @@ export const planLabel = (plan: string | null | undefined): string => {
   return "Free";
 };
 
-/** Tiers offered on education videos and certification courses, in plan order. */
-export const PLAN_TIER_OPTIONS = [
+/** Access plans in plan order; "free" carries no subscription. */
+export const PLAN_ACCESS_OPTIONS = [
   { value: "free", label: "Free" },
   { value: "monthly", label: "1-Month Plan" },
   { value: "quarterly", label: "3-Month Plan" },
   { value: "biennial", label: "6-Month Plan" },
   { value: "annual", label: "12-Month Plan" },
-  { value: "b2b", label: "B2B Plan" },
+  { value: "b2b_quarterly", label: "B2B Plan" },
+  // Grandfathered B2B subscribers keep their original yearly plan.
+  { value: "b2b_annual", label: "B2B Plan (legacy 12-month)" },
 ] as const;
+
+/** Days of access granted by each plan, mirroring the payment activation RPCs. */
+export const PLAN_DAYS: Record<string, number> = {
+  monthly: 30,
+  quarterly: 90,
+  biennial: 180,
+  annual: 365,
+  b2b_quarterly: 90,
+  b2b_annual: 365,
+};
+
+export const USER_TYPE_OPTIONS = [
+  { value: "individual", label: "Individual" },
+  { value: "business", label: "Business" },
+  { value: "b2b", label: "B2B Subscriber" },
+] as const;
+
+export type UserTypeValue = (typeof USER_TYPE_OPTIONS)[number]["value"];
+
+/** Legacy rows stored group/firm before types were consolidated. */
+export const normalizeUserType = (value: string | null | undefined): UserTypeValue => {
+  const key = String(value ?? "").toLowerCase();
+  if (key === "business" || key === "group" || key === "firm") return "business";
+  if (key === "b2b") return "b2b";
+  return "individual";
+};
+
+export const userTypeLabel = (value: string | null | undefined): string =>
+  USER_TYPE_OPTIONS.find((option) => option.value === normalizeUserType(value))?.label ??
+  "Individual";

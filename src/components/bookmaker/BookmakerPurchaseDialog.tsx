@@ -107,7 +107,7 @@ export function BookmakerPurchaseDialog({
             {title}
           </DialogTitle>
           <DialogDescription>
-            {view === "choose" && "A credit pack is the flexible top-up; a subscription adds a monthly ebook allowance and credits."}
+            {view === "choose" && "A credit pack is the flexible top-up; a subscription includes the plan's ebook allowance and every AI action."}
             {view === "pack" && "Platform credits for writing, covers, narration and downloads. Prices exclude 7.5% VAT."}
             {view === "subscribe" && "Choose a plan, then pay below. Prices exclude 7.5% VAT, added at checkout."}
           </DialogDescription>
@@ -140,8 +140,8 @@ export function BookmakerPurchaseDialog({
                 Subscribe to a plan
               </p>
               <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                Includes an ebook allowance for the billing period plus monthly credits. Audiobook
-                narration still uses platform credits from a pack.
+                Includes the plan's ebook allowance for the billing period and every AI action —
+                writing, rewrites, covers and audiobook narration — with no credits used.
               </p>
             </button>
           </div>

@@ -97,7 +97,7 @@ const Welcome = () => {
             className="mb-5 sm:mb-6"
           >
             <Link
-              to={user ? "/bookmaker" : "/auth?mode=login"}
+              to={user ? "/home" : "/auth?mode=login"}
               onClick={(event) => {
                 if (isLoading) event.preventDefault();
               }}

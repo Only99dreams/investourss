@@ -140,8 +140,8 @@ const AdminOverview = () => {
         supabase.from('wallets').select('user_wallet_balance, gfe_wallet_balance'),
         // Pending complaints
         supabase.from('complaints').select('*', { count: 'exact', head: true }).eq('status', 'open'),
-        // Premium users
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('user_tier', 'premium'),
+        // Active subscribers (subscription access replaces the old tier flag)
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('has_active_subscription', true),
         // Deposit requests stats
         supabase.from('deposit_requests').select('status, amount, created_at'),
         // Total transactions
@@ -287,7 +287,7 @@ const AdminOverview = () => {
       color: "text-accent"
     },
     {
-      title: "Premium Users",
+      title: "Active Subscribers",
       value: stats.premiumUsers.toLocaleString(),
       change: 15.3,
       icon: CreditCard,
@@ -442,7 +442,7 @@ const AdminOverview = () => {
                 <span className="text-lg font-semibold text-blue-600">{stats.activeUsers}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Premium Users</span>
+                <span className="text-sm text-muted-foreground">Active Subscribers</span>
                 <span className="text-lg font-semibold text-gold-600">{stats.premiumUsers}</span>
               </div>
               <div className="flex items-center justify-between">

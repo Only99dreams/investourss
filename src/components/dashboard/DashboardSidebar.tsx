@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { isActiveSubscriber, planLabel as formatPlanLabel } from "@/lib/subscription";
 import { 
   User, Wallet, GraduationCap, TrendingUp, FileText, Users, 
   Settings, Bell, MessageSquare, AlertCircle, Share2, Trophy,
@@ -42,14 +43,11 @@ export function DashboardSidebar() {
 
   const expiryDate = profile?.subscription_expires_at ? new Date(profile.subscription_expires_at) : null;
   const daysLeft = expiryDate ? Math.ceil((expiryDate.getTime() - Date.now()) / 86_400_000) : null;
-  const showSubscription = Boolean(
-    profile && (profile.has_active_subscription || profile.user_tier !== "free" || profile.subscription_expires_at),
-  );
+  const subscriber = isActiveSubscriber(profile);
+  const showSubscription = Boolean(profile && (subscriber || profile.subscription_expires_at));
   const planLabel = profile?.subscription_type
-    ? profile.subscription_type.replace(/_/g, " ")
-    : profile?.user_tier === "free"
-      ? "Free"
-      : "Premium";
+    ? formatPlanLabel(profile.subscription_type)
+    : "Free";
   const expiryLabel = expiryDate
     ? daysLeft !== null && daysLeft < 0
       ? `Expired ${expiryDate.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}`
@@ -110,15 +108,13 @@ export function DashboardSidebar() {
             <p className="font-medium truncate">{profile?.full_name || "User"}</p>
             <span className={cn(
               "text-xs px-2 py-0.5 rounded-full",
-              profile?.user_tier === "premium" ? "bg-gold/20 text-gold" :
-              profile?.user_tier === "exclusive" ? "bg-primary/20 text-primary" :
-              "bg-muted text-muted-foreground"
+              subscriber ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
             )}>
-              {profile?.user_tier?.toUpperCase() || "FREE"}
+              {subscriber ? planLabel.toUpperCase() : "FREE"}
             </span>
             {showSubscription ? (
               <div className="mt-2 rounded-md border border-border bg-muted/40 px-2 py-1.5 text-[11px] leading-snug">
-                <p className="font-medium capitalize text-foreground">{planLabel} plan</p>
+                <p className="font-medium text-foreground">{planLabel}</p>
                 <p className={daysLeft !== null && daysLeft <= 7 ? "text-amber-700" : "text-muted-foreground"}>
                   {expiryLabel}
                 </p>

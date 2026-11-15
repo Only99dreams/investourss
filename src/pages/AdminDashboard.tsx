@@ -14,6 +14,7 @@ import EducationTab from "@/components/admin/tabs/EducationTab";
 import CertificationTab from "@/components/admin/tabs/CertificationTab";
 import CommunityTab from "@/components/admin/tabs/CommunityTab";
 import WalletsTab from "@/components/admin/tabs/WalletsTab";
+import TransactionHistoryTab from "@/components/admin/tabs/TransactionHistoryTab";
 import PayoutsTab from "@/components/admin/tabs/PayoutsTab";
 import ReferralsTab from "@/components/admin/tabs/ReferralsTab";
 import CampaignsTab from "@/components/admin/tabs/CampaignsTab";
@@ -84,6 +85,7 @@ const AdminDashboard = () => {
             <Route path="certification" element={<CertificationTab />} />
             <Route path="community" element={<CommunityTab />} />
             <Route path="wallets" element={<WalletsTab />} />
+            <Route path="transactions" element={<TransactionHistoryTab />} />
             <Route path="deposit-requests" element={<DepositRequestsManager />} />
             <Route path="payouts" element={<PayoutsTab />} />
             <Route path="referrals" element={<ReferralsTab />} />

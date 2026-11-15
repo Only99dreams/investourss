@@ -26,7 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { cn, generateVideoThumbnail } from "@/lib/utils";
 import { LinkifiedText } from "@/lib/LinkifiedText";
-import { isActiveSubscriber, isPremiumTier } from "@/lib/subscription";
+import { isActiveSubscriber } from "@/lib/subscription";
 
 interface Post {
   id: string;
@@ -76,7 +76,6 @@ const FHAChatroomHub = () => {
 
   const isEligible =
     isActiveSubscriber(profile) ||
-    isPremiumTier(profile) ||
     (profile?.audit_credits ?? 0) > 0;
 
   const fetchPosts = async () => {

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { isActiveSubscriber } from "@/lib/subscription";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Award, Download, Loader2, Medal, Trophy, Star } from "lucide-react";
@@ -190,13 +191,13 @@ export function CertificatesSection() {
   const handleDownload = async (cert: Certificate) => {
     if (!user || !profile) return;
 
-    const isFree = profile.user_tier === "free";
+    const isFree = !isActiveSubscriber(profile);
     const currentDownloads = cert.download_count ?? 0;
 
     if (isFree && currentDownloads >= 1) {
       toast({
         title: "Upgrade to Download Again",
-        description: "Free users can download each certificate once. Upgrade to Premium to download unlimited times.",
+        description: "Free members can download each certificate once. An active subscription allows unlimited downloads.",
         variant: "destructive",
       });
       return;
@@ -277,7 +278,7 @@ export function CertificatesSection() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {certificates.map((cert, index) => {
             const IconComponent = levelIcons[cert.level] || Award;
-            const isFree = profile?.user_tier === "free";
+            const isFree = !isActiveSubscriber(profile);
             const remaining = isFree ? 1 - (cert.download_count ?? 0) : Infinity;
 
             return (

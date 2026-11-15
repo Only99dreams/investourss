@@ -48,7 +48,7 @@ import {
 } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Video, Eye, EyeOff, GraduationCap, GripVertical, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
-import { PLAN_TIER_OPTIONS, planLabel } from "@/lib/subscription";
+import { PLAN_ACCESS_OPTIONS, planLabel } from "@/lib/subscription";
 
 interface Module {
   id: string;
@@ -58,7 +58,7 @@ interface Module {
   video_url: string | null;
   category: string | null;
   subcategory: string | null;
-  tier_required: "free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b";
+  tier_required: string | null;
   is_published: boolean;
   order_index: number;
   certification_course_id: string | null;
@@ -218,7 +218,7 @@ const EducationTab = () => {
   const [videoUrl, setVideoUrl] = useState("");
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
-  const [tierRequired, setTierRequired] = useState<"free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b">("free");
+  const [tierRequired, setTierRequired] = useState("free");
   const [isPublished, setIsPublished] = useState(true);
   const [isCertification, setIsCertification] = useState(false);
   const [certificationCourseId, setCertificationCourseId] = useState("");
@@ -280,7 +280,7 @@ const EducationTab = () => {
       .insert({
         title: name,
         category: "Certification",
-        tier_required: tierRequired,
+        tier_required: tierRequired || "free",
         is_published: true,
         order_index: certCourses.length + 1,
       })
@@ -477,7 +477,7 @@ const EducationTab = () => {
       video_url: videoUrl.trim() || null,
       category: category.trim() || null,
       subcategory: subcategory.trim() || null,
-      tier_required: tierRequired,
+      tier_required: tierRequired || "free",
       is_published: isPublished,
       certification_course_id: isCertification ? certificationCourseId : null,
       order_index: editingModule
@@ -735,8 +735,8 @@ const EducationTab = () => {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      New courses take the tier selected below. Add a description or unpublish it
-                      in the Certification tab.
+                      New courses take the minimum plan selected below. Add a description or
+                      unpublish it in the Certification tab.
                     </p>
                   </div>
                 ) : null}
@@ -744,13 +744,13 @@ const EducationTab = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Tier Required</Label>
-                  <Select value={tierRequired} onValueChange={(v: "free" | "monthly" | "quarterly" | "biennial" | "annual" | "b2b") => setTierRequired(v)}>
+                  <Label>Minimum Plan</Label>
+                  <Select value={tierRequired} onValueChange={setTierRequired}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PLAN_TIER_OPTIONS.map((option) => (
+                      {PLAN_ACCESS_OPTIONS.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>
@@ -860,7 +860,7 @@ const EducationTab = () => {
                   <TableHead>Title</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Certification</TableHead>
-                  <TableHead>Tier</TableHead>
+                  <TableHead>Minimum plan</TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
