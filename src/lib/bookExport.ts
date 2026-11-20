@@ -350,7 +350,9 @@ function chapterFlowHtml(chapter: BookChapter, number: number, theme: BookTheme)
   const blockHtml = blocks
     .map((block) => `<div class="flow-block">${renderBlocksToHtml([block], theme)}</div>`)
     .join("");
-  return `<div class="flow-block chapter-open" data-chapter="${number}" style="page-break-before:always;">
+  // Pagination starts a fresh page for chapter openings. Adding a print break
+  // here as well makes browsers emit a blank page between the two.
+  return `<div class="flow-block chapter-open" data-chapter="${number}">
       <div style="margin-bottom:4mm;padding-bottom:3mm;border-bottom:2px solid ${theme.palette.accent};">
         <p style="margin:0 0 1.5mm;font-family:${theme.bodyFont};font-size:6.5pt;letter-spacing:0.2em;text-transform:uppercase;color:${theme.palette.muted};">Chapter ${number}</p>
         <h2 style="margin:0;font-family:${theme.headingFont};font-size:19pt;line-height:1.15;color:${theme.palette.primary};">${escapeHtml(chapter.title)}</h2>
@@ -393,12 +395,22 @@ const PRINT_CSS = `
 
 const PAGINATION_SCRIPT = `
 (function () {
+  // An empty markup block used to claim a whole page. Count real content, not
+  // just element nodes, so a page with a lone empty wrapper is discarded.
+  function hasVisibleContent(node) {
+    if (!node) return false;
+    if ((node.textContent || '').trim()) return true;
+    return Boolean(node.querySelector('img,svg,table,video,figure,canvas,hr'));
+  }
+
   function paginate() {
     var flow = document.getElementById('book-flow');
     var host = document.getElementById('book-pages');
     var template = document.getElementById('page-template');
     if (!flow || !host || !template) return;
-    var items = Array.prototype.slice.call(flow.children);
+    var items = Array.prototype.slice.call(flow.children).filter(function (item) {
+      return hasVisibleContent(item);
+    });
     var content = null;
     var currentPage = null;
 
@@ -432,7 +444,17 @@ const PAGINATION_SCRIPT = `
       if (backTemplate.parentNode) backTemplate.parentNode.removeChild(backTemplate);
     }
 
-    // Fill table-of-contents page numbers.
+    // Remove every page without content, including any page created by a
+    // chapter break that landed on an already-empty spread.
+    Array.prototype.slice.call(host.querySelectorAll('.page')).forEach(function (page) {
+      if (page.classList.contains('cover-page')) return;
+      var pageContent = page.querySelector('.page-content');
+      if (!pageContent || !hasVisibleContent(pageContent)) {
+        if (page.parentNode) page.parentNode.removeChild(page);
+      }
+    });
+
+    // Fill table-of-contents page numbers after the empty pages are gone.
     var allPages = Array.prototype.slice.call(document.querySelectorAll('#book-pages .page'));
     var contentPages = allPages.filter(function (p) { return !p.classList.contains('cover-page'); });
     contentPages.forEach(function (page, index) {

@@ -5,7 +5,11 @@
       "destination": "/api/post/:id"
     },
     {
-      "source": "/((?!api/|post/).*)",
+      "source": "/training/:id",
+      "destination": "/api/training/:id"
+    },
+    {
+      "source": "/((?!api/|post/|training/).*)",
       "destination": "/index.html"
     }
   ]

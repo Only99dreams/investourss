@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,16 @@ interface PromoCode {
   is_active: boolean;
   plan_type: string;
   applies_to: string;
+  credit_pack_id: string | null;
   created_by: string;
   created_at: string;
   creator_name?: string;
+  credit_pack_name?: string;
+}
+
+interface CreditPackOption {
+  id: string;
+  name: string;
 }
 
 const errorMessage = (error: unknown, fallback: string) =>
@@ -38,6 +45,8 @@ export default function PromoCodesTab() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [creditPacks, setCreditPacks] = useState<CreditPackOption[]>([]);
+  const creditPacksRef = useRef<CreditPackOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -50,11 +59,22 @@ export default function PromoCodesTab() {
     expiry_hours: '24',
     plan_type: 'annual',
     applies_to: 'subscription',
+    credit_pack_id: 'all',
   });
 
   useEffect(() => {
-    fetchPromoCodes();
+    void fetchCreditPacks().then(() => fetchPromoCodes());
   }, []);
+
+  const fetchCreditPacks = async () => {
+    const { data } = await supabase
+      .from('audit_credit_packs')
+      .select('id,name')
+      .order('sort_order');
+    const options = (data ?? []) as CreditPackOption[];
+    creditPacksRef.current = options;
+    setCreditPacks(options);
+  };
 
   const fetchPromoCodes = async () => {
     try {
@@ -68,21 +88,19 @@ export default function PromoCodesTab() {
       // Fetch creator names separately
       const codesWithCreators = await Promise.all(
         (data || []).map(async (code) => {
+          let creatorName = 'Unknown';
           if (code.created_by) {
             const { data: profileData } = await supabase
               .from('profiles')
               .select('full_name')
               .eq('id', code.created_by)
               .single();
-
-            return {
-              ...code,
-              creator_name: profileData?.full_name || 'Unknown'
-            };
+            creatorName = profileData?.full_name || 'Unknown';
           }
           return {
             ...code,
-            creator_name: 'Unknown'
+            creator_name: creatorName,
+            credit_pack_name: creditPacksRef.current.find((pack) => pack.id === code.credit_pack_id)?.name ?? null,
           };
         })
       );
@@ -138,9 +156,14 @@ export default function PromoCodesTab() {
           discount_percentage: discount,
           max_uses: parseInt(formData.max_uses),
           expires_at: expiryDate,
-          // Credit-only codes are plan-agnostic.
+          // Credit-only codes are plan-agnostic. A restricted credit code
+          // carries the chosen pack; NULL means every pack.
           plan_type: formData.applies_to === 'credits' ? 'all' : formData.plan_type,
           applies_to: formData.applies_to,
+          credit_pack_id:
+            formData.applies_to !== 'subscription' && formData.credit_pack_id !== 'all'
+              ? formData.credit_pack_id
+              : null,
           created_by: profile?.id
         });
 
@@ -159,6 +182,7 @@ export default function PromoCodesTab() {
         expiry_hours: '24',
         plan_type: 'annual',
         applies_to: 'subscription',
+        credit_pack_id: 'all',
       });
 
       fetchPromoCodes();
@@ -337,10 +361,35 @@ export default function PromoCodesTab() {
                 </Select>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {formData.applies_to === 'credits'
-                    ? 'Credit codes work on every credit pack.'
+                    ? 'Credit codes are not tied to a subscription plan.'
                     : 'Choose “Any plan” to make the code work on every subscription.'}
                 </p>
               </div>
+
+              {formData.applies_to !== 'subscription' && (
+                <div>
+                  <Label htmlFor="credit_pack_id">Credit Pack</Label>
+                  <Select
+                    value={formData.credit_pack_id}
+                    onValueChange={(v) => setFormData({ ...formData, credit_pack_id: v })}
+                  >
+                    <SelectTrigger id="credit_pack_id">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Any credit pack</SelectItem>
+                      {creditPacks.map((pack) => (
+                        <SelectItem key={pack.id} value={pack.id}>
+                          {pack.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Just like a subscription plan, choose one pack or leave it open for all packs.
+                  </p>
+                </div>
+              )}
 
               <div className="flex gap-2 pt-4">
                 <Button
@@ -367,8 +416,8 @@ export default function PromoCodesTab() {
         <Tag className="h-4 w-4" />
         <AlertDescription>
           Promo codes are single-use per account. Subscription codes apply to the
-          chosen plan (or any plan), while credit codes discount platform credit
-          packs. They auto-expire based on the time set during creation.
+          chosen plan, and credit codes can target one platform credit pack (or
+          any pack). They auto-expire based on the time set during creation.
         </AlertDescription>
       </Alert>
 
@@ -427,6 +476,11 @@ export default function PromoCodesTab() {
                       {code.applies_to !== 'credits' && (
                         <span className="ml-2 text-xs text-muted-foreground">
                           {code.plan_type === 'all' ? 'Any plan' : code.plan_type}
+                        </span>
+                      )}
+                      {code.applies_to !== 'subscription' && (
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {code.credit_pack_name ?? 'Any credit pack'}
                         </span>
                       )}
                     </TableCell>

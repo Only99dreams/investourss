@@ -4,8 +4,6 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { 
   Check, 
   ArrowRight,
-  Mail,
-  Building2,
   Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -201,107 +199,6 @@ const Pricing = () => {
             viewport={{ once: true }}
             className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto"
           >
-            {/* Platform Credit Packs */}
-            <motion.div variants={fadeInUp}>
-              <Card variant="elevated" className="h-full border-2 border-border/50">
-                <CardHeader className="text-center pb-4">
-                  <CardTitle className="text-2xl font-bold">Platform Credit Packs</CardTitle>
-                  <CardDescription className="text-base">
-                    Pay-as-you-go credits for on-demand AI solutions.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    {packsLoading ? (
-                      <div className="flex justify-center py-8">
-                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                      </div>
-                    ) : (
-                      creditPacks.map((pack, i) => {
-                        const isAnnual = pack.name.toLowerCase().includes("annual");
-                        const isStandard = pack.name.toLowerCase().includes("standard");
-                        return (
-                          <div
-                            key={pack.id}
-                            className={`rounded-lg p-4 border-2 relative ${
-                              isAnnual
-                                ? "bg-investours-gold/10 border-investours-gold/30"
-                                : isStandard
-                                ? "bg-accent/10 border-accent/30"
-                                : "bg-primary/10 border-primary/20"
-                            }`}
-                          >
-                            {isAnnual && (
-                              <Badge className="absolute -top-2 -right-2 bg-investours-gold text-foreground">
-                                Best Value
-                              </Badge>
-                            )}
-                            <div className="flex items-baseline justify-between mb-2">
-                              <span className="text-sm font-medium">
-                                {pack.name.toLowerCase().includes("starter")
-                                  ? "Starter Credit Pack"
-                                  : pack.name.toLowerCase().includes("standard")
-                                  ? "Standard Credit Pack"
-                                  : "Annual Credit Pack"}
-                              </span>
-                              <div className="text-right">
-                                <span className="text-xl font-bold text-foreground">₦{pack.price.toLocaleString()}</span>
-                                <span className="text-sm text-muted-foreground"> one-time</span>
-                              </div>
-                            </div>
-                            <div className="text-xs text-muted-foreground mb-3">
-                              {pack.credits} Platform Credits · Valid {pack.validity_days} Days
-                            </div>
-                            <Link to={packsHref}>
-                              <Button
-                                variant={isAnnual ? "default" : isStandard ? "accent" : "default"}
-                                className={`w-full ${isAnnual ? "bg-investours-gold hover:bg-investours-gold/90 text-foreground" : ""}`}
-                                size="sm"
-                              >
-                                Get Credit Pack
-                              </Button>
-                            </Link>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  <ul className="space-y-2 pt-2">
-                    <li className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                      <span className="text-sm">Spend credits on AI Financial Audits, Scam Detector scans, Bookmaker ebooks &amp; audiobook narration</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                      <span className="text-sm">Financial Health Scores &amp; leakage detection</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                      <span className="text-sm">Recovery opportunity recommendations</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                      <span className="text-sm">No automatic renewal — pay only for what you use</span>
-                    </li>
-                  </ul>
-                  <Link to={packsHref} className="block mt-4">
-                    <Button variant="outline" className="w-full" size="lg">
-                      Get Started with Credits
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </Link>
-                  <p className="mt-3 text-center text-xs text-muted-foreground">
-                    Writing an ebook? Credits from this pack also work in{" "}
-                    <Link to="/bookmaker" className="font-medium text-primary hover:underline">
-                      Bookmaker by Investours
-                    </Link>
-                    .
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
             {/* Premium Plan */}
             <motion.div variants={fadeInUp}>
               <Card variant="elevated" className="h-full border-2 border-primary shadow-xl relative overflow-hidden">
@@ -471,6 +368,107 @@ const Pricing = () => {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {/* Platform Credit Packs */}
+            <motion.div variants={fadeInUp}>
+              <Card variant="elevated" className="h-full border-2 border-border/50">
+                <CardHeader className="text-center pb-4">
+                  <CardTitle className="text-2xl font-bold">Platform Credit Packs</CardTitle>
+                  <CardDescription className="text-base">
+                    Pay-as-you-go credits for on-demand AI solutions.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    {packsLoading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      </div>
+                    ) : (
+                      creditPacks.map((pack) => {
+                        const isAnnual = pack.name.toLowerCase().includes("annual");
+                        const isStandard = pack.name.toLowerCase().includes("standard");
+                        return (
+                          <div
+                            key={pack.id}
+                            className={`rounded-lg p-4 border-2 relative ${
+                              isAnnual
+                                ? "bg-investours-gold/10 border-investours-gold/30"
+                                : isStandard
+                                ? "bg-accent/10 border-accent/30"
+                                : "bg-primary/10 border-primary/20"
+                            }`}
+                          >
+                            {isAnnual && (
+                              <Badge className="absolute -top-2 -right-2 bg-investours-gold text-foreground">
+                                Best Value
+                              </Badge>
+                            )}
+                            <div className="flex items-baseline justify-between mb-2">
+                              <span className="text-sm font-medium">
+                                {pack.name.toLowerCase().includes("starter")
+                                  ? "Starter Credit Pack"
+                                  : pack.name.toLowerCase().includes("standard")
+                                  ? "Standard Credit Pack"
+                                  : "Annual Credit Pack"}
+                              </span>
+                              <div className="text-right">
+                                <span className="text-xl font-bold text-foreground">₦{pack.price.toLocaleString()}</span>
+                                <span className="text-sm text-muted-foreground"> one-time</span>
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground mb-3">
+                              {pack.credits} Platform Credits · Valid {pack.validity_days} Days
+                            </div>
+                            <Link to={packsHref}>
+                              <Button
+                                variant={isAnnual ? "default" : isStandard ? "accent" : "default"}
+                                className={`w-full ${isAnnual ? "bg-investours-gold hover:bg-investours-gold/90 text-foreground" : ""}`}
+                                size="sm"
+                              >
+                                Get Credit Pack
+                              </Button>
+                            </Link>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <ul className="space-y-2 pt-2">
+                    <li className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                      <span className="text-sm">Spend credits on AI Financial Audits, Scam Detector scans, Bookmaker ebooks &amp; audiobook narration</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                      <span className="text-sm">Financial Health Scores &amp; leakage detection</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                      <span className="text-sm">Recovery opportunity recommendations</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <Check className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                      <span className="text-sm">No automatic renewal — pay only for what you use</span>
+                    </li>
+                  </ul>
+                  <Link to={packsHref} className="block mt-4">
+                    <Button variant="outline" className="w-full" size="lg">
+                      Get Started with Credits
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </Link>
+                  <p className="mt-3 text-center text-xs text-muted-foreground">
+                    Writing an ebook? Credits from this pack also work in{" "}
+                    <Link to="/bookmaker" className="font-medium text-primary hover:underline">
+                      Bookmaker by Investours
+                    </Link>
+                    .
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
           </motion.div>
         </div>
         <p className="mt-8 text-center text-xs text-muted-foreground">
@@ -478,93 +476,6 @@ const Pricing = () => {
         </p>
       </section>
 
-      {/* Institutional Access */}
-      <section className="py-16 md:py-24 bg-secondary/30">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="max-w-4xl mx-auto"
-          >
-            <Card variant="elevated" className="border-primary/30">
-              <CardHeader className="text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Building2 className="w-8 h-8 text-primary" />
-                </div>
-                <CardTitle className="text-2xl md:text-3xl font-bold">
-                  Institutional Access
-                </CardTitle>
-                <CardDescription className="text-base max-w-2xl mx-auto">
-                  Empowering Youth, Women, Entrepreneurs, and Communities with AI-Powered Financial Intelligence and Income Mobility
-                </CardDescription>
-                <p className="text-sm text-muted-foreground mt-3 max-w-xl mx-auto">
-                  Tailored for Government MDAs, NYSC Programs, NGOs, Development Partners, Unions, Cooperatives, Educational Institutions, and Corporations.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                      <Check className="w-5 h-5 text-primary" />
-                      Included Benefits
-                    </h3>
-                    <ul className="space-y-2 text-sm text-muted-foreground ml-7">
-                      <li>AI for Financial Intelligence &amp; Scam Protection Program</li>
-                      <li>AI Business Plan Generator for aspiring entrepreneurs and business owners</li>
-                      <li>Sponsored Premium Access for beneficiaries</li>
-                      <li>Financial literacy, business development, and income mobility resources</li>
-                      <li>Community engagement and impact tracking</li>
-                      <li>Onboarding, training, and ongoing support</li>
-                    </ul>
-                  </div>
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                      <Check className="w-5 h-5 text-primary" />
-                      Requirements &amp; Pricing
-                    </h3>
-                    <ul className="space-y-2 text-sm text-muted-foreground ml-7">
-                      <li>Minimum sponsorship: 25 beneficiaries</li>
-                      <li>Annual billing only</li>
-                      <li>Discounts available for 101+ beneficiaries</li>
-                      <li>White-label solutions available from 5,000+ users</li>
-                      <li>Additional concessions available for large-scale sponsorship programs</li>
-                      <li>Pilot partnerships may be considered on a case-by-case basis</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="pt-4">
-                  <h3 className="font-semibold text-lg flex items-center gap-2 justify-center mb-3">
-                    <Check className="w-5 h-5 text-primary" />
-                    Ideal For
-                  </h3>
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground ml-7 max-w-xl mx-auto">
-                    <li>&bull; Youth empowerment programs</li>
-                    <li>&bull; Women's economic empowerment initiatives</li>
-                    <li>&bull; Entrepreneurship and business incubation programs</li>
-                    <li>&bull; Financial inclusion projects</li>
-                    <li>&bull; Cooperative and union capacity building</li>
-                    <li>&bull; Workforce and community development initiatives</li>
-                  </ul>
-                </div>
-
-                <div className="pt-6 border-t border-border text-center">
-                  <p className="text-muted-foreground mb-4">
-                    Ready to equip your beneficiaries with AI-powered tools for financial intelligence, entrepreneurship, and income mobility?
-                  </p>
-                  <a href="mailto:institutional@investours.com?subject=Institutional Access Request">
-                    <Button variant="hero" size="lg">
-                      <Mail className="w-5 h-5 mr-2" />
-                      Contact Us to Get Started
-                    </Button>
-                  </a>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-      </section>
       <Footer />
     </div>
   );

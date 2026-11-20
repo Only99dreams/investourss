@@ -211,11 +211,11 @@ export function EducationSection() {
   };
 
   const generateShareUrl = (moduleId: string): string => {
-    const baseUrl = window.location.origin;
+    // A canonical share URL gives crawlers a server-rendered page with the
+    // video's thumbnail. Linking straight to /dashboard only exposes the SPA
+    // shell, so networks show two raw links instead of one preview card.
+    const url = new URL(`/training/${encodeURIComponent(moduleId)}`, window.location.origin);
     const referralCode = profile?.referral_code || "";
-    const url = new URL(`${baseUrl}/dashboard`);
-    url.searchParams.set("tab", "education");
-    url.searchParams.set("module", moduleId);
     if (referralCode) {
       url.searchParams.set("ref", referralCode);
     }
@@ -321,11 +321,10 @@ export function EducationSection() {
 
   const handleShare = async (module: Module, platform: "copy" | "twitter" | "facebook" | "linkedin" | "instagram" | "whatsapp") => {
     const shareUrl = generateShareUrl(module.id);
-    const thumbnail = getVideoThumbnail(module);
-    const shareText = `Check out this learning module: "${module.title}" on Investours!`;
-    const shareTextWithLink = thumbnail
-      ? `${shareText}\n\n🎥 ${module.title}\n${shareUrl}`
-      : `${shareText}\n${shareUrl}`;
+    // One link only: the canonical URL carries the preview card. Repeating the
+    // title and URL in the body made networks render two separate links.
+    const shareText = `Watch "${module.title}" on Investours`;
+    const shareTextWithLink = `${shareText}\n${shareUrl}`;
 
     switch (platform) {
       case "copy":

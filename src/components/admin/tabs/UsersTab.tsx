@@ -111,7 +111,8 @@ const UsersTab = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
   const [walletLoading, setWalletLoading] = useState(false);
-  const [creditMap, setCreditMap] = useState<Record<string, number>>({});
+  const [platformCreditMap, setPlatformCreditMap] = useState<Record<string, number>>({});
+  const [planCreditMap, setPlanCreditMap] = useState<Record<string, number>>({});
 
   const formatNaira = (value: number) =>
     `₦${Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -219,7 +220,8 @@ const UsersTab = () => {
       });
       setReferrerMap(map);
 
-      // AI credits are split between subscription allowances and top-up packs.
+      // Platform credits (purchased packs) and subscription ebook allowances
+      // are different balances. Show both, but never mix them into one number.
       const [{ data: packs }, { data: grants }] = await Promise.all([
         supabase
           .from("user_credit_packs")
@@ -230,19 +232,23 @@ const UsersTab = () => {
       ]);
 
       const now = Date.now();
-      const credits: Record<string, number> = {};
+      const packCredits: Record<string, number> = {};
       (packs || []).forEach((pack) => {
         if (pack.status !== "active") return;
         if (pack.expires_at && new Date(pack.expires_at).getTime() <= now) return;
-        credits[pack.user_id] = (credits[pack.user_id] || 0) + (pack.credits_remaining || 0);
+        packCredits[pack.user_id] =
+          (packCredits[pack.user_id] || 0) + (pack.credits_remaining || 0);
       });
+      setPlatformCreditMap(packCredits);
+
+      const planCredits: Record<string, number> = {};
       (grants || []).forEach((grant) => {
         if (!grant.period_end || new Date(grant.period_end).getTime() <= now) return;
-        credits[grant.user_id] =
-          (credits[grant.user_id] || 0) +
+        planCredits[grant.user_id] =
+          (planCredits[grant.user_id] || 0) +
           Math.max((grant.credits_granted || 0) - (grant.credits_used || 0), 0);
       });
-      setCreditMap(credits);
+      setPlanCreditMap(planCredits);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error("Error fetching users:", error);
@@ -342,7 +348,7 @@ const UsersTab = () => {
                   <TableHead>Role</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Access</TableHead>
-                  <TableHead>Credits</TableHead>
+                  <TableHead>Platform credits</TableHead>
                   <TableHead>Subscription ends</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Joined</TableHead>
@@ -379,7 +385,14 @@ const UsersTab = () => {
                           {isActiveSubscriber(user) ? planLabel(user.subscription_type) : "Free"}
                         </Badge>
                       </TableCell>
-                      <TableCell>{creditMap[user.id] ?? user.audit_credits ?? 0}</TableCell>
+                      <TableCell>
+                        <span className="font-medium">
+                          {platformCreditMap[user.id] ?? user.audit_credits ?? 0}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {planCreditMap[user.id] ?? 0} plan
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <ExpiryCell value={user.subscription_expires_at} />
                       </TableCell>
@@ -538,6 +551,38 @@ const UsersTab = () => {
               </div>
             ) : (
               <div className="space-y-4 py-2">
+                <div>
+                  <p className="text-sm font-medium mb-2">Access &amp; Credits</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                      <p className="text-xs text-muted-foreground">Platform credits available</p>
+                      <p className="text-lg font-bold text-primary mt-1">
+                        {platformCreditMap[selectedUser?.id] ?? selectedUser?.audit_credits ?? 0}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-background/60 p-3">
+                      <p className="text-xs text-muted-foreground">Subscription</p>
+                      <p className="text-sm font-semibold mt-1">
+                        {selectedUser && isActiveSubscriber(selectedUser)
+                          ? planLabel(selectedUser.subscription_type)
+                          : "Free"}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-background/60 p-3">
+                      <p className="text-xs text-muted-foreground">Subscription expires</p>
+                      <p className="text-sm font-semibold mt-1">
+                        <ExpiryCell value={selectedUser?.subscription_expires_at} />
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-background/60 p-3">
+                      <p className="text-xs text-muted-foreground">Subscription ebook credits</p>
+                      <p className="text-lg font-bold mt-1">
+                        {planCreditMap[selectedUser?.id] ?? 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="rounded-lg border bg-background/60 p-3">
                     <p className="text-xs text-muted-foreground">Referred By</p>

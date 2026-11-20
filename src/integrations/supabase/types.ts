@@ -1341,6 +1341,7 @@ export type Database = {
           is_active: boolean | null
           plan_type: string | null
           applies_to: string
+          credit_pack_id: string | null
           created_by: string | null
           created_at: string | null
           updated_at: string | null
@@ -1356,6 +1357,7 @@ export type Database = {
           is_active?: boolean | null
           plan_type?: string | null
           applies_to?: string
+          credit_pack_id?: string | null
           created_by?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -1371,6 +1373,7 @@ export type Database = {
           is_active?: boolean | null
           plan_type?: string | null
           applies_to?: string
+          credit_pack_id?: string | null
           created_by?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -2040,6 +2043,7 @@ export type Database = {
         Args: {
           p_code: string
           p_user_id: string
+          p_pack_id?: string | null
         }
         Returns: Json
       }

@@ -85,6 +85,8 @@ const AuditorPacks = () => {
     code: string;
     promo_code_id: string;
     discount_percentage: number;
+    credit_pack_id: string | null;
+    credit_pack_name: string | null;
   } | null>(null);
 
   const discountFor = (price: number) =>
@@ -106,16 +108,22 @@ const AuditorPacks = () => {
         message?: string;
         discount_percentage?: number;
         promo_code_id?: string;
+        credit_pack_id?: string | null;
+        credit_pack_name?: string | null;
       };
       if (result.valid && result.promo_code_id) {
         setAppliedPromo({
           code,
           promo_code_id: result.promo_code_id,
           discount_percentage: Number(result.discount_percentage ?? 0),
+          credit_pack_id: result.credit_pack_id ?? null,
+          credit_pack_name: result.credit_pack_name ?? null,
         });
         toast({
           title: "Promo code applied",
-          description: `${result.discount_percentage}% off your credit pack.`,
+          description: result.credit_pack_name
+            ? `${result.discount_percentage}% off the ${result.credit_pack_name} pack.`
+            : `${result.discount_percentage}% off any credit pack.`,
         });
       } else {
         toast({
@@ -279,6 +287,14 @@ const AuditorPacks = () => {
   };
 
   const handlePurchase = async (pack: CreditPack) => {
+    if (appliedPromo?.credit_pack_id && appliedPromo.credit_pack_id !== pack.id) {
+      toast({
+        title: "Promo code does not apply",
+        description: `This code is for the ${appliedPromo.credit_pack_name ?? "selected"} pack.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setPurchasing(pack.id);
     try {
       const { data, error } = await supabase.rpc("purchase_audit_pack", {
@@ -383,6 +399,11 @@ const AuditorPacks = () => {
                 <span className="ml-2 text-emerald-600">
                   {appliedPromo.discount_percentage}% off
                 </span>
+                {appliedPromo.credit_pack_name && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {appliedPromo.credit_pack_name} only
+                  </span>
+                )}
               </span>
               <Button variant="ghost" size="sm" className="h-7 px-2" onClick={removePromo}>
                 <X className="h-4 w-4" />
@@ -419,7 +440,10 @@ const AuditorPacks = () => {
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : (
-            packs.map((pack, i) => (
+            packs.map((pack, i) => {
+              const promoApplies =
+                appliedPromo && (!appliedPromo.credit_pack_id || appliedPromo.credit_pack_id === pack.id);
+              return (
               <motion.div
                 key={pack.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -436,7 +460,7 @@ const AuditorPacks = () => {
                     <CardTitle>{packDisplayName(pack.name)}</CardTitle>
                     <CardDescription>{pack.description?.replace(/Audit/gi, "Platform")}</CardDescription>
                     <div className="mt-2">
-                      {appliedPromo ? (
+                      {appliedPromo && promoApplies ? (
                         <>
                           <span className="text-3xl font-bold">
                             ₦{priceAfterPromo(pack.price).toLocaleString()}
@@ -473,11 +497,16 @@ const AuditorPacks = () => {
                         <Info className="w-4 h-4 text-primary" /> Monthly monitoring summary
                       </li>
                     </ul>
+                    {appliedPromo && !promoApplies && (
+                      <p className="mb-2 text-xs text-amber-600">
+                        Promo code applies to {appliedPromo.credit_pack_name ?? "another pack"} only.
+                      </p>
+                    )}
                     <Button
                       size="lg"
                       variant={i === 1 ? "default" : "outline"}
                       onClick={() => handlePurchase(pack)}
-                      disabled={purchasing === pack.id || activating}
+                      disabled={purchasing === pack.id || activating || Boolean(appliedPromo && !promoApplies)}
                       className="w-full mt-auto"
                     >
                       {purchasing === pack.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
@@ -486,8 +515,8 @@ const AuditorPacks = () => {
                   </CardContent>
                 </Card>
               </motion.div>
-            ))
-          )}
+              );
+            }))}
         </div>
 
         {/* Pending order payment card */}

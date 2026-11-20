@@ -62,6 +62,8 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
     code: string;
     promo_code_id: string;
     discount_percentage: number;
+    credit_pack_id: string | null;
+    credit_pack_name: string | null;
   } | null>(null);
 
   const discountFor = (price: number) =>
@@ -83,16 +85,22 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
         message?: string;
         discount_percentage?: number;
         promo_code_id?: string;
+        credit_pack_id?: string | null;
+        credit_pack_name?: string | null;
       };
       if (result.valid && result.promo_code_id) {
         setAppliedPromo({
           code,
           promo_code_id: result.promo_code_id,
           discount_percentage: Number(result.discount_percentage ?? 0),
+          credit_pack_id: result.credit_pack_id ?? null,
+          credit_pack_name: result.credit_pack_name ?? null,
         });
         toast({
           title: "Promo code applied",
-          description: `${result.discount_percentage}% off your credit pack.`,
+          description: result.credit_pack_name
+            ? `${result.discount_percentage}% off the ${result.credit_pack_name} pack.`
+            : `${result.discount_percentage}% off any credit pack.`,
         });
       } else {
         toast({
@@ -220,6 +228,14 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
       toast({ title: "Login Required", description: "Please log in to continue.", variant: "destructive" });
       return;
     }
+    if (appliedPromo?.credit_pack_id && appliedPromo.credit_pack_id !== pack.id) {
+      toast({
+        title: "Promo code does not apply",
+        description: `This code is for the ${appliedPromo.credit_pack_name ?? "selected"} pack.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setPurchasing(pack.id);
     try {
       const { data, error } = await supabase.rpc("purchase_audit_pack", {
@@ -304,6 +320,11 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
               <span className="ml-2 text-emerald-600">
                 {appliedPromo.discount_percentage}% off
               </span>
+              {appliedPromo.credit_pack_name && (
+                <span className="ml-2 block text-xs text-muted-foreground">
+                  {appliedPromo.credit_pack_name} only
+                </span>
+              )}
             </span>
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={removePromo}>
               <X className="h-3.5 w-3.5" />
@@ -342,6 +363,8 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
       ) : (
         packs.map((pack) => {
           const votes = votesForPack(pack.name);
+          const promoApplies =
+            appliedPromo && (!appliedPromo.credit_pack_id || appliedPromo.credit_pack_id === pack.id);
           const busy = purchasing === pack.id || activating;
           return (
             <div
@@ -369,7 +392,7 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
                   )}
                 </div>
                 <div className="shrink-0 text-right">
-                  {appliedPromo ? (
+                  {appliedPromo && promoApplies ? (
                     <>
                       <p className="text-sm font-semibold">
                         ₦{priceAfterPromo(Number(pack.price)).toLocaleString()}{" "}
@@ -402,9 +425,14 @@ export function CreditPackCheckout({ onPurchased, onCancel }: CreditPackCheckout
                   )}
                 </div>
               </div>
+              {appliedPromo && !promoApplies && (
+                <p className="mt-2 text-xs text-amber-600">
+                  Promo code applies to {appliedPromo.credit_pack_name ?? "another pack"} only.
+                </p>
+              )}
               <Button
                 className="mt-3 w-full"
-                disabled={busy}
+                disabled={busy || Boolean(appliedPromo && !promoApplies)}
                 onClick={() => void purchase(pack)}
               >
                 {busy ? (
