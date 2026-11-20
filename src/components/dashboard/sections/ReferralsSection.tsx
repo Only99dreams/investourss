@@ -10,7 +10,7 @@ import {
   Copy, Check, Users, MousePointer, UserCheck, Crown, Link2, UserPlus,
   MessageCircle, Twitter, Facebook, RefreshCw, AlertCircle,
 } from "lucide-react";
-import { isActiveSubscriber, planLabel } from "@/lib/subscription";
+import { isActiveB2BSubscriber, isActiveSubscriber, planLabel } from "@/lib/subscription";
 import { buildReferralLink, callReferralRpc, normalizeReferralCode } from "@/lib/referral";
 
 export function ReferralsSection() {
@@ -33,6 +33,8 @@ export function ReferralsSection() {
 
   const referralCode = normalizeReferralCode(profile?.referral_code);
   const referralLink = buildReferralLink(referralCode);
+  const isB2BReferrer = isActiveB2BSubscriber(profile);
+  const recurringRate = isB2BReferrer ? "30%" : "10%";
 
   const copyText = useCallback(
     async (text: string, label: string, which: "link" | "code") => {
@@ -222,7 +224,7 @@ export function ReferralsSection() {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold mb-1">Share Your Referral Link</h3>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Share your referral link or code to earn followers and 30% commission automatically.
+                    Share your referral link or code to earn followers and up to 30% commission automatically.
                   </p>
 
                   {referralCode ? (
@@ -350,8 +352,8 @@ export function ReferralsSection() {
                       <p className="text-muted-foreground">First-time</p>
                     </div>
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
-                      <p className="font-semibold">20%</p>
-                      <p className="text-muted-foreground">Recurring</p>
+                      <p className="font-semibold">{recurringRate}</p>
+                      <p className="text-muted-foreground">Recurring{isB2BReferrer ? " (B2B)" : ""}</p>
                     </div>
                     <div className="text-center p-3 bg-muted/50 rounded-lg">
                       <p className="font-semibold">10%</p>
@@ -373,9 +375,9 @@ export function ReferralsSection() {
                     </div>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-3 text-center">
-                    Direct commissions on first-time purchases (30%) and repurchases/renewals (20%).
-                    10% indirect bonus on purchases by your followers&apos; own referrals. Rates apply to
-                    the actual price (VAT excluded).
+                    Subscriptions pay 30% first-time, {recurringRate} recurring and 10% indirect.
+                    Active B2B subscribers earn 30% recurring. Platform Credit Packs keep 30% first-time
+                    and 20% recurring. Rates apply to the actual price (VAT excluded).
                   </p>
             </CardContent>
           </Card>

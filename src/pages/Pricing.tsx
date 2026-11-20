@@ -101,7 +101,7 @@ const Pricing = () => {
     }
     setB2bProcessing(true);
     const reference = `INV-B2B-${user.id.slice(0, 8)}-${Date.now()}`;
-    const amount = 360000;
+    const amount = 1440000;
     const vatAmount = Math.round(amount * VAT_RATE);
     const totalWithVat = amount + vatAmount;
     const amountKobo = Math.round(totalWithVat * 100);
@@ -298,10 +298,10 @@ const Pricing = () => {
                       <div className="flex items-baseline justify-between mb-2">
                         <span className="text-sm font-medium">B2B Subscription</span>
                         <div className="text-right">
-                          <span className="text-2xl font-bold text-foreground">₦360,000</span>
-                          <span className="text-sm text-muted-foreground"> / 3 months</span>
+                          <span className="text-2xl font-bold text-foreground">₦1,440,000</span>
+                          <span className="text-sm text-muted-foreground"> / 12 months</span>
                           <div className="text-xs text-muted-foreground">+ 7.5% VAT at checkout</div>
-                          <div className="text-xs text-primary font-medium">6 ebooks / quarter for your team</div>
+                          <div className="text-xs text-primary font-medium">Unlimited ebooks for your team</div>
                         </div>
                       </div>
                       <Button

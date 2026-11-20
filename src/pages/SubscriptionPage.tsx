@@ -36,7 +36,9 @@ const SubscriptionPage = () => {
   const currentSubType = profile?.subscription_type || null;
   const currentPlanLevel = currentSubType ? planHierarchy[currentSubType] || 0 : 0;
   const isSubscriber = isActiveSubscriber(profile);
-  const isUpgrading = isSubscriber && currentSubType !== 'annual';
+  const isHighestPlan =
+    currentSubType === 'annual' || String(currentSubType ?? '').toLowerCase().startsWith('b2b');
+  const isUpgrading = isSubscriber && !isHighestPlan;
 
   useEffect(() => {
     if (!user) {
@@ -44,8 +46,8 @@ const SubscriptionPage = () => {
       return;
     }
 
-    // Only redirect if user is already on the highest plan (annual)
-    if (isSubscriber && currentSubType === 'annual') {
+    // Only redirect if user is already on the highest plan (annual or B2B).
+    if (isSubscriber && isHighestPlan) {
       navigate(bookReturnHref ?? '/dashboard');
       return;
     }
@@ -65,7 +67,7 @@ const SubscriptionPage = () => {
         setSelectedPlan('b2b_quarterly');
       }
     }
-  }, [user, profile, searchParams, navigate, isSubscriber, currentSubType, bookReturnHref]);
+  }, [user, profile, searchParams, navigate, isSubscriber, isHighestPlan, currentSubType, bookReturnHref]);
 
   const handlePaymentSuccess = () => {
     navigate(bookReturnHref ?? '/dashboard');
@@ -75,8 +77,8 @@ const SubscriptionPage = () => {
     navigate(bookReturnHref ?? '/pricing');
   };
 
-  // Only block if annual subscriber (highest tier) or not logged in
-  if (!user || (isSubscriber && currentSubType === 'annual')) {
+  // Only block if already on the highest tier or not logged in.
+  if (!user || (isSubscriber && isHighestPlan)) {
     return null;
   }
 
@@ -191,14 +193,14 @@ const SubscriptionPage = () => {
       key: 'b2b_quarterly' as const,
       name: 'B2B Plan',
       description: 'For big promoters, organizations, institutions, and teams',
-      price: 360000,
-      period: '3 months',
+      price: 1440000,
+      period: '12 months',
       savings: null,
       icon: Shield,
       featured: false,
       features: [
         'All 12-Month Plan features',
-        '6 ebooks per quarter for your team',
+        'Unlimited ebooks for your team on Bookmaker',
         'Dedicated account manager',
         'Custom learning pathways',
         'Organizational analytics dashboard',

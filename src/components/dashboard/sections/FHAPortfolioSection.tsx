@@ -188,7 +188,7 @@ export function FHAPortfolioSection() {
         quarterly: "3-Month",
         biennial: "6-Month",
         annual: "12-Month",
-        b2b_quarterly: "B2B (3-Month)",
+        b2b_quarterly: "B2B (12-Month)",
       },
       data: subscribers.individuals,
     },
@@ -202,10 +202,10 @@ export function FHAPortfolioSection() {
         quarterly: "3-Month",
         biennial: "6-Month",
         annual: "12-Month",
-        b2b_quarterly: "B2B (3-Month)",
+        b2b_quarterly: "B2B (12-Month)",
       },
       data: subscribers.businesses,
-      note: "B2B Annual plans are counted under Annual; B2B Quarterly shown separately.",
+      note: "Legacy B2B Annual rows count under Annual; the current B2B Plan is shown separately.",
     },
   ];
 

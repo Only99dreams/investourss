@@ -53,12 +53,20 @@ export const meetsPlan = (
 
 export const planLabel = (plan: string | null | undefined): string => {
   const key = String(plan ?? "").toLowerCase();
-  if (key.startsWith("b2b")) return "B2B Plan";
+  if (key.startsWith("b2b")) return "B2B Plan (12 months)";
   if (key === "annual") return "12-Month Plan";
   if (key === "biennial") return "6-Month Plan";
   if (key === "quarterly") return "3-Month Plan";
   if (key === "monthly") return "1-Month Plan";
   return "Free";
+};
+
+/** True while the member holds a live B2B subscription (the 30% recurring tier). */
+export const isActiveB2BSubscriber = (
+  profile: (SubscriberLike & { subscription_type?: string | null }) | null | undefined,
+): boolean => {
+  if (!isActiveSubscriber(profile)) return false;
+  return String(profile?.subscription_type ?? "").toLowerCase().startsWith("b2b");
 };
 
 /** Access plans in plan order; "free" carries no subscription. */
@@ -68,9 +76,9 @@ export const PLAN_ACCESS_OPTIONS = [
   { value: "quarterly", label: "3-Month Plan" },
   { value: "biennial", label: "6-Month Plan" },
   { value: "annual", label: "12-Month Plan" },
-  { value: "b2b_quarterly", label: "B2B Plan" },
-  // Grandfathered B2B subscribers keep their original yearly plan.
-  { value: "b2b_annual", label: "B2B Plan (legacy 12-month)" },
+  { value: "b2b_quarterly", label: "B2B Plan (12 months)" },
+  // Legacy code retained for existing B2B rows; it is the same 12-month offer.
+  { value: "b2b_annual", label: "B2B Plan (legacy code)" },
 ] as const;
 
 /** Days of access granted by each plan, mirroring the payment activation RPCs. */
@@ -79,7 +87,7 @@ export const PLAN_DAYS: Record<string, number> = {
   quarterly: 90,
   biennial: 180,
   annual: 365,
-  b2b_quarterly: 90,
+  b2b_quarterly: 365,
   b2b_annual: 365,
 };
 

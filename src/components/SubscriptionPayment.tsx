@@ -35,7 +35,7 @@ export const SUBSCRIPTION_PLANS = {
   quarterly:  { name: '3-Month Plan',  price: 102000, period: '3 months', savings: 'Save ₦12,750' },
   biennial:   { name: '6-Month Plan',  price: 191250, period: '6 months', savings: 'Save ₦38,250' },
   annual:     { name: '12-Month Plan', price: 382500, period: '12 months', savings: 'Save ₦76,500' },
-  b2b_quarterly: { name: 'B2B Plan',   price: 360000, period: '3 months', savings: null },
+  b2b_quarterly: { name: 'B2B Plan',   price: 1440000, period: '12 months', savings: null },
 };
 
 // Generates a unique Paystack reference
@@ -304,6 +304,7 @@ export const SubscriptionPayment: React.FC<SubscriptionPaymentProps> = ({
                     'Unlimited AI Financial Tutor access',
                     'Unlimited Scam Detector access',
                     'AI Financial Auditor',
+                    ...(planType === 'b2b_quarterly' ? ['Unlimited ebooks on Bookmaker'] : []),
                     'Premium educational content',
                     'Priority support',
                   ].map((f) => (

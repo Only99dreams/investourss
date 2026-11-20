@@ -355,7 +355,7 @@ export default function PromoCodesTab() {
                     <SelectItem value="quarterly">3-Month Plan</SelectItem>
                     <SelectItem value="biennial">6-Month Plan</SelectItem>
                     <SelectItem value="annual">12-Month Plan</SelectItem>
-                    <SelectItem value="b2b_quarterly">B2B Plan</SelectItem>
+                    <SelectItem value="b2b_quarterly">B2B Plan (12 months)</SelectItem>
                     <SelectItem value="all">Any plan</SelectItem>
                   </SelectContent>
                 </Select>
