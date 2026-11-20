@@ -27,6 +27,7 @@ import { CoverPreview } from "@/components/bookmaker/CoverPreview";
 import { BookmakerPurchaseDialog } from "@/components/bookmaker/BookmakerPurchaseDialog";
 import { createBlankBook, LENGTH_OPTIONS } from "@/lib/bookmaker";
 import CommunitySection from "@/components/home/CommunitySection";
+import { useHomepageCtaVisibility } from "@/hooks/useHomepageCtaVisibility";
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -110,6 +111,7 @@ const steps = [
 const BookmakerLanding = () => {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const { pathname } = useLocation();
+  const { challengeVisible, partnerVisible } = useHomepageCtaVisibility();
 
   // This page is both the home page (/home) and the Bookmaker product page
   // (/bookmaker). The activity feed belongs on the home page only.
@@ -154,20 +156,28 @@ const BookmakerLanding = () => {
                   Create My Ebook <ArrowRight className="h-5 w-5" />
                 </Link>
               </Button>
-              <Button
-                asChild
-                size="xl"
-                variant="outline"
-                className="h-auto min-h-14 w-full whitespace-normal px-4 py-3 text-center text-base leading-snug sm:w-auto sm:px-6 sm:text-lg"
-              >
-                {isHomeRoute ? (
+              {isHomeRoute && challengeVisible && (
+                <Button
+                  asChild
+                  size="xl"
+                  variant="outline"
+                  className="h-auto min-h-14 w-full whitespace-normal px-4 py-3 text-center text-base leading-snug sm:w-auto sm:px-6 sm:text-lg"
+                >
                   <a href="https://competition.investours.app/" target="_blank" rel="noopener noreferrer">
                     Creativity &amp; Enterprise Challenge
                   </a>
-                ) : (
+                </Button>
+              )}
+              {(!isHomeRoute || partnerVisible) && (
+                <Button
+                  asChild
+                  size="xl"
+                  variant="outline"
+                  className="h-auto min-h-14 w-full whitespace-normal px-4 py-3 text-center text-base leading-snug sm:w-auto sm:px-6 sm:text-lg"
+                >
                   <Link to="/ambassador">Enterprise Partners Program</Link>
-                )}
-              </Button>
+                </Button>
+              )}
               <Button
                 size="xl"
                 variant="outline"

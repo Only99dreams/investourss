@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Settings as SettingsIcon } from "lucide-react";
+import { HOMEPAGE_CTA_KEYS } from "@/lib/homepageCta";
 
 interface SystemSetting {
   key: string;
@@ -86,8 +87,9 @@ const SettingsTab = () => {
     setting.key.includes('commission') || setting.key.includes('withdrawal_fee')
   );
 
+  const homepageCtaKeys = new Set<string>(Object.values(HOMEPAGE_CTA_KEYS));
   const otherSettings = settings.filter(setting =>
-    !setting.key.includes('commission')
+    !setting.key.includes('commission') && !homepageCtaKeys.has(setting.key)
   );
 
   if (loading) {

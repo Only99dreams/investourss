@@ -8,14 +8,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, Star, Trash2 } from "lucide-react";
+import { Eye, Loader2, Save, Star, Trash2 } from "lucide-react";
+import {
+  fetchHomepageCtaVisibility,
+  saveHomepageCtaVisibility,
+  type HomepageCtaVisibility,
+} from "@/lib/homepageCta";
 
 interface FeaturedSolution {
   id: string;
@@ -33,6 +38,12 @@ const FeaturedSolutionsTab = () => {
   const { toast } = useToast();
   const [items, setItems] = useState<FeaturedSolution[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ctaVisibility, setCtaVisibility] = useState<HomepageCtaVisibility>({
+    challenge: true,
+    partner: false,
+  });
+  const [ctaLoading, setCtaLoading] = useState(true);
+  const [ctaSaving, setCtaSaving] = useState(false);
 
   const fetchItems = async () => {
     setLoading(true);
@@ -50,10 +61,34 @@ const FeaturedSolutionsTab = () => {
 
   useEffect(() => {
     fetchItems();
+    fetchHomepageCtaVisibility()
+      .then(setCtaVisibility)
+      .catch((error) => console.error("Failed to load homepage button settings:", error))
+      .finally(() => setCtaLoading(false));
   }, []);
 
   const updateField = (id: string, field: keyof FeaturedSolution, value: unknown) => {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
+  };
+
+  const updateCtaVisibility = (key: keyof HomepageCtaVisibility, value: boolean) => {
+    setCtaVisibility((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const saveCtaVisibility = async () => {
+    setCtaSaving(true);
+    try {
+      await saveHomepageCtaVisibility(ctaVisibility);
+      toast({ title: "Saved", description: "Homepage button visibility updated." });
+    } catch (error) {
+      toast({
+        title: "Save failed",
+        description: error instanceof Error ? error.message : "Could not update homepage buttons.",
+        variant: "destructive",
+      });
+    } finally {
+      setCtaSaving(false);
+    }
   };
 
   const save = async (item: FeaturedSolution) => {
@@ -90,6 +125,56 @@ const FeaturedSolutionsTab = () => {
 
   return (
     <div className="space-y-4 md:space-y-6">
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg md:text-xl flex items-center gap-2">
+            <Eye className="w-5 h-5" /> Homepage Hero Buttons
+          </CardTitle>
+          <CardDescription>
+            Choose which campaign buttons appear in the homepage hero. Each button is controlled
+            independently.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 px-4 md:px-6">
+          {[
+            {
+              key: "challenge" as const,
+              title: "Creativity & Enterprise Challenge",
+              description: "Opens the competition website in a new tab.",
+            },
+            {
+              key: "partner" as const,
+              title: "Enterprise Partners Program",
+              description: "Opens the Investours ambassador and partner page.",
+            },
+          ].map((item) => (
+            <div key={item.key} className="flex items-center justify-between gap-4 rounded-lg border p-3 md:p-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{item.title}</p>
+                <p className="text-xs text-muted-foreground">{item.description}</p>
+              </div>
+              <Switch
+                checked={ctaVisibility[item.key]}
+                onCheckedChange={(value) => updateCtaVisibility(item.key, value)}
+                disabled={ctaLoading || ctaSaving}
+                aria-label={`Show ${item.title} on the homepage`}
+              />
+            </div>
+          ))}
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <Badge variant="secondary">After saving, refresh an open homepage to see the change.</Badge>
+            <Button onClick={saveCtaVisibility} disabled={ctaLoading || ctaSaving}>
+              {ctaSaving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              Save visibility
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="pb-4">
           <CardTitle className="text-lg md:text-xl flex items-center gap-2">

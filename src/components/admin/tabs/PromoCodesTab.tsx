@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -262,15 +262,15 @@ export default function PromoCodesTab() {
               Create Promo Code
             </Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
+          <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+            <DialogHeader className="px-6 pb-4 pr-12 pt-6">
               <DialogTitle>Create New Promo Code</DialogTitle>
               <DialogDescription>
                 Generate a promotional code for subscription or platform credit discounts
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4">
+            <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-4">
               <div>
                 <Label htmlFor="campaign_name">Campaign Name *</Label>
                 <Input
@@ -391,23 +391,24 @@ export default function PromoCodesTab() {
                 </div>
               )}
 
-              <div className="flex gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCreateDialog(false)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={generatePromoCode}
-                  disabled={isCreating}
-                  className="flex-1"
-                >
-                  {isCreating ? "Creating..." : "Create Code"}
-                </Button>
-              </div>
             </div>
+
+            <DialogFooter className="border-t bg-background px-6 py-4 sm:justify-between">
+              <Button
+                variant="outline"
+                onClick={() => setShowCreateDialog(false)}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={generatePromoCode}
+                disabled={isCreating}
+                className="w-full sm:w-auto"
+              >
+                {isCreating ? "Creating..." : "Create Code"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
